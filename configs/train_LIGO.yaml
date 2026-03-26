@@ -1,0 +1,44 @@
+# Usage: python main.py fit --config configs/train_LIGO.yaml
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+
+model:
+  class_path: tasks.LIGO_regression.S4DMSELoss
+  init_args:
+    d_input: 2          # H1 + L1
+    d_output: 1         # number of target_variables below
+    d_model: 256
+    d_state: 64
+    n_layers: 4
+    dropout: 0.2
+    dt_min: 0.001
+    dt_max: 0.1
+    lr: 1.0e-3
+    lr_decay: 0.99
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: data/LIGO/sample_dataset/train.h5
+    val_file:   data/LIGO/sample_dataset/val.h5
+    test_file:  data/LIGO/sample_dataset/test.h5
+    target_variables:
+      - chirp_mass
+    observed_variables:
+      - snr
+    injected_data_key: injected_data
+    strain_frequency: 512
+    downsample_factor: 2
+    strain_duration: 64.0
+    window_begin: 60.0
+    window_end: 64.0
+    train_batch_size: 64
+    val_batch_size: 64
+    test_batch_size: 64
+    num_workers: 4
+    shuffle: true
+    persistent_workers: true
