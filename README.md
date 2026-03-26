@@ -21,7 +21,7 @@ Gravitational Wave signals from LIGO detectors.
 ## Setup
 
 ```bash
-mamba env create -f env.yaml
+conda env create -f env.yaml
 conda activate tsenv
 pip install -e .
 ```
