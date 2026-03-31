@@ -22,3 +22,8 @@ checkpoints/
 
 # IDE
 .vscode/
+
+# SLURM
+slurm/
+*.out
+*.err

@@ -11,6 +11,12 @@ state-spaces/s4 Apache License
 Source:
 https://github.com/state-spaces/s4
 
+Derived files:
+  src/models/s4d.py          — adapted from s4d.py and examples.py
+  src/models/s4d_seq2seq.py  — derivative of s4d.py; removes temporal pooling
+                               for sequence-to-sequence (denoising) tasks
+  src/functions/dropout.py   — derived from S4 dropout utilities
+
 This repo contains code derived from the state-spaces/s4 project, which is
 licensed under the Apache License Version 2.0:
 
