@@ -6,9 +6,9 @@ trainer:
   devices: 1
   log_every_n_steps: 1
   logger:
-    class_path: lightning.pytorch.loggers.TensorBoardLogger
+    class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
-      save_dir: lightning_logs
+      project: TimeSeriesPhysics
       name: toy_denoising
 
 model:
