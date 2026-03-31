@@ -11,6 +11,13 @@ trainer:
         monitor: val/loss
         mode: min
         patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/toy_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
