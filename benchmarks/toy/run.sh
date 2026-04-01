@@ -15,11 +15,11 @@ WORKDIR=/n/holystore01/LABS/iaifi_lab/Lab/kyoon/TimeSeriesPhysics
 LOGS=$WORKDIR/benchmarks/toy/logs
 
 SBATCH_COMMON="
-  --partition=gpu_test
+  --partition=gpu_requeue
   --nodes=1
   --ntasks=1
   --gpus=1
-  --time=12:00:00
+  --time=6:00:00
   --chdir=$WORKDIR
 "
 
@@ -43,7 +43,7 @@ JOB2=$(sbatch --parsable \
   --output=$LOGS/toy_reg_raw_%j.out \
   --error=$LOGS/toy_reg_raw_%j.err \
   --wrap="$ACTIVATE && srun --cpu-bind=none python main.py fit \
-    --config configs/toy/train_toy_s4d_regression_raw.yaml")
+    --config configs/toy/train_toy_mlp_regression_raw.yaml")
 echo "[2/4] Raw regressor submitted: job $JOB2 (depends on $JOB1)"
 
 JOB3=$(sbatch --parsable \
@@ -53,7 +53,7 @@ JOB3=$(sbatch --parsable \
   --output=$LOGS/toy_reg_clean_%j.out \
   --error=$LOGS/toy_reg_clean_%j.err \
   --wrap="$ACTIVATE && srun --cpu-bind=none python main.py fit \
-    --config configs/toy/train_toy_s4d_regression_clean.yaml")
+    --config configs/toy/train_toy_mlp_regression_clean.yaml")
 echo "[3/4] Clean regressor submitted: job $JOB3 (depends on $JOB1)"
 
 # ── Step 4: Eval (waits for both regressors) ──────────────────────────────────
@@ -65,8 +65,8 @@ JOB4=$(sbatch --parsable \
   --error=$LOGS/toy_eval_%j.err \
   --wrap="$ACTIVATE && srun --cpu-bind=none python benchmarks/toy/eval_pipeline.py \
     --denoiser_ckpt        checkpoints/toy_s4d_denoising/best.ckpt \
-    --regressor_raw_ckpt   checkpoints/toy_s4d_regression_raw/best.ckpt \
-    --regressor_clean_ckpt checkpoints/toy_s4d_regression_clean/best.ckpt \
+    --regressor_raw_ckpt   checkpoints/toy_mlp_regression_raw/best.ckpt \
+    --regressor_clean_ckpt checkpoints/toy_mlp_regression_clean/best.ckpt \
     --data_dir             data/toy/sinusoidal_signal_white_noise \
     --out_dir              benchmarks/toy")
 echo "[4/4] Eval submitted: job $JOB4 (depends on $JOB2, $JOB3)"
