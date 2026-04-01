@@ -49,8 +49,29 @@ the benefit of denoising.
 | Step | Config | Checkpoint |
 |------|--------|-----------|
 | Denoiser | `configs/toy/train_toy_s4d_denoising.yaml` | `checkpoints/toy_s4d_denoising/best.ckpt` |
-| Raw regressor | `configs/toy/train_toy_s4d_regression_raw.yaml` | `checkpoints/toy_s4d_regression_raw/best.ckpt` |
-| Clean regressor | `configs/toy/train_toy_s4d_regression_clean.yaml` | `checkpoints/toy_s4d_regression_clean/best.ckpt` |
+| Raw regressor | `configs/toy/train_toy_mlp_regression_raw.yaml` | `checkpoints/toy_mlp_regression_raw/best.ckpt` |
+| Clean regressor | `configs/toy/train_toy_mlp_regression_clean.yaml` | `checkpoints/toy_mlp_regression_clean/best.ckpt` |
+
+The denoiser is S4D seq2seq (`S4ModelSeq2Seq`). Both regressors are MLPs
+(`MLPRegressor`, ~205K params): flatten the 640-step sequence then pass through
+FC layers `[256, 128, 64]` with LayerNorm + GELU + Dropout.
+
+### How denoising is applied before regression
+
+The **raw** and **clean** regressors are trained separately on their respective
+input domains. At eval time, the denoiser bridges them:
+
+```
+raw pipeline:      sig_bkg ──────────────────────────> reg_raw   -> y_hat
+denoised pipeline: sig_bkg -> denoiser -> sig_approx -> reg_clean -> y_hat
+oracle pipeline:   sig     ──────────────────────────> reg_clean -> y_hat
+```
+
+`reg_clean` is trained on clean `sig`, so feeding it `denoiser(sig_bkg)` tests
+how well the denoiser recovers the true signal distribution. The two gaps are:
+
+- **oracle − denoised**: regression error from imperfect denoising
+- **denoised − raw**: benefit of denoising over using the raw noisy signal
 
 ---
 
