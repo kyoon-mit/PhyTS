@@ -31,7 +31,7 @@ JOB1=$(sbatch --parsable \
   --job-name=toy_denoiser \
   --output=$LOGS/toy_denoiser_%j.out \
   --error=$LOGS/toy_denoiser_%j.err \
-  --wrap="$ACTIVATE && srun --cpu-bind=none python main.py fit \
+  --wrap="$ACTIVATE && python main.py fit \
     --config configs/toy/train_toy_s4d_denoising.yaml")
 echo "[1/4] Denoiser submitted: job $JOB1"
 
@@ -42,7 +42,7 @@ JOB2=$(sbatch --parsable \
   --job-name=toy_reg_raw \
   --output=$LOGS/toy_reg_raw_%j.out \
   --error=$LOGS/toy_reg_raw_%j.err \
-  --wrap="$ACTIVATE && srun --cpu-bind=none python main.py fit \
+  --wrap="$ACTIVATE && python main.py fit \
     --config configs/toy/train_toy_mlp_regression_raw.yaml")
 echo "[2/4] Raw regressor submitted: job $JOB2 (depends on $JOB1)"
 
@@ -52,7 +52,7 @@ JOB3=$(sbatch --parsable \
   --job-name=toy_reg_clean \
   --output=$LOGS/toy_reg_clean_%j.out \
   --error=$LOGS/toy_reg_clean_%j.err \
-  --wrap="$ACTIVATE && srun --cpu-bind=none python main.py fit \
+  --wrap="$ACTIVATE && python main.py fit \
     --config configs/toy/train_toy_mlp_regression_clean.yaml")
 echo "[3/4] Clean regressor submitted: job $JOB3 (depends on $JOB1)"
 
@@ -63,7 +63,7 @@ JOB4=$(sbatch --parsable \
   --job-name=toy_eval \
   --output=$LOGS/toy_eval_%j.out \
   --error=$LOGS/toy_eval_%j.err \
-  --wrap="$ACTIVATE && srun --cpu-bind=none python benchmarks/toy/eval_pipeline.py \
+  --wrap="$ACTIVATE && python benchmarks/toy/eval_pipeline.py \
     --denoiser_ckpt        checkpoints/toy_s4d_denoising/best.ckpt \
     --regressor_raw_ckpt   checkpoints/toy_mlp_regression_raw/best.ckpt \
     --regressor_clean_ckpt checkpoints/toy_mlp_regression_clean/best.ckpt \
