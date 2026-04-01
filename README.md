@@ -39,14 +39,18 @@ src/
   models/
     s4d.py           # S4D kernel + S4Model (sequence classifier)       [Apache 2.0, derived from state-spaces/s4]
     s4d_seq2seq.py   # S4ModelSeq2Seq (no pooling, for denoising)       [Apache 2.0, derived from s4d.py]
+    mlp.py           # MLPRegressor (flatten → FC layers)
   dataloader/
     LIGO_dataloader.py
     toy_dataloader.py
   tasks/
-    LIGO_denoising.py   # DenoisingMSE task for LIGO
-    toy_denoising.py    # DenoisingMSE task for toy dataset
-  functions/
-configs/               # PyTorch Lightning YAML configs
+    toy/
+      toy_denoising.py    # DenoisingMSE task for toy dataset
+      toy_regression.py   # RegressionMSE task for toy dataset
+    LIGO/
+      LIGO_denoising.py   # DenoisingMSE task for LIGO
+configs/toy/           # PyTorch Lightning YAML configs
+benchmarks/toy/        # Benchmark scripts and results
 data/
   LIGO/sample_dataset/
   toy/sinusoidal_signal_white_noise/
@@ -57,32 +61,58 @@ main.py                # LightningCLI entry point
 
 ## Task architecture
 
-Tasks are organized **by domain**, not by model. Each task file exposes a
-`DenoisingMSE` LightningModule that accepts any seq2seq `nn.Module` as a
-constructor argument. Swapping models only requires changing the YAML config.
-
-```
-tasks/toy_denoising.py   DenoisingMSE(model=..., lr=..., lr_decay=...)
-tasks/LIGO_denoising.py  DenoisingMSE(model=..., lr=..., lr_decay=...)
-```
+Tasks are organized **by domain**, not by model. Each LightningModule accepts
+any compatible `nn.Module` as a constructor argument — swapping models only
+requires changing the YAML config.
 
 ---
 
-## Training
+## Toy benchmark: denoising pipeline
 
 ```bash
-# Toy denoising (S4D seq2seq)
-python main.py fit --config configs/train_toy.yaml
+bash benchmarks/toy/run.sh
+```
 
-# LIGO denoising
-python main.py fit --config configs/train_LIGO.yaml
+This submits 4 chained SLURM jobs and compares three regression pipelines:
+
+```
+[1] train denoiser ──┬──> [2] train reg_raw   ──┬──> [4] eval
+                     └──> [3] train reg_clean ──┘
+```
+
+| Pipeline | Training input | Eval input | Purpose |
+|----------|---------------|------------|---------|
+| **raw** | `sig_bkg` (noisy) | `sig_bkg` | baseline |
+| **denoised** | `sig` (clean) | `denoiser(sig_bkg)` | benefit of denoising |
+| **oracle** | `sig` (clean) | `sig` (clean) | upper bound |
+
+`reg_clean` is trained on clean signals so it "knows" what clean signals look
+like. At eval time, the denoiser approximates `sig` from `sig_bkg`, and that
+approximation is fed into `reg_clean`. The gap **oracle − denoised** measures
+imperfect denoising; the gap **denoised − raw** measures the benefit of denoising.
+
+Results are saved to `benchmarks/toy/regression_benchmark.png`.
+
+---
+
+## Training (individual steps)
+
+```bash
+# Toy denoising
+python main.py fit --config configs/toy/train_toy_s4d_denoising.yaml
+
+# Toy regression (MLP, raw noisy input)
+python main.py fit --config configs/toy/train_toy_mlp_regression_raw.yaml
+
+# Toy regression (MLP, clean input)
+python main.py fit --config configs/toy/train_toy_mlp_regression_clean.yaml
 ```
 
 Override config values from the command line:
 
 ```bash
-python main.py fit --config configs/train_toy.yaml \
-  --model.init_args.model.init_args.d_model 512 \
+python main.py fit --config configs/toy/train_toy_mlp_regression_raw.yaml \
+  --model.init_args.lr 5e-4 \
   --data.init_args.batch_size 128
 ```
 
@@ -94,6 +124,7 @@ python main.py fit --config configs/train_toy.yaml \
 |-------|-------|-------------|
 | S4D | `models.s4d.S4Model` | Diagonal SSM — sequence classifier (mean pooling) |
 | S4D Seq2Seq | `models.s4d_seq2seq.S4ModelSeq2Seq` | Diagonal SSM — sequence-to-sequence (denoising) |
+| MLP | `models.mlp.MLPRegressor` | Flatten → FC layers (~205K params for seq_len=640) |
 
 ---
 
@@ -101,8 +132,9 @@ python main.py fit --config configs/train_toy.yaml \
 
 | Domain | Task | Class |
 |--------|------|-------|
-| Toy | Denoising (MSE) | `tasks.toy_denoising.DenoisingMSE` |
-| LIGO | Denoising (MSE) | `tasks.LIGO_denoising.DenoisingMSE` |
+| Toy | Denoising (MSE) | `tasks.toy.toy_denoising.DenoisingMSE` |
+| Toy | Regression (MSE) | `tasks.toy.toy_regression.RegressionMSE` |
+| LIGO | Denoising (MSE) | `tasks.LIGO.LIGO_denoising.DenoisingMSE` |
 
 ---
 
