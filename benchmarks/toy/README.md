@@ -1,57 +1,66 @@
 # Toy Benchmark: Raw vs Denoised Regression
 
-Compares how well physical signal parameters are recovered from (a) the raw noisy
-signal and (b) the denoiser's output, as a function of SNR.
+Compares how well physical signal parameters are recovered across three pipelines,
+as a function of SNR.
 
 ---
 
-## Setup
+## Quickstart
 
-Two models are needed:
-
-| Model | Config | Task |
-|-------|--------|------|
-| Denoiser | `configs/train_toy.yaml` | `DenoisingMSE` (S4D seq2seq) |
-| Regressor | `configs/train_toy_regression.yaml` | `RegressionMSE` (S4Model) |
-
-### Train the denoiser
 ```bash
-python main.py fit --config configs/train_toy.yaml
+bash benchmarks/toy/run.sh
 ```
 
-### Train the regressor (on raw noisy signals)
-```bash
-python main.py fit --config configs/train_toy_regression.yaml
+That's it. The script submits 4 SLURM jobs with automatic dependencies:
+
+```
+[1] toy_denoiser   ──┬──> [2] toy_reg_raw   ──┬──> [4] toy_eval
+                     └──> [3] toy_reg_clean ──┘
 ```
 
-Lightning saves checkpoints to `lightning_logs/` by default.
+Steps 2 and 3 run in parallel. Step 4 starts only after both finish.
+
+Monitor progress:
+```bash
+squeue -u $USER
+tail -f benchmarks/toy/logs/toy_denoiser_<jobid>.out
+```
+
+Results are saved to `benchmarks/toy/regression_benchmark.png`.
 
 ---
 
-## Running the Benchmark
+## Pipelines
 
-```bash
-python benchmarks/toy/eval_pipeline.py \
-    --denoiser_ckpt  <path/to/denoising.ckpt> \
-    --regressor_ckpt <path/to/regression.ckpt> \
-    --data_dir       data/toy/sinusoidal_signal_white_noise \
-    --out_dir        benchmarks/toy
-```
+| Pipeline | Input to regressor | Regressor trained on |
+|----------|-------------------|----------------------|
+| **raw** | `sig_bkg` (noisy) | `sig_bkg` (noisy) |
+| **denoised** | `denoiser(sig_bkg)` | `sig` (clean) |
+| **oracle** | `sig` (clean) | `sig` (clean) |
 
-Outputs `benchmarks/toy/regression_benchmark.png`.
+The gap between **denoised** and **oracle** measures how much regression error
+comes from imperfect denoising. The gap between **raw** and **denoised** measures
+the benefit of denoising.
 
 ---
 
-## What the Plot Shows
+## Models & Configs
 
-Bar chart of RMSE per SNR bin (low / mid / high), one panel per target parameter
-(`amplitude`, `frequency_hz`, `phase_rad`).
+| Step | Config | Checkpoint |
+|------|--------|-----------|
+| Denoiser | `configs/toy/train_toy_s4d_denoising.yaml` | `checkpoints/toy_s4d_denoising/best.ckpt` |
+| Raw regressor | `configs/toy/train_toy_s4d_regression_raw.yaml` | `checkpoints/toy_s4d_regression_raw/best.ckpt` |
+| Clean regressor | `configs/toy/train_toy_s4d_regression_clean.yaml` | `checkpoints/toy_s4d_regression_clean/best.ckpt` |
 
-- **Blue bars** — regression on raw noisy signal
-- **Red bars** — regression on denoised signal
+---
 
-The key result: denoising should reduce RMSE most in the **low-SNR** bin (SNR < 0.1),
-and the benefit should shrink as SNR increases.
+## Target Parameters
+
+`[amplitude, frequency_hz, phase_rad]` — the physical signal parameters.
+`noise_amplitude` and `snr` are excluded (they describe the noise, not the signal).
+
+> **Note on phase:** Phase is circular (0 to 2π). MSE treats it as linear,
+> so errors near the 0/2π boundary are overestimated. Treat phase RMSE as indicative.
 
 ---
 
@@ -63,13 +72,5 @@ and the benefit should shrink as SNR increases.
 | mid | 0.1 – 0.3 |
 | high | > 0.3 |
 
-The toy dataset has typical SNR ≈ 0.14 (A ≈ 1, σ ≈ 5), so most samples fall in the
-mid bin, with a spread across all three.
-
----
-
-## Notes on Phase
-
-Phase is circular (0 to 2π). MSE treats it as a linear quantity, so errors near the
-0/2π wrap-around are overestimated. This is acceptable for a toy benchmark — treat
-phase RMSE as indicative rather than exact.
+The toy dataset has typical SNR ≈ 0.14, so most samples fall in the mid bin.
+The benefit of denoising should be largest in the low-SNR bin.
