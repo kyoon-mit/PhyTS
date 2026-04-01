@@ -32,6 +32,9 @@ slurm/
 *.h5
 *.npz
 
+# Large data directories (symlink or populate locally, see each dir's README)
+data/TIDMAD/*.h5
+
 # Plots
 *.png
 
