@@ -27,3 +27,13 @@ checkpoints/
 slurm/
 *.out
 *.err
+
+# Data files
+*.h5
+*.npz
+
+# Plots
+*.png
+
+# Wandb
+wandb/
