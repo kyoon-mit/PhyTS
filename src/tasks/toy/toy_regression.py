@@ -54,17 +54,19 @@ class RegressionMSE(L.LightningModule):
         self,
         model: nn.Module,
         target_params: list[str] = ['amplitude', 'frequency_hz', 'phase_rad'],
+        use_clean_input: bool = False,
         lr: float = 1e-3,
         lr_decay: float = 0.99,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model'])
-        self.model         = model
-        self.lr            = lr
-        self.lr_decay      = lr_decay
-        self.target_params = target_params
-        self.target_idx    = [int(Param[p]) for p in target_params]
-        self.criterion     = nn.MSELoss()
+        self.model           = model
+        self.lr              = lr
+        self.lr_decay        = lr_decay
+        self.target_params   = target_params
+        self.target_idx      = [int(Param[p]) for p in target_params]
+        self.use_clean_input = use_clean_input   # True → train on sig; False → train on sig_bkg
+        self.criterion       = nn.MSELoss()
 
     def forward(self, x):
         # x: (B, L) -> (B, L, 1) -> model -> (B, n_targets)
@@ -79,7 +81,8 @@ class RegressionMSE(L.LightningModule):
             self.log(f'{prefix}/rmse/{name}', rmse, on_step=False, on_epoch=True)
 
     def _step(self, batch):
-        X, _, params = batch
+        sig_bkg, sig, params = batch
+        X     = sig if self.use_clean_input else sig_bkg       # (B, L)
         y     = self._get_targets(params)                      # (B, n_targets)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
@@ -97,7 +100,8 @@ class RegressionMSE(L.LightningModule):
         self._log_per_param_rmse(y_hat, y, 'val')
 
     def test_step(self, batch, batch_idx):
-        X, _, params = batch
+        sig_bkg, sig, params = batch
+        X     = sig if self.use_clean_input else sig_bkg
         y     = self._get_targets(params)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
