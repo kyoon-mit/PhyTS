@@ -30,8 +30,9 @@ Science files have only `channel0001` (the real DM search data, no ground truth)
 ### Option A — Symlink from existing copy (IAIFI cluster)
 
 ```bash
-rmdir data/TIDMAD
-ln -s /n/holystore01/LABS/iaifi_lab/Lab/creissel/TIDMAD data/TIDMAD
+for f in /n/holystore01/LABS/iaifi_lab/Lab/creissel/TIDMAD/*.h5; do
+    ln -s "$f" data/TIDMAD/$(basename "$f")
+done
 ```
 
 ### Option B — Download from OSDF (official)
