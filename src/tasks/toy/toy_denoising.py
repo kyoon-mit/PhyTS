@@ -44,7 +44,7 @@ class DenoisingMSE(L.LightningModule):
         lr_decay: float = 0.99,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['model'])
+        self.save_hyperparameters()
         self.model    = model
         self.lr       = lr
         self.lr_decay = lr_decay
