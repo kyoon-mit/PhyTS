@@ -24,8 +24,18 @@ Usage (LightningCLI YAML):
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import optim
 import lightning as L
+
+
+class PSDLoss(nn.Module):
+    """MSE loss in the power spectral density domain."""
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        psd_pred = torch.fft.rfft(y_pred).abs().pow(2)
+        psd_true = torch.fft.rfft(y_true).abs().pow(2)
+        return F.mse_loss(psd_pred, psd_true)
 
 
 class DenoisingMSE(L.LightningModule):
@@ -80,3 +90,11 @@ class DenoisingMSE(L.LightningModule):
             'optimizer': optimizer,
             'lr_scheduler': {'scheduler': scheduler, 'interval': 'epoch'},
         }
+
+
+class DenoisingPSD(DenoisingMSE):
+    """Seq2seq denoising with PSD loss."""
+
+    def __init__(self, model: nn.Module, lr: float = 1e-3, lr_decay: float = 0.99):
+        super().__init__(model, lr, lr_decay)
+        self.criterion = PSDLoss()

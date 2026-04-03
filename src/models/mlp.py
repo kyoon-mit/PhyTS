@@ -9,7 +9,6 @@ Parameter count (seq_len=640, hidden_dims=[256,128,64], d_output=3):
 
 import torch.nn as nn
 
-
 class MLPRegressor(nn.Module):
     def __init__(
         self,

@@ -1,0 +1,21 @@
+# Classical filter — no learnable parameters, no training needed.
+# Use tools/save_checkpoint.py to create the checkpoint:
+#   python tools/save_checkpoint.py \
+#       --cfg configs/toy/train_toy_classical_denoising.yaml \
+#       --out checkpoints/toy_classical_denoising/best.ckpt
+
+model:
+  class_path: tasks.toy.toy_denoising.DenoisingMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.classical_filter.ClassicalFilter
+      init_args: {}
+
+data:
+  class_path: dataloader.toy_dataloader.ToyDataModule
+  init_args:
+    data_dir: data/toy/sinusoidal_signal_white_noise
+    batch_size: 64
+    num_workers: 4

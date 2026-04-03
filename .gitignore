@@ -35,8 +35,9 @@ slurm/
 # Large data directories (symlink or populate locally, see each dir's README)
 data/TIDMAD/*.h5
 
-# Plots
+# Plots (exclude generated plots everywhere except the plots/ directory)
 *.png
+!plots/**/*.png
 
 # Wandb
 wandb/

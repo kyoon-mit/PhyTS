@@ -1,47 +1,46 @@
 """
-Benchmark: Raw vs Denoised Regression on the Toy Dataset.
+Benchmark: Raw vs Denoised Regression on TIDMAD.
 
-Three pipelines compared on the test set:
-  raw      — regressor_raw(sig_bkg)            regressor trained on noisy signals
-  denoised — regressor_clean(denoiser(sig_bkg)) regressor trained on clean signals, applied after denoising
-  signal   — regressor_clean(sig)              regressor trained on clean signals, applied to ground truth
+Three pipelines compared on the validation set:
+  raw      — regressor_raw(noisy)              regressor trained on noisy signals
+  denoised — regressor_clean(denoiser(noisy))  regressor trained on clean signals, applied after denoising
+  oracle   — regressor_clean(clean)            regressor trained on clean signals, applied to ground truth
 
 Usage:
-    python benchmarks/toy/eval_pipeline.py \
-        --denoiser_ckpt        checkpoints/toy_s4d_denoising/best.ckpt \
-        --denoiser_cfg         configs/toy/train_toy_s4d_denoising.yaml \
-        --regressor_raw_ckpt   checkpoints/toy_mlp_regression_raw/best.ckpt \
-        --regressor_raw_cfg    configs/toy/train_toy_mlp_regression_raw.yaml \
-        --regressor_clean_ckpt checkpoints/toy_mlp_regression_clean/best.ckpt \
-        --regressor_clean_cfg  configs/toy/train_toy_mlp_regression_clean.yaml \
-        --data_dir             data/toy/sinusoidal_signal_white_noise \
-        --out_dir              benchmarks/toy
+    python benchmarks/TIDMAD/eval_pipeline.py \
+        --denoiser_ckpt        checkpoints/tidmad_s4d_denoising/best.ckpt \
+        --denoiser_cfg         configs/TIDMAD/train_tidmad_s4d_denoising.yaml \
+        --regressor_raw_ckpt   checkpoints/tidmad_mlp_regression_raw/best.ckpt \
+        --regressor_raw_cfg    configs/TIDMAD/train_tidmad_mlp_regression_raw.yaml \
+        --regressor_clean_ckpt checkpoints/tidmad_mlp_regression_clean/best.ckpt \
+        --regressor_clean_cfg  configs/TIDMAD/train_tidmad_mlp_regression_clean.yaml \
+        --data_dir             data/TIDMAD \
+        --out_dir              benchmarks/TIDMAD
 """
 
 import argparse
-import importlib
 from pathlib import Path
 
 import yaml
+import importlib
+
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-from dataloader.toy_dataloader import ToyDataModule, Param
+from dataloader.tidmad_dataloader import TIDMADDataModule, Param
 
 
 # ── Histogram bins per variable (signed residuals: predicted − true) ──────────
 BINS = {
-    'amplitude':    np.linspace(-1.0,   1.0,   41),
-    'frequency_hz': np.linspace(-5.0,   5.0,   41),
-    'phase_rad':    np.linspace(-np.pi, np.pi, 41),
+    'frequency_hz': np.linspace(-500.0, 500.0, 41),   # Hz; effective res ~1 Hz at 10k samples
+    'amplitude':    np.linspace(-5.0,   5.0,   41),   # mV
 }
 
 # LaTeX x-axis labels
 LATEX = {
-    'amplitude':    r'$\hat{A} - A$',
     'frequency_hz': r'$\hat{f} - f$ [Hz]',
-    'phase_rad':    r'$\hat{\phi} - \phi$ [rad]',
+    'amplitude':    r'$\hat{A} - A$ [mV]',
 }
 
 COLORS = {'raw': 'steelblue', 'denoised': 'tomato', 'signal': 'seagreen'}
@@ -71,19 +70,19 @@ def load_model(ckpt_path: str, cfg_path: str, device: torch.device):
 
 @torch.no_grad()
 def run_all_pipelines(denoiser, reg_raw, reg_clean, dataloader, device, target_idx):
-    """Returns: y_true, y_raw, y_denoised, y_signal, snr — all (N, n_targets) or (N,)."""
+    """Returns: y_true, y_raw, y_denoised, y_signal, snr  — all (N, n_targets) or (N,)."""
     y_true_list, y_raw_list, y_den_list, y_signal_list, snr_list = [], [], [], [], []
 
-    for sig_bkg, sig, params in dataloader:
-        sig_bkg = sig_bkg.to(device)
-        sig     = sig.to(device)
-        params  = params.to(device)
+    for noisy, clean, params in dataloader:
+        noisy  = noisy.to(device)
+        clean  = clean.to(device)
+        params = params.to(device)
 
-        X_denoised = denoiser(sig_bkg.unsqueeze(-1))          # (B, L, 1)
+        X_denoised = denoiser(noisy.unsqueeze(-1))             # (B, L, 1)
 
-        y_raw    = reg_raw(sig_bkg)                            # (B, L)   → (B, n_targets)
-        y_den    = reg_clean(X_denoised)                       # (B, L, 1)→ (B, n_targets)
-        y_signal = reg_clean(sig)                              # (B, L)   → (B, n_targets)
+        y_raw    = reg_raw(noisy)                              # (B, L) → (B, n_targets)
+        y_den    = reg_clean(X_denoised)                       # (B, L, 1) → squeeze → (B, n_targets)
+        y_signal = reg_clean(clean)                            # (B, L) → (B, n_targets)
 
         y_true_list.append(params[:, target_idx].cpu())
         y_raw_list.append(y_raw.cpu())
@@ -142,26 +141,26 @@ def main():
     parser.add_argument('--regressor_raw_cfg',    required=True)
     parser.add_argument('--regressor_clean_ckpt', required=True)
     parser.add_argument('--regressor_clean_cfg',  required=True)
-    parser.add_argument('--data_dir',   default='data/toy/sinusoidal_signal_white_noise')
-    parser.add_argument('--out_dir',    default='benchmarks/toy')
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--data_dir',   default='data/TIDMAD')
+    parser.add_argument('--out_dir',    default='benchmarks/TIDMAD')
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--device',     default='cuda' if torch.cuda.is_available() else 'cpu')
     args = parser.parse_args()
 
     device  = torch.device(args.device)
     out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     denoiser  = load_model(args.denoiser_ckpt,        args.denoiser_cfg,        device)
     reg_raw   = load_model(args.regressor_raw_ckpt,   args.regressor_raw_cfg,   device)
     reg_clean = load_model(args.regressor_clean_ckpt, args.regressor_clean_cfg, device)
 
+    # Read target_params from YAML (load_model returns a raw nn.Module)
     with open(args.regressor_raw_cfg) as f:
         reg_cfg = yaml.safe_load(f)
     target_params = reg_cfg['model']['init_args']['target_params']
     target_idx    = [int(Param[p]) for p in target_params]
 
-    dm = ToyDataModule(data_dir=args.data_dir, batch_size=args.batch_size)
+    dm = TIDMADDataModule(data_dir=args.data_dir, batch_size=args.batch_size)
     dm.setup('test')
     loader = dm.test_dataloader()
 
