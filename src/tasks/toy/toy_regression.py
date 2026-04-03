@@ -33,12 +33,30 @@ Batch convention (from ToyDataset.__getitem__):
     z  = params   (B, 5)   [amplitude, frequency_hz, phase_rad, noise_amplitude, snr]
 """
 
+import importlib
+
+import yaml
 import torch
 import torch.nn as nn
 from torch import optim
 import lightning as L
 
 from dataloader.toy_dataloader import Param
+
+
+def _load_denoiser(ckpt_path: str, cfg_path: str) -> nn.Module:
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+    mc = cfg['model']['init_args']['model']
+    mod, cls_name = mc['class_path'].rsplit('.', 1)
+    cls = getattr(importlib.import_module(mod), cls_name)
+    model = cls(**mc.get('init_args', {}))
+    ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+    sd = {k.replace('model.', ''): v
+          for k, v in ckpt['state_dict'].items() if k.startswith('model.')}
+    model.load_state_dict(sd)
+    model.eval()
+    return model
 
 # SNR bins for stratified test metrics
 SNR_BINS = {'low': (0.0, 0.1), 'mid': (0.1, 0.3), 'high': (0.3, float('inf'))}
@@ -55,6 +73,8 @@ class RegressionMSE(L.LightningModule):
         model: nn.Module,
         target_params: list[str] = ['amplitude', 'frequency_hz', 'phase_rad'],
         use_clean_input: bool = False,
+        denoiser_ckpt: str | None = None,
+        denoiser_cfg:  str | None = None,
         lr: float = 1e-3,
         lr_decay: float = 0.99,
     ):
@@ -65,8 +85,16 @@ class RegressionMSE(L.LightningModule):
         self.lr_decay        = lr_decay
         self.target_params   = target_params
         self.target_idx      = [int(Param[p]) for p in target_params]
-        self.use_clean_input = use_clean_input   # True → train on sig; False → train on sig_bkg
+        self.use_clean_input = use_clean_input
         self.criterion       = nn.MSELoss()
+
+        # Optional frozen denoiser — inputs are denoised on-the-fly during training
+        if denoiser_ckpt and denoiser_cfg:
+            self.denoiser = _load_denoiser(denoiser_ckpt, denoiser_cfg)
+            for p in self.denoiser.parameters():
+                p.requires_grad_(False)
+        else:
+            self.denoiser = None
 
     def forward(self, x):
         # x: (B, L) -> (B, L, 1) -> model -> (B, n_targets)
@@ -82,7 +110,13 @@ class RegressionMSE(L.LightningModule):
 
     def _step(self, batch):
         sig_bkg, sig, params = batch
-        X     = sig if self.use_clean_input else sig_bkg       # (B, L)
+        if self.use_clean_input:
+            X = sig                                            # (B, L) clean signal
+        elif self.denoiser is not None:
+            with torch.no_grad():
+                X = self.denoiser(sig_bkg.unsqueeze(-1)).squeeze(-1)  # denoised
+        else:
+            X = sig_bkg                                        # (B, L) noisy
         y     = self._get_targets(params)                      # (B, n_targets)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
@@ -101,7 +135,13 @@ class RegressionMSE(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         sig_bkg, sig, params = batch
-        X     = sig if self.use_clean_input else sig_bkg
+        if self.use_clean_input:
+            X = sig
+        elif self.denoiser is not None:
+            with torch.no_grad():
+                X = self.denoiser(sig_bkg.unsqueeze(-1)).squeeze(-1)
+        else:
+            X = sig_bkg
         y     = self._get_targets(params)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
