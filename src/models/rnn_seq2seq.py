@@ -26,6 +26,6 @@ class RNNSeq2Seq(nn.Module):
         self.proj = nn.Linear(2 * d_model, d_input)
 
     def forward(self, x):
-        # x: (B, L, 1)
-        h, _ = self.rnn(x)        # (B, L, 2*d_model)
-        return self.proj(h)       # (B, L, 1)
+        # x: (B, L, 1) — .contiguous() required by cuDNN GRU kernel
+        h, _ = self.rnn(x.contiguous())  # (B, L, 2*d_model)
+        return self.proj(h)              # (B, L, 1)
