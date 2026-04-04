@@ -1,6 +1,6 @@
 # Usage: python main.py fit --config configs/TIDMAD/train_tidmad_s4d_denoising.yaml
 # Trains S4D seq2seq denoiser: channel0001 (noisy) -> channel0002 (clean).
-# Note: with downsample_factor=1000 the effective Nyquist is 5 kHz.
+# Input: 100,000 samples at 10 MHz (0.01 s, no downsampling). Nyquist = 5 MHz.
 
 trainer:
   max_epochs: 100
@@ -46,8 +46,6 @@ model:
 data:
   class_path: dataloader.tidmad_dataloader.TIDMADDataModule
   init_args:
-    data_dir: data/TIDMAD
-    window_size: 10000000
-    downsample_factor: 1000
+    data_dir: data/TIDMAD/preprocessed
     batch_size: 32
-    num_workers: 0
+    num_workers: 4

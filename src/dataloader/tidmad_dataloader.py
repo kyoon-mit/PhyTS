@@ -1,41 +1,35 @@
 """
-Dataloader for the TIDMAD dataset (ABRACADABRA dark matter experiment).
+Dataloader for the preprocessed TIDMAD dataset (ABRACADABRA dark matter experiment).
 
-Each H5 file contains two channels at 10 MHz (int8):
-  channel0001 — SQUID readout (noisy input)
-  channel0002 — injected reference signal (clean ground truth)
+Expects the output of data/TIDMAD/preprocess_tidmad.py in data_dir:
+  {split}_ch1.npy     int8     (N, 100_000)  noisy SQUID channel (channel0001)
+  {split}_ch2.npy     int8     (N, 100_000)  clean injected reference (channel0002)
+  {split}_params.npy  float32  (N, 3)        [frequency_hz, amplitude_mV, snr]
+  scale.npy           float32  scalar        voltage_range_mV / 256.0
 
-Samples are non-overlapping 1-second windows (window_size=10_000_000 samples).
-An optional downsample_factor reduces the sequence length presented to the model.
+int8 arrays are memory-mapped (not loaded into RAM) and converted to float32
+on-the-fly in __getitem__ by multiplying by scale.
 
-Labels are derived per-window from channel0002 via FFT:
-  frequency_hz — dominant frequency peak
-  amplitude    — peak amplitude in mV
-  snr          — signal-to-noise ratio (signal power / noise power in PSD bins)
-
-Normalization: int8 × (volt_range_mV / 256) → physical millivolts (float32).
+Window convention:
+  0.01 s × 10 MHz = 100,000 samples per window, no downsampling.
+  FFT resolution: 10 MHz / 100k = 100 Hz (matches minimum frequency grid step).
+  Nyquist: 5 MHz (covers full 1.1 kHz – 4.9 MHz injection range).
 
 Usage (LightningCLI YAML):
     data:
       class_path: dataloader.tidmad_dataloader.TIDMADDataModule
       init_args:
-        data_dir: data/TIDMAD
-        window_size: 10000000
-        downsample_factor: 1000
+        data_dir: data/TIDMAD/preprocessed
         batch_size: 32
-        num_workers: 0
 
 Batch convention:
-    noisy   (B, seq_len)  — channel0001, downsampled
-    clean   (B, seq_len)  — channel0002, downsampled
-    params  (B, 3)        — [frequency_hz, amplitude_mV, snr]
+    noisy   (B, 100_000)  float32  channel0001
+    clean   (B, 100_000)  float32  channel0002
+    params  (B, 3)        float32  [frequency_hz, amplitude_mV, snr]
 """
 
-import glob
-import os
 from enum import IntEnum
 
-import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -49,142 +43,60 @@ class Param(IntEnum):
 
 
 class TIDMADDataset(Dataset):
-    """Windowed dataset over multiple TIDMAD H5 files.
+    """Memory-mapped TIDMAD dataset.  Loads int8 arrays, scales on-the-fly."""
 
-    Labels (frequency_hz, amplitude, snr) are computed from channel0002 FFT
-    for each window in __getitem__. File handles are opened lazily per worker.
-    """
-
-    FS = 10_000_000  # native sampling rate (Hz)
-
-    def __init__(
-        self,
-        h5_files: list,
-        window_size: int = 10_000_000,
-        downsample_factor: int = 1000,
-    ):
-        self.h5_files        = h5_files
-        self.window_size     = window_size
-        self.downsample_factor = downsample_factor
-        self.seq_len         = window_size // downsample_factor
-        self._file_handles   = {}  # populated lazily per worker process
-
-        # Build flat index: list of (file_path, window_start_sample, scaling, params)
-        # Labels are constant per file (injected signal frequency/amplitude don't change),
-        # so we compute them once from the first full window at native 10 MHz resolution.
-        self.index = []
-        for path in h5_files:
-            with h5py.File(path, 'r') as f:
-                ch1_len   = f['timeseries/channel0001/timeseries'].shape[0]
-                ch2_len   = f['timeseries/channel0002/timeseries'].shape[0]
-                n_samples = min(ch1_len, ch2_len)
-                scaling   = np.float32(f['timeseries/channel0001'].attrs['voltage_range_mV'] / 256.0)
-                ch2_ref   = f['timeseries/channel0002/timeseries'][:window_size].astype(np.float32) * scaling
-            params = self._compute_labels(ch2_ref)
-            n_windows = n_samples // window_size
-            for w in range(n_windows):
-                self.index.append((path, w * window_size, scaling, params))
+    def __init__(self, data_dir: str, split: str):
+        self.scale  = float(np.load(f'{data_dir}/scale.npy'))
+        # mmap_mode='r': array is not loaded into RAM; OS pages on demand
+        self.ch1    = np.load(f'{data_dir}/{split}_ch1.npy',    mmap_mode='r')
+        self.ch2    = np.load(f'{data_dir}/{split}_ch2.npy',    mmap_mode='r')
+        self.params = torch.as_tensor(
+                          np.load(f'{data_dir}/{split}_params.npy'))
 
     def __len__(self):
-        return len(self.index)
-
-    def _get_file(self, path):
-        if path not in self._file_handles:
-            self._file_handles[path] = h5py.File(path, 'r')
-        return self._file_handles[path]
+        return len(self.params)
 
     def __getitem__(self, idx):
-        path, start, scaling, params = self.index[idx]
-        end = start + self.window_size
-        step = self.downsample_factor
-
-        f = self._get_file(path)
-        ch1 = f['timeseries/channel0001/timeseries'][start:end:step].astype(np.float32) * scaling
-        ch2 = f['timeseries/channel0002/timeseries'][start:end:step].astype(np.float32) * scaling
-
-        return (
-            torch.from_numpy(ch1),
-            torch.from_numpy(ch2),
-            torch.from_numpy(params),
-        )
-
-    def _compute_labels(self, clean: np.ndarray) -> np.ndarray:
-        """Derive frequency_hz, amplitude_mV, snr from full-resolution clean signal via FFT."""
-        N      = len(clean)
-        fs_eff = self.FS  # always full-resolution (10 MHz)
-
-        # One-sided amplitude spectrum
-        fft_mag = 2.0 * np.abs(np.fft.rfft(clean)) / N
-        freqs   = np.fft.rfftfreq(N, d=1.0 / fs_eff)
-
-        # Peak (skip DC bin)
-        peak_idx     = int(np.argmax(fft_mag[1:])) + 1
-        frequency_hz = float(freqs[peak_idx])
-        amplitude    = float(fft_mag[peak_idx])
-
-        # SNR in PSD units (mirrors benchmark.py getSNR)
-        psd        = fft_mag ** 2 / (2.0 * fs_eff)
-        sig_range  = 1
-        noise_range = 50
-        lo_s, hi_s = max(0, peak_idx - sig_range), peak_idx + sig_range + 1
-        lo_n, hi_n = max(0, peak_idx - noise_range), peak_idx + noise_range + 1
-        signal_pwr = float(np.sum(psd[lo_s:hi_s]))
-        noise_pwr  = float(np.sum(psd[lo_n:hi_n])) - signal_pwr
-        snr        = signal_pwr / max(noise_pwr, 1e-30)
-
-        return np.array([frequency_hz, amplitude, snr], dtype=np.float32)
+        # astype copies the int8 slice into a new float32 array
+        ch1 = torch.from_numpy(self.ch1[idx].astype(np.float32)) * self.scale
+        ch2 = torch.from_numpy(self.ch2[idx].astype(np.float32)) * self.scale
+        return ch1, ch2, self.params[idx]
 
 
 class TIDMADDataModule(L.LightningDataModule):
-    """Lightning DataModule for TIDMAD.
+    """Lightning DataModule for preprocessed TIDMAD NPY splits.
 
-    Splits:
-      train — abra_training_*.h5
-      val   — abra_validation_*.h5
-      test  — abra_validation_*.h5  (same files, different shuffle)
+    Expects train / val / test splits produced by preprocess_tidmad.py.
     """
 
     def __init__(
         self,
-        data_dir: str,
-        window_size: int = 10_000_000,
-        downsample_factor: int = 1000,
-        batch_size: int = 32,
+        data_dir:    str,
+        batch_size:  int = 32,
         num_workers: int = 0,
     ):
         super().__init__()
-        self.data_dir         = data_dir
-        self.window_size      = window_size
-        self.downsample_factor = downsample_factor
-        self.batch_size       = batch_size
-        self.num_workers      = num_workers
+        self.data_dir    = data_dir
+        self.batch_size  = batch_size
+        self.num_workers = num_workers
 
-    def _glob(self, pattern):
-        files = sorted(glob.glob(os.path.join(self.data_dir, pattern)))
-        if not files:
-            raise FileNotFoundError(f'No files found matching {os.path.join(self.data_dir, pattern)}')
-        return files
-
-    def _dataset(self, files):
-        return TIDMADDataset(files, self.window_size, self.downsample_factor)
-
-    def setup(self, stage=None):
+    def setup(self, stage: str | None = None):
         if stage == 'fit':
-            self.train_dataset = self._dataset(self._glob('abra_training_*.h5'))
-            self.val_dataset   = self._dataset(self._glob('abra_validation_*.h5'))
+            self.train = TIDMADDataset(self.data_dir, 'train')
+            self.val   = TIDMADDataset(self.data_dir, 'val')
         elif stage in ('test', 'predict'):
-            self.test_dataset  = self._dataset(self._glob('abra_validation_*.h5'))
+            self.test  = TIDMADDataset(self.data_dir, 'test')
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size,
-                          shuffle=True, num_workers=self.num_workers)
+        return DataLoader(self.train, batch_size=self.batch_size,
+                          shuffle=True,  num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size,
+        return DataLoader(self.val,   batch_size=self.batch_size,
                           shuffle=False, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size,
+        return DataLoader(self.test,  batch_size=self.batch_size,
                           shuffle=False, num_workers=self.num_workers)
 
     def predict_dataloader(self):

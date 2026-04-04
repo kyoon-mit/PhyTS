@@ -1,7 +1,7 @@
 # Usage: python main.py fit --config configs/TIDMAD/train_tidmad_mlp_regression_clean.yaml
 # Trains MLP regressor on clean signals (channel0002). This regressor is applied
 # to denoised signals at eval time to represent the "denoised pipeline".
-# seq_len = window_size // downsample_factor = 10_000_000 // 1000 = 10_000
+# seq_len = 100,000 (0.01 s at 10 MHz, no downsampling)
 
 trainer:
   max_epochs: 1000
@@ -39,7 +39,7 @@ model:
     model:
       class_path: models.mlp.MLPRegressor
       init_args:
-        seq_len: 10000
+        seq_len: 100000
         d_output: 2      # must match len(target_params)
         hidden_dims: [256, 128, 64]
         dropout: 0.1
@@ -47,8 +47,6 @@ model:
 data:
   class_path: dataloader.tidmad_dataloader.TIDMADDataModule
   init_args:
-    data_dir: data/TIDMAD
-    window_size: 10000000
-    downsample_factor: 1000
+    data_dir: data/TIDMAD/preprocessed
     batch_size: 32
-    num_workers: 0
+    num_workers: 4

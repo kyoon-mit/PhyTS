@@ -42,18 +42,27 @@ src/
     mlp.py           # MLPRegressor (flatten → FC layers)
   dataloader/
     LIGO_dataloader.py
+    tidmad_dataloader.py
     toy_dataloader.py
   tasks/
     toy/
       toy_denoising.py    # DenoisingMSE task for toy dataset
       toy_regression.py   # RegressionMSE task for toy dataset
+    TIDMAD/
+      tidmad_regression.py # RegressionMSE task for TIDMAD
     LIGO/
       LIGO_denoising.py   # DenoisingMSE task for LIGO
 configs/toy/           # PyTorch Lightning YAML configs
+configs/TIDMAD/        # PyTorch Lightning YAML configs for TIDMAD
 benchmarks/toy/        # Benchmark scripts and results
+benchmarks/TIDMAD/     # Benchmark scripts and results for TIDMAD
 data/
   LIGO/sample_dataset/
   toy/sinusoidal_signal_white_noise/
+  TIDMAD/
+    original/          # raw H5 files (symlinks or downloads) — not tracked by git
+    preprocessed/      # .npy arrays from preprocess_tidmad.py — not tracked by git
+    preprocess_tidmad.py
 main.py                # LightningCLI entry point
 ```
 
@@ -64,6 +73,25 @@ main.py                # LightningCLI entry point
 Tasks are organized **by domain**, not by model. Each LightningModule accepts
 any compatible `nn.Module` as a constructor argument — swapping models only
 requires changing the YAML config.
+
+---
+
+## TIDMAD benchmark: denoising pipeline
+
+**One-time setup** — preprocess raw H5 files into memory-mappable `.npy` arrays
+(see [`data/TIDMAD/README.md`](data/TIDMAD/README.md) for how to obtain the H5 files):
+
+```bash
+python data/TIDMAD/preprocess_tidmad.py \
+    --data_dir data/TIDMAD/original \
+    --out_dir  data/TIDMAD/preprocessed
+```
+
+Then run the benchmark:
+
+```bash
+bash benchmarks/TIDMAD/run.sh
+```
 
 ---
 
