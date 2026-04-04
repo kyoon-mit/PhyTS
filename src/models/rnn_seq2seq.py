@@ -3,6 +3,7 @@
 Interface: (B, L, 1) -> (B, L, 1)
 """
 
+import torch
 import torch.nn as nn
 
 
@@ -26,6 +27,8 @@ class RNNSeq2Seq(nn.Module):
         self.proj = nn.Linear(2 * d_model, d_input)
 
     def forward(self, x):
-        # x: (B, L, 1) — .contiguous() required by cuDNN GRU kernel
-        h, _ = self.rnn(x.contiguous())  # (B, L, 2*d_model)
+        # x: (B, L, 1)
+        # cuDNN GRU does not support seq_len=100k on MIG; fall back to PyTorch impl
+        with torch.backends.cudnn.flags(enabled=False):
+            h, _ = self.rnn(x)           # (B, L, 2*d_model)
         return self.proj(h)              # (B, L, 1)
