@@ -1,0 +1,23 @@
+# Usage: python tools/save_checkpoint.py --cfg configs/TIDMAD/train_tidmad_classical_denoising.yaml --out checkpoints/tidmad_classical_denoising/best.ckpt
+# Wiener-inspired spectral filter — no learnable parameters.
+
+trainer:
+  max_epochs: 1
+  accelerator: cpu
+  devices: 1
+
+model:
+  class_path: tasks.toy.toy_denoising.DenoisingMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.classical_filter.ClassicalFilter
+      init_args: {}
+
+data:
+  class_path: dataloader.tidmad_dataloader.TIDMADDataModule
+  init_args:
+    data_dir: data/TIDMAD/preprocessed
+    batch_size: 32
+    num_workers: 4

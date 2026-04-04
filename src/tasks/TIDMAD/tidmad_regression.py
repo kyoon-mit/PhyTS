@@ -19,23 +19,42 @@ Usage (LightningCLI YAML):
         model:
           class_path: models.mlp.MLPRegressor
           init_args:
-            seq_len: 10000
+            seq_len: 100000
             d_output: 2
             hidden_dims: [256, 128, 64]
             dropout: 0.1
 
 Batch convention (from TIDMADDataset.__getitem__):
-    noisy   (B, L)  — channel0001 (noisy input, or pre-denoised)
-    clean   (B, L)  — channel0002 (clean ground truth, unused here)
+    noisy   (B, L)  — channel0001 (noisy input)
+    clean   (B, L)  — channel0002 (clean ground truth)
     params  (B, 3)  — [frequency_hz, amplitude_mV, snr]
 """
 
+import importlib
+
+import yaml
 import torch
 import torch.nn as nn
 from torch import optim
 import lightning as L
 
 from dataloader.tidmad_dataloader import Param
+
+
+def _load_denoiser(ckpt_path: str, cfg_path: str) -> nn.Module:
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+    mc = cfg['model']['init_args']['model']
+    mod, cls_name = mc['class_path'].rsplit('.', 1)
+    cls = getattr(importlib.import_module(mod), cls_name)
+    model = cls(**mc.get('init_args', {}))
+    ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+    sd = {k.replace('model.', ''): v
+          for k, v in ckpt['state_dict'].items() if k.startswith('model.')}
+    model.load_state_dict(sd)
+    model.eval()
+    return model
+
 
 # SNR bins for stratified test metrics
 SNR_BINS = {'low': (0.0, 1.0), 'mid': (1.0, 10.0), 'high': (10.0, float('inf'))}
@@ -45,6 +64,7 @@ class RegressionMSE(L.LightningModule):
     """Parameter regression from a (possibly denoised) TIDMAD signal via MSE loss.
 
     Logs per-param RMSE at train/val and SNR-stratified RMSE at test.
+    Optionally applies a frozen denoiser on-the-fly during training/inference.
     """
 
     def __init__(
@@ -52,6 +72,8 @@ class RegressionMSE(L.LightningModule):
         model: nn.Module,
         target_params: list = ['frequency_hz', 'amplitude'],
         use_clean_input: bool = False,
+        denoiser_ckpt: str | None = None,
+        denoiser_cfg:  str | None = None,
         lr: float = 1e-3,
         lr_decay: float = 0.99,
     ):
@@ -64,6 +86,14 @@ class RegressionMSE(L.LightningModule):
         self.target_idx      = [int(Param[p]) for p in target_params]
         self.use_clean_input = use_clean_input
         self.criterion       = nn.MSELoss()
+
+        # Optional frozen denoiser — inputs are denoised on-the-fly during training
+        if denoiser_ckpt and denoiser_cfg:
+            self.denoiser = _load_denoiser(denoiser_ckpt, denoiser_cfg)
+            for p in self.denoiser.parameters():
+                p.requires_grad_(False)
+        else:
+            self.denoiser = None
 
     def forward(self, x):
         # x: (B, L) -> (B, L, 1) -> model -> (B, n_targets)
@@ -79,7 +109,13 @@ class RegressionMSE(L.LightningModule):
 
     def _step(self, batch):
         noisy, clean, params = batch
-        X     = clean if self.use_clean_input else noisy       # (B, L)
+        if self.use_clean_input:
+            X = clean                                          # (B, L) clean signal
+        elif self.denoiser is not None:
+            with torch.no_grad():
+                X = self.denoiser(noisy.unsqueeze(-1)).squeeze(-1)  # denoised
+        else:
+            X = noisy                                          # (B, L) noisy
         y     = self._get_targets(params)                      # (B, n_targets)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
@@ -98,7 +134,13 @@ class RegressionMSE(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         noisy, clean, params = batch
-        X     = clean if self.use_clean_input else noisy
+        if self.use_clean_input:
+            X = clean
+        elif self.denoiser is not None:
+            with torch.no_grad():
+                X = self.denoiser(noisy.unsqueeze(-1)).squeeze(-1)
+        else:
+            X = noisy
         y     = self._get_targets(params)
         y_hat = self(X)
         loss  = self.criterion(y_hat, y)
