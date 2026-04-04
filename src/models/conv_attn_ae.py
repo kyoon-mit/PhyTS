@@ -25,6 +25,7 @@ Classification mode (num_classes > 0):
             lg (~700K): C=192 → 706,376
 """
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
@@ -65,13 +66,15 @@ class ConvAttnAE(nn.Module):
         self.encoder = nn.Sequential(enc)
 
         # Bottleneck attention: operates on (B, L', latent_channels)
-        self.attn = nn.MultiheadAttention(
-            embed_dim=latent_channels,
-            num_heads=num_heads,
-            dropout=attn_dropout,
-            batch_first=True,
-        )
+        # Projections for F.scaled_dot_product_attention (Flash Attention — O(L) memory)
+        self.q_proj = nn.Linear(latent_channels, latent_channels)
+        self.k_proj = nn.Linear(latent_channels, latent_channels)
+        self.v_proj = nn.Linear(latent_channels, latent_channels)
+        self.out_proj = nn.Linear(latent_channels, latent_channels)
         self.attn_norm = nn.LayerNorm(latent_channels)
+        self.num_heads = num_heads
+        self.head_dim = latent_channels // num_heads
+        self.attn_dropout = attn_dropout
 
         if self._classify:
             self.head = nn.Linear(latent_channels, num_classes)
@@ -91,9 +94,17 @@ class ConvAttnAE(nn.Module):
         B, L, _ = x.shape
         x = x.transpose(1, 2)                    # (B, 1, L)
         z = self.encoder(x)                       # (B, C, L')
-        # Attention in bottleneck
+        # Attention in bottleneck (Flash Attention — O(L) memory)
         z_t = z.transpose(1, 2)                   # (B, L', C)
-        h, _ = self.attn(z_t, z_t, z_t)
+        Bz, Lz, C = z_t.shape
+        q = self.q_proj(z_t).reshape(Bz, Lz, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(z_t).reshape(Bz, Lz, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(z_t).reshape(Bz, Lz, self.num_heads, self.head_dim).transpose(1, 2)
+        # (B, heads, L', head_dim) — uses Flash Attention on supported hardware
+        dropout_p = self.attn_dropout if self.training else 0.0
+        h = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+        h = h.transpose(1, 2).reshape(Bz, Lz, C)
+        h = self.out_proj(h)
         z_t = self.attn_norm(z_t + h)            # residual
         z = z_t.transpose(1, 2)                   # (B, C, L')
 
