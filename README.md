@@ -21,13 +21,69 @@ Synthetic dataset for denoising benchmarks: `s(t) = A·sin(2πft + φ)` buried i
 See [`data/toy/sinusoidal_signal_white_noise/README.md`](data/toy/sinusoidal_signal_white_noise/README.md).
 
 ---
-
-## Setup
+<!-- ## Setup
 
 ```bash
 conda env create -f env.yaml
 conda activate tsenv
 pip install -e .
+``` -->
+
+# Setup using `uv`
+
+Two independent `uv` projects live in this repo:
+
+1. **Root** (`pyproject.toml`) - main training / eval env, Python 3.12.
+2. **Foundation benchmark** (`benchmarks/foundation/pyproject.toml`) — pretrained
+   foundation-model wrappers, Python 3.10 + torch 2.4.1. Kept separate because
+   several of those models have pinned deps that conflict with the main stack.
+
+### Main env
+
+`torch` is installed from the official PyTorch wheel indexes via two mutually
+exclusive extras (`cpu` and `cu129`), so the lockfile resolves correctly on
+both laptop and GPU node. Pick exactly one:
+
+```bash
+# Laptop / CPU-only
+uv sync --extra cpu
+
+# GPU cluster (CUDA 12.x); add --extra jax for equinox/optax on top
+uv sync --extra cu129 [--extra jax]
+
+# Dev tools (ruff, …)
+uv sync --group dev
+```
+
+`--extra jax` pulls in `jax`, `equinox`, and `optax`. On GPU nodes, `--extra cu129`
+additionally installs `jax[cuda12]` — do not combine `--extra cpu` and
+`--extra cu129`.
+
+If your cluster has a different CUDA version, change the `pytorch-cu129` index
+URL in `pyproject.toml` to the matching wheel channel (e.g. `whl/cu124`).
+
+### Foundation-model env
+
+Separate project, separate lockfile, Python 3.10. Run `uv` against it by path:
+
+```bash
+uv --project benchmarks/foundation sync
+```
+
+This installs torch 2.4.1 from the cu121 wheel index, the six foundation-model
+libraries (MOMENT, Chronos, TimesFM, Time-MoE, MOIRAI, Lag-Llama), and pulls
+Lag-Llama directly from GitHub via `[tool.uv.sources]`. Then run benchmarks
+with:
+
+```bash
+uv --project benchmarks/foundation run python benchmarks/foundation/run_benchmark.py ...
+```
+
+Lag-Llama checkpoint download (one-time):
+
+```bash
+huggingface-cli download time-series-foundation-models/Lag-Llama lag-llama.ckpt \
+    --local-dir <your_checkpoints_dir>/lag-llama/
 ```
 
 ---

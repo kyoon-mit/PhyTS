@@ -1,5 +1,4 @@
-"""
-Unified foundation-model benchmarking pipeline.
+"""Unified foundation-model benchmarking pipeline.
 
 Usage
 -----

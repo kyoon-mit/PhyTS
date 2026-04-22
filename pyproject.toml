@@ -11,18 +11,40 @@ dependencies = [
     "jaxtyping>=0.3.9",
     "jsonargparse[signatures]>=4.48.0",
     "lightning>=2.6.1",
-    "torch>=2.11.0",
     "wandb>=0.26.0",
 ]
 
 [project.optional-dependencies]
-jax = [
-    "optax>=0.2.8",
-    "equinox>=0.13.2",
-    "jax>=0.7.2",
-]
-cu12 = ["jax[cuda12]>=0.7.2"]
+# Pick exactly one of cpu / cu129 — they are mutually exclusive (see tool.uv.conflicts).
+# Local / laptop:           uv sync --extra cpu
+# GPU cluster (CUDA 12.x):  uv sync --extra cu129 [--extra jax]
+cpu = ["torch>=2.11.0"]
+cu129 = ["torch>=2.11.0", "jax[cuda12]>=0.7.2"]
+# Pure-Python JAX stack (CPU or layered on top of cu129). Safe to combine with either wheel choice.
+jax = ["equinox>=0.13.2", "jax>=0.7.2", "optax>=0.2.8"]
 
+[dependency-groups]
+# add any extra dependencies for development here, e.g. linters, formatters, type checkers, etc. here
+dev = ["ruff>=0.6.0"]
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu129" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu129", extra = "cu129" },
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -34,7 +56,17 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["C", "E", "F", "I", "W", "D", "N"]
-ignore = ["E741", "W605", "C408", "E402", "F722", "N806", "N803", "D107", "N812"]
+ignore = [
+    "E741",
+    "W605",
+    "C408",
+    "E402",
+    "F722",
+    "N806",
+    "N803",
+    "D107",
+    "N812",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
