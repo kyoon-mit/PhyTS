@@ -1,7 +1,7 @@
 # Foundation-model benchmark dependencies (Python 3.10).
 #
-# One env covers all six wrappers: MOMENT, Chronos, TimesFM, Time-MoE,
-# MOIRAI, and Lag-Llama.
+# One env covers all seven wrappers: MOMENT, Chronos, TimesFM, Time-MoE,
+# MOIRAI, Lag-Llama, and Granite TTM.
 #
 # Install:
 #   conda create -p <env_prefix> python=3.10 -y
@@ -15,7 +15,7 @@
 
 torch==2.4.1
 numpy==1.26.4
-pandas==2.1.4
+pandas==2.3.3                     # granite-tsfm needs >=2.2; gluonts 0.14 runs fine despite its pin
 einops==0.7.0
 h5py
 wandb
@@ -30,3 +30,4 @@ timesfm==1.3.0
 transformers==4.44.2
 accelerate==1.13.0
 uni2ts==2.0.0
+granite-tsfm==0.2.23
