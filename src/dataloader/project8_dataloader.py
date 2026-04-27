@@ -54,9 +54,14 @@ import h5py
 import lightning as L
 import numpy as np
 import torch
+from scipy.fft import fft
 from torch.utils.data import DataLoader, Dataset
 
-from src.utils.transforms import fft_func_IQ_complex_channels
+
+def fft_func_IQ_complex_channels(signal_I, signal_Q):
+    signal = signal_I + 1j * signal_Q
+    yf = fft(signal)
+    return yf.real, yf.imag
 
 
 # ─── batch-tuple indices for the joint task ─────────────────────────────────
