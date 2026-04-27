@@ -18,6 +18,19 @@ import importlib
 from pathlib import Path
 
 import lightning as L
+
+# Directory containing the git checkout (benchmarks/TESS/eval_pipeline.py → repo root).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _resolve_under_repo(path_str: str) -> Path:
+    """Turn CLI path into an absolute Path; relative paths are rooted at the repo.
+
+    Slurm jobs may start in the submit directory or another cwd; anchoring avoids
+    nested paths like ``benchmarks/TESS/benchmarks/TESS`` and broken ``configs/`` lookups.
+    """
+    p = Path(path_str).expanduser()
+    return p.resolve() if p.is_absolute() else (_REPO_ROOT / p).resolve()
 import numpy as np
 import torch
 import yaml
@@ -127,6 +140,7 @@ def load_linoss_task(ckpt_path: str, cfg_path: str):
         model=task.jax_model,
         model_state=task.jax_model_state,
     )
+    task.eval()
     return task
 
 
@@ -369,31 +383,33 @@ def main():
     args = parser.parse_args()
 
     device = torch.device(args.device)
-    ckpt_dir = Path(args.ckpt_dir)
-    out_dir = Path(args.out_dir)
+    ckpt_dir = _resolve_under_repo(args.ckpt_dir)
+    data_dir = _resolve_under_repo(args.data_dir)
+    out_dir = _resolve_under_repo(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Regression ──────────────────────────────────────────────────────────
     if not args.skip_regression:
         from dataloader.tess_dataloader import TESSRegressionDataModule
-        dm = TESSRegressionDataModule(data_dir=args.data_dir, batch_size=args.batch_size)
+        dm = TESSRegressionDataModule(data_dir=str(data_dir), batch_size=args.batch_size)
         dm.setup("test")
         loader = dm.test_dataloader()
 
         print("\n=== Regression ===")
         for model_name, ckpt_rel, cfg_path in REGRESSION_MODELS:
             ckpt_path = ckpt_dir / ckpt_rel
+            cfg_abs = _resolve_under_repo(cfg_path)
             if not ckpt_path.exists():
                 print(f"  [{model_name}] checkpoint not found, skipping: {ckpt_path}")
                 continue
             if model_name in LINOSS_TASKS:
-                model = load_linoss_task(str(ckpt_path), cfg_path)
+                model = load_linoss_task(str(ckpt_path), str(cfg_abs))
                 results = evaluate_linoss_regression(model, loader)
             elif model_name in FROZEN_TASKS:
-                model = load_task(str(ckpt_path), cfg_path, device)
+                model = load_task(str(ckpt_path), str(cfg_abs), device)
                 results = evaluate_regression(model, loader, device)
             else:
-                model = load_model(str(ckpt_path), cfg_path, device)
+                model = load_model(str(ckpt_path), str(cfg_abs), device)
                 results = evaluate_regression(model, loader, device)
             print(f"  [{model_name}] RMSE={results['rmse']:.4f}  MAE={results['mae']:.4f}  R²={results['r2']:.3f}")
             plot_regression(results, model_name, out_dir)
@@ -401,8 +417,8 @@ def main():
 
     # ── Classification ──────────────────────────────────────────────────────
     if not args.skip_classification:
-        from dataloader.tess_dataloader import TESSClassificationDataModule, TESSClassificationDataset
-        dm = TESSClassificationDataModule(data_dir=args.data_dir, batch_size=args.batch_size)
+        from dataloader.tess_dataloader import TESSClassificationDataModule
+        dm = TESSClassificationDataModule(data_dir=str(data_dir), batch_size=args.batch_size)
         dm.setup("test")
         loader = dm.test_dataloader()
         label_names = dm.test.label_names
@@ -410,17 +426,18 @@ def main():
         print("\n=== Classification ===")
         for model_name, ckpt_rel, cfg_path in CLASSIFICATION_MODELS:
             ckpt_path = ckpt_dir / ckpt_rel
+            cfg_abs = _resolve_under_repo(cfg_path)
             if not ckpt_path.exists():
                 print(f"  [{model_name}] checkpoint not found, skipping: {ckpt_path}")
                 continue
             if model_name in LINOSS_TASKS:
-                model = load_linoss_task(str(ckpt_path), cfg_path)
+                model = load_linoss_task(str(ckpt_path), str(cfg_abs))
                 results = evaluate_linoss_classification(model, loader, label_names)
             elif model_name in FROZEN_TASKS:
-                model = load_task(str(ckpt_path), cfg_path, device)
+                model = load_task(str(ckpt_path), str(cfg_abs), device)
                 results = evaluate_classification(model, loader, device, label_names)
             else:
-                model = load_model(str(ckpt_path), cfg_path, device)
+                model = load_model(str(ckpt_path), str(cfg_abs), device)
                 results = evaluate_classification(model, loader, device, label_names)
             print(f"  [{model_name}] Accuracy={results['acc']:.3f}")
             for cls_name, cls_acc in results["per_class_acc"].items():

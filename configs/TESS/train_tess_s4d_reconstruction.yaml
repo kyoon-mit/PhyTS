@@ -14,7 +14,7 @@ trainer:
         monitor: val/loss
         mode: min
         patience: 20
-    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    - class_path: tasks.TESS.pytorch_checkpoint.TESSPyTorchModelCheckpoint
       init_args:
         dirpath: checkpoints/tess_s4d_reconstruction
         filename: best

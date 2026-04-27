@@ -16,7 +16,8 @@
 
 set -e
 
-REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 DATA_DIR=/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics/data_engaging/TESS/.cache
 
 # Skip if both files already present

@@ -92,6 +92,10 @@ class JAXLightningModule(L.LightningModule):
         """Split a scalar PRNG key into one key per sample for vmapped dropout."""
         return jax.random.split(base_key, batch_size)
 
+    def _training_step_extra_logs(self, model_output: PyTree[jax.Array], y: PyTree[jax.Array]) -> None:
+        """Log additional ``train/*`` metrics from forward outputs; override in task modules."""
+        return
+
     def forward(self, x: ModelInput):
         """Forward pass. convert PyTorch tensor to JAX array and apply JAX model."""
         x_jax = tensor_to_jax(x)
@@ -141,6 +145,7 @@ class JAXLightningModule(L.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
+        self._training_step_extra_logs(model_output, y)
 
         # Needed for lightning if self.automatic_optimization = False
         optimizers = self.optimizers()
@@ -212,6 +217,10 @@ class JAXLightningModule(L.LightningModule):
             self.jax_optimizer,
         )
 
-        # seperate trainable and non-trainable parameters for optimizer state initialization
+        # separate trainable and non-trainable parameters for optimizer state initialization
         diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
         self.opt_state = self.jax_optimizer.init(diff_model)
+        # Lightning still expects a torch.nn optimizer when ``automatic_optimization`` is
+        # False; real updates are optax in ``training_step``.  A noop SGD silences
+        # "configure_optimizers returned None" and keeps ``self.optimizers()`` valid.
+        return torch.optim.SGD([torch.nn.Parameter(torch.zeros(1))], lr=0.0)

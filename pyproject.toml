@@ -25,7 +25,11 @@ jax = [
     "huggingface_hub>=0.20.0",
     "jax>=0.7.2",
 ]
+# GPU JAX: use together with the ``jax`` extra, e.g.
+#   uv sync --extra jax --extra cu12
+# Pick ``cu12`` (driver >= 525) or ``cu13`` (>= 580); see https://docs.jax.dev/en/latest/installation.html
 cu12 = ["jax[cuda12]>=0.7.2"]
+cu13 = ["jax[cuda13]>=0.7.2"]
 
 
 [tool.setuptools.packages.find]
