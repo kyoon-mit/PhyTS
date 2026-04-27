@@ -12,6 +12,7 @@ dependencies = [
     "jaxtyping>=0.3.9",
     "jsonargparse[signatures]>=4.48.0",
     "lightning>=2.6.1",
+    "matplotlib>=3.8.0",
     "pyarrow>=16.0.0",
     "torch>=2.11.0",
     "wandb>=0.26.0",
@@ -23,7 +24,6 @@ jax = [
     "equinox>=0.13.2",
     "huggingface_hub>=0.20.0",
     "jax>=0.7.2",
-    "matplotlib>=3.8.0",
 ]
 cu12 = ["jax[cuda12]>=0.7.2"]
 

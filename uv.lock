@@ -2263,6 +2263,7 @@ dependencies = [
     { name = "jaxtyping" },
     { name = "jsonargparse", extra = ["signatures"] },
     { name = "lightning" },
+    { name = "matplotlib" },
     { name = "pyarrow" },
     { name = "torch" },
     { name = "wandb" },
@@ -2276,7 +2277,6 @@ jax = [
     { name = "equinox" },
     { name = "huggingface-hub" },
     { name = "jax" },
-    { name = "matplotlib" },
     { name = "optax" },
 ]
 
@@ -2291,7 +2291,7 @@ requires-dist = [
     { name = "jaxtyping", specifier = ">=0.3.9" },
     { name = "jsonargparse", extras = ["signatures"], specifier = ">=4.48.0" },
     { name = "lightning", specifier = ">=2.6.1" },
-    { name = "matplotlib", marker = "extra == 'jax'", specifier = ">=3.8.0" },
+    { name = "matplotlib", specifier = ">=3.8.0" },
     { name = "optax", marker = "extra == 'jax'", specifier = ">=0.2.8" },
     { name = "pyarrow", specifier = ">=16.0.0" },
     { name = "torch", specifier = ">=2.11.0" },

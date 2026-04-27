@@ -38,7 +38,7 @@ REPO = "PhyTS-team/PhyTS-bench"
 REG_NAME = "tess_regression.parquet"
 CLS_NAME = "tess_classification.parquet"
 SCRIPT_DIR = Path(__file__).resolve().parent
-CACHE = SCRIPT_DIR / ".cache"
+_DEFAULT_DATA_DIR = SCRIPT_DIR / ".cache" / "TESS"
 
 N_EXAMPLE_CURVES = 6
 RNG_SEED = 42
@@ -52,13 +52,16 @@ COVERAGE_PREVIEW_MAX_H = 900
 COVERAGE_PREVIEW_MAX_W = 700
 
 
-def resolve_parquet(filename: str) -> Path:
-    """Return path to ``TESS/<filename>``, downloading from the Hub if missing.
+def resolve_parquet(filename: str, data_dir: Path) -> Path:
+    """Return path to ``filename``, downloading from the Hub if missing.
 
     Parameters
     ----------
     filename
-        Basename under the ``TESS/`` folder on the dataset repo.
+        Basename of the Parquet file (e.g. ``tess_regression.parquet``).
+    data_dir
+        Directory that contains (or should contain) the Parquet files.
+        Matches the ``data_dir`` used by the dataloaders and ``eval_pipeline.py``.
 
     Returns
     -------
@@ -70,21 +73,19 @@ def resolve_parquet(filename: str) -> Path:
     SystemExit
         If download fails.
     """
-    candidates = [
-        CACHE / "TESS" / filename,
-        CACHE / filename,
-    ]
-    for p in candidates:
-        if p.is_file():
-            return p
-    CACHE.mkdir(parents=True, exist_ok=True)
+    direct = data_dir / filename
+    if direct.is_file():
+        return direct
+    # Fall back to downloading via the Hub into the default cache location.
+    cache = SCRIPT_DIR / ".cache"
+    cache.mkdir(parents=True, exist_ok=True)
     try:
         return Path(
             hf_hub_download(
                 repo_id=REPO,
                 repo_type="dataset",
                 filename=f"TESS/{filename}",
-                local_dir=str(CACHE),
+                local_dir=str(cache),
             )
         )
     except (OSError, HfHubHTTPError) as e:
@@ -491,16 +492,24 @@ def _render_time_coverage_dataset(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Write TESS exploration figures under --out-dir.")
     parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=_DEFAULT_DATA_DIR,
+        help="Directory containing tess_regression.parquet and tess_classification.parquet. "
+             f"Default: {_DEFAULT_DATA_DIR}",
+    )
+    parser.add_argument(
         "--out-dir",
         type=Path,
         default=SCRIPT_DIR / "figures",
-        help="Output directory (default: data/TESS/figures)",
+        help="Output directory for figures (default: data/TESS/figures)",
     )
     args = parser.parse_args()
+    data_dir = args.data_dir.resolve()
     out_dir = args.out_dir.resolve()
 
-    reg_path = resolve_parquet(REG_NAME)
-    cls_path = resolve_parquet(CLS_NAME)
+    reg_path = resolve_parquet(REG_NAME, data_dir)
+    cls_path = resolve_parquet(CLS_NAME, data_dir)
 
     rng = np.random.default_rng(RNG_SEED)
     rng_dt = np.random.default_rng(RNG_SEED + 31337)
