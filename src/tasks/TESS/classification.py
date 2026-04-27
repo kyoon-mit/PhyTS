@@ -29,6 +29,8 @@ Usage (LightningCLI YAML):
             n_layers: 4
 """
 
+import logging
+
 import torch
 import torch.nn as nn
 from torch import Tensor, optim
@@ -38,6 +40,8 @@ from torchmetrics.classification import (
     MulticlassF1Score,
     MulticlassConfusionMatrix,
 )
+
+log = logging.getLogger(__name__)
 
 from dataloader.tess_dataloader import NUM_CLASSES, Label
 
@@ -105,6 +109,18 @@ class TESSClassification(L.LightningModule):
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
         return loss
+
+    def on_train_epoch_end(self):
+        metrics = self.trainer.callback_metrics
+        log.info(
+            "Epoch %3d | train/loss: %.4f  train/acc: %.4f  val/loss: %.4f  val/acc: %.4f  val/f1: %.4f",
+            self.current_epoch,
+            metrics.get("train/loss", 0),
+            metrics.get("train/acc", 0),
+            metrics.get("val/loss", 0),
+            metrics.get("val/acc", 0),
+            metrics.get("val/f1_macro", 0),
+        )
 
     def validation_step(self, batch: Batch, batch_idx: int):
         loss, logits, label = self._step(batch)
