@@ -2,12 +2,16 @@
 Dataloader for the Project 8 simulation dataset (CRES neutrino-mass experiment).
 
 Splits are stored as separate directories of HDF5 files (one per split).  Each
-HDF5 file contains:
-  inputs       e.g. ['output_ts_I', 'output_ts_Q']  (T,)  float32  time series
-  variables    e.g. ['energy', ...]                 ()    float32  regression targets
-  noise        pre-generated noise traces, stored under one of two keys
-               (gaussian / non-gaussian); the active key is selected by
-               ``noise_type`` and the full array is preloaded once per split.
+HDF5 file contains, per event:
+  inputs       e.g. ['output_ts_I', 'output_ts_Q']  (T,) float32 clean trace
+  variables    e.g. ['energy', ...]                 ()   float32 regression targets
+  noise        for every input key ``K`` and every supported noise type ``N``,
+               a parallel dataset ``K_N_noise`` (e.g. ``output_ts_I_cav_noise``)
+               holding the (T,) float32 noise trace for that channel.
+
+The active noise type is selected by ``noise_type`` (``'cav'`` | ``'gauss'``);
+in __getitem__ the matching noise row is read alongside the clean row and
+added channel-wise.
 
 Two tasks are supported:
   Project8SimDataset           - joint task: ts (+ optional fft),
@@ -26,10 +30,7 @@ Usage (LightningCLI YAML):
         test_dir:   data/Project8Sim/hdf5/test
         inputs:     [output_ts_I, output_ts_Q]
         variables:  [energy]
-        noise_type: gaussian
-        noise_paths:
-          gaussian:     noise_gaussian
-          non_gaussian: noise_non_gaussian
+        noise_type: cav        # 'cav' | 'gauss'
         # Optional: skip _compute_norm_stats by passing precomputed values.
         mu:   null
         stds: null
@@ -76,11 +77,17 @@ class DenoisingBatch(IntEnum):
     clean = 1
 
 
-# ─── default noise key mapping ──────────────────────────────────────────────
-DEFAULT_NOISE_PATHS = {
-    'gaussian':     'noise_gaussian',
-    'non_gaussian': 'noise_non_gaussian',
-}
+# ─── noise key naming ───────────────────────────────────────────────────────
+NOISE_TYPES = ('cav', 'gauss')
+
+
+def _noise_key(input_key: str, noise_type: str) -> str:
+    """HDF5 dataset name for the noise paired with ``input_key``."""
+    if noise_type not in NOISE_TYPES:
+        raise ValueError(
+            f"noise_type must be one of {NOISE_TYPES}, got {noise_type!r}"
+        )
+    return f'{input_key}_{noise_type}_noise'
 
 
 # ─── HDF5 helpers ───────────────────────────────────────────────────────────
@@ -107,28 +114,6 @@ def _build_index(paths: list[str], probe_key: str) -> list[tuple[str, int]]:
     return index
 
 
-def _resolve_noise_key(noise_type: str, noise_paths: Optional[dict]) -> str:
-    table = noise_paths if noise_paths is not None else DEFAULT_NOISE_PATHS
-    if noise_type not in table:
-        raise ValueError(
-            f"noise_type must be one of {list(table)}, got {noise_type!r}"
-        )
-    return table[noise_type]
-
-
-def _preload_noise(paths: list[str], noise_key: str) -> np.ndarray:
-    """Concatenate the HDF5 dataset at ``noise_key`` across all files.
-
-    Concatenation order matches ``_build_index``, so global idx aligns with
-    the row-index produced for the inputs/variables.
-    """
-    chunks = []
-    for path in paths:
-        with h5py.File(path, 'r') as f:
-            chunks.append(np.asarray(f[noise_key][:], dtype=np.float32))
-    return np.concatenate(chunks, axis=0)
-
-
 def hdf5_worker_init_fn(worker_id):
     """Required for num_workers > 0: HDF5 handles aren't fork-safe."""
     info = torch.utils.data.get_worker_info()
@@ -140,9 +125,9 @@ def hdf5_worker_init_fn(worker_id):
 class Project8SimDataset(Dataset):
     """Project 8 simulation dataset.  Reads one HDF5 row per __getitem__.
 
-    Noise traces are loaded once at construction time from a fixed HDF5 path
-    (selected by ``noise_type``); per-item access is a pure index into the
-    preloaded array.  Optionally computes the FFT of the I/Q channels.
+    For each input channel ``K`` the matching noise trace at
+    ``f'{K}_{noise_type}_noise'`` is read in the same call and added to the
+    clean signal.  Optionally computes the FFT of the I/Q channels.
     """
 
     def __init__(
@@ -152,8 +137,7 @@ class Project8SimDataset(Dataset):
         variables:      list[str],
         cutoff:         int = 4000,
         norm:           bool = True,
-        noise_type:     str = 'gaussian',
-        noise_paths:    Optional[dict] = None,
+        noise_type:     str = 'gauss',
         freq_transform: Optional[str] = 'fft',   # 'fft' | None
         mu:             Optional[np.ndarray] = None,
         stds:           Optional[np.ndarray] = None,
@@ -165,13 +149,11 @@ class Project8SimDataset(Dataset):
         self.cutoff         = cutoff
         self.norm           = norm
         self.noise_type     = noise_type
-        self.noise_paths    = noise_paths if noise_paths is not None else dict(DEFAULT_NOISE_PATHS)
-        self.noise_key      = _resolve_noise_key(noise_type, self.noise_paths)
+        self.noise_keys     = [_noise_key(k, noise_type) for k in inputs]
         self.freq_transform = freq_transform
 
         probe_key   = (variables + inputs)[0]
         self._index = _build_index(self.paths, probe_key)
-        self._noise = _preload_noise(self.paths, self.noise_key)
 
         # Norm stats: use the supplied values when given, otherwise compute.
         if norm:
@@ -228,16 +210,14 @@ class Project8SimDataset(Dataset):
 
     def __getitem__(self, idx):
         path, local_idx = self._index[idx]
-        row = self._read_row(path, local_idx, self.inputs + self.variables)
+        row = self._read_row(
+            path, local_idx,
+            self.inputs + self.noise_keys + self.variables,
+        )
 
-        # inputs → (cutoff, n_inputs); add preloaded noise (broadcast 1-D → C).
-        X_clean = np.stack([row[k] for k in self.inputs], axis=-1)[:self.cutoff]
-        noise   = self._noise[idx]
-        if noise.ndim == 1:
-            noise = np.broadcast_to(noise[:, None], X_clean.shape)
-        noise = noise[:self.cutoff]
-
-        X_ts = (X_clean + noise).astype(np.float32, copy=True)
+        X_clean = np.stack([row[k] for k in self.inputs],     axis=-1)[:self.cutoff]
+        noise   = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
+        X_ts    = (X_clean + noise).astype(np.float32, copy=True)
         if self.norm:
             for j in range(X_ts.shape[1]):
                 X_ts[:, j] = X_ts[:, j] / (np.std(X_ts[:, j]) + 1e-8)
@@ -254,8 +234,8 @@ class Project8SimDataset(Dataset):
         if self.freq_transform == 'fft':
             iI = self.inputs.index('output_ts_I')
             iQ = self.inputs.index('output_ts_Q')
-            fft = torch.from_numpy(self._compute_fft(X_ts, iI, iQ).astype(np.float32))
-            return ts, fft, var
+            fft_t = torch.from_numpy(self._compute_fft(X_ts, iI, iQ).astype(np.float32))
+            return ts, fft_t, var
 
         raise ValueError(
             f"freq_transform must be 'fft' | None, got {self.freq_transform!r}"
@@ -292,20 +272,17 @@ class Project8SimDenoisingDataset(Dataset):
         inputs:      list[str],
         cutoff:      int = 4000,
         norm:        bool = True,
-        noise_type:  str = 'gaussian',
-        noise_paths: Optional[dict] = None,
+        noise_type:  str = 'gauss',
     ):
         super().__init__()
-        self.paths       = _list_hdf5(data_dir)
-        self.inputs      = inputs
-        self.cutoff      = cutoff
-        self.norm        = norm
-        self.noise_type  = noise_type
-        self.noise_paths = noise_paths if noise_paths is not None else dict(DEFAULT_NOISE_PATHS)
-        self.noise_key   = _resolve_noise_key(noise_type, self.noise_paths)
+        self.paths      = _list_hdf5(data_dir)
+        self.inputs     = inputs
+        self.cutoff     = cutoff
+        self.norm       = norm
+        self.noise_type = noise_type
+        self.noise_keys = [_noise_key(k, noise_type) for k in inputs]
 
         self._index = _build_index(self.paths, inputs[0])
-        self._noise = _preload_noise(self.paths, self.noise_key)
         self._file_handles: dict = {}
 
     def _get_handle(self, path):
@@ -322,15 +299,12 @@ class Project8SimDenoisingDataset(Dataset):
 
     def __getitem__(self, idx):
         path, local_idx = self._index[idx]
-        row = self._read_row(path, local_idx, self.inputs)
+        row = self._read_row(path, local_idx, self.inputs + self.noise_keys)
 
-        X_clean = np.stack([row[k] for k in self.inputs], axis=-1)[:self.cutoff]
-        noise   = self._noise[idx]
-        if noise.ndim == 1:
-            noise = np.broadcast_to(noise[:, None], X_clean.shape)
-        noise = noise[:self.cutoff]
-
+        X_clean = np.stack([row[k] for k in self.inputs],     axis=-1)[:self.cutoff]
+        noise   = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
         X_noisy = X_clean + noise
+
         X_noisy_norm = np.zeros_like(X_clean, dtype=np.float32)
         X_clean_norm = np.zeros_like(X_clean, dtype=np.float32)
         for j in range(X_clean.shape[1]):
@@ -377,8 +351,7 @@ class Project8DataModule(L.LightningDataModule):
         variables:      list[str],
         cutoff:         int   = 4000,
         norm:           bool  = True,
-        noise_type:     str   = 'gaussian',
-        noise_paths:    Optional[dict] = None,
+        noise_type:     str   = 'gauss',
         freq_transform: Optional[str]  = 'fft',
         mu:             Optional[list] = None,
         stds:           Optional[list] = None,
@@ -397,7 +370,6 @@ class Project8DataModule(L.LightningDataModule):
             cutoff         = self.hparams.cutoff,
             norm           = self.hparams.norm,
             noise_type     = self.hparams.noise_type,
-            noise_paths    = self.hparams.noise_paths,
             freq_transform = self.hparams.freq_transform,
             mu             = mu,
             stds           = stds,
@@ -443,8 +415,7 @@ class Project8DenoisingDataModule(L.LightningDataModule):
         inputs:       list[str],
         cutoff:       int   = 4000,
         norm:         bool  = True,
-        noise_type:   str   = 'gaussian',
-        noise_paths:  Optional[dict] = None,
+        noise_type:   str   = 'gauss',
         batch_size:   int   = 512,
         num_workers:  int   = 4,
         pin_memory:   bool  = False,
@@ -454,12 +425,11 @@ class Project8DenoisingDataModule(L.LightningDataModule):
 
     def _make_dataset(self, data_dir):
         return Project8SimDenoisingDataset(
-            data_dir    = data_dir,
-            inputs      = self.hparams.inputs,
-            cutoff      = self.hparams.cutoff,
-            norm        = self.hparams.norm,
-            noise_type  = self.hparams.noise_type,
-            noise_paths = self.hparams.noise_paths,
+            data_dir   = data_dir,
+            inputs     = self.hparams.inputs,
+            cutoff     = self.hparams.cutoff,
+            norm       = self.hparams.norm,
+            noise_type = self.hparams.noise_type,
         )
 
     def setup(self, stage: str | None = None):
