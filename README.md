@@ -57,7 +57,6 @@ data/
   toy/sinusoidal_signal_white_noise/
   TIDMAD/
     original/          # raw H5 files (symlinks or downloads) — not tracked by git
-    preprocess_tidmad.py
 main.py                # LightningCLI entry point
 ```
 
