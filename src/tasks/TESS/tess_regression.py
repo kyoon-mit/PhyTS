@@ -1,0 +1,219 @@
+"""Regression tasks for TESS lightcurve data.
+
+TESSRegressionMSE — end-to-end: flux → frot (rotation frequency).
+TESSFrozenBackboneRegressionMSE — frozen seq2seq backbone + trainable MLP head.
+
+Batch convention (from TESSRegressionDataset.__getitem__):
+    flux  (B, L)   — z-score normalized, padded to seq_len
+    mask  (B, L)   — True where cadence is valid
+    frot  (B,)     — rotation frequency target
+
+Any model with signature forward(x: (B, L, 1)) -> (B, 1) works as drop-in.
+
+Usage (LightningCLI YAML):
+    model:
+      class_path: tasks.TESS.tess_regression.TESSRegressionMSE
+      init_args:
+        lr: 1.0e-3
+        lr_decay: 0.99
+        model:
+          class_path: models.mlp.MLPRegressor
+          init_args:
+            seq_len: 1100
+            d_output: 1
+"""
+
+import importlib
+
+import torch
+import torch.nn as nn
+from torch import Tensor, optim
+import lightning as L
+import yaml
+
+
+def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
+    """Instantiate a seq2seq model from a LightningCLI YAML and load its weights."""
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+    model_cfg = cfg["model"]["init_args"]["model"]
+    module_name, class_name = model_cfg["class_path"].rsplit(".", 1)
+    cls = getattr(importlib.import_module(module_name), class_name)
+    model = cls(**model_cfg.get("init_args", {}))
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+    sd = {
+        k[len("model."):]: v
+        for k, v in ckpt["state_dict"].items()
+        if k.startswith("model.")
+    }
+    model.load_state_dict(sd)
+    return model
+
+
+# ── End-to-end regression ────────────────────────────────────────────────────
+
+class TESSRegressionMSE(L.LightningModule):
+    """End-to-end regression: forward(flux) → frot via MSE loss."""
+
+    def __init__(
+        self,
+        model: nn.Module,
+        lr: float = 1e-3,
+        lr_decay: float = 0.99,
+    ):
+        super().__init__()
+        self.save_hyperparameters(ignore=["model"])
+        self.model = model
+        self.lr = lr
+        self.lr_decay = lr_decay
+        self.criterion = nn.MSELoss()
+
+    def forward(self, x: Tensor) -> Tensor:
+        # x: (B, L) → (B, L, 1) → model → (B, 1) → (B,)
+        return self.model(x.unsqueeze(-1)).squeeze(-1)
+
+    def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
+        flux, mask, frot = batch
+        y_hat = self(flux)
+        return self.criterion(y_hat, frot), y_hat, frot
+
+    def training_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+
+    def on_test_epoch_start(self):
+        self._test_preds: list[Tensor] = []
+        self._test_labels: list[Tensor] = []
+
+    def test_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
+        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+        self.log("test/mae", (y_hat - y).abs().mean(), on_step=False, on_epoch=True)
+        self._test_preds.append(y_hat.detach().cpu())
+        self._test_labels.append(y.detach().cpu())
+
+    def on_test_epoch_end(self):
+        y_hat = torch.cat(self._test_preds)
+        y = torch.cat(self._test_labels)
+        ss_res = (y_hat - y).pow(2).sum()
+        ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
+        self.log("test/r2", 1.0 - ss_res / ss_tot)
+
+    def configure_optimizers(self):
+        opt = optim.AdamW(self.parameters(), lr=self.lr)
+        sched = optim.lr_scheduler.ExponentialLR(opt, gamma=self.lr_decay)
+        return {"optimizer": opt, "lr_scheduler": {"scheduler": sched, "interval": "epoch"}}
+
+
+# ── Frozen-backbone regression ───────────────────────────────────────────────
+
+class TESSFrozenBackboneRegressionMSE(L.LightningModule):
+    """Frozen seq2seq backbone + trainable MLP regression head.
+
+    The backbone (pretrained seq2seq model, e.g. S4ModelSeq2Seq) is loaded
+    from a LightningCLI checkpoint and frozen. Only the head is trained.
+
+    Forward: flux → backbone(flux) → reconstructed_flux → head → frot
+
+    Usage (LightningCLI YAML):
+        model:
+          class_path: tasks.TESS.tess_regression.TESSFrozenBackboneRegressionMSE
+          init_args:
+            backbone_ckpt: checkpoints/tess_s4d_reconstruction/best.ckpt
+            backbone_cfg: configs/TESS/train_tess_s4d_reconstruction.yaml
+            lr: 1.0e-3
+            lr_decay: 0.99
+            head:
+              class_path: models.mlp.MLPRegressor
+              init_args:
+                seq_len: 1100
+                d_output: 1
+    """
+
+    def __init__(
+        self,
+        backbone_ckpt: str,
+        backbone_cfg: str,
+        head: nn.Module,
+        lr: float = 1e-3,
+        lr_decay: float = 0.99,
+    ):
+        super().__init__()
+        self.save_hyperparameters(ignore=["head"])
+        backbone = _load_seq2seq_backbone(backbone_ckpt, backbone_cfg)
+        backbone.eval()
+        for p in backbone.parameters():
+            p.requires_grad_(False)
+        self.backbone = backbone
+        self.head = head
+        self.lr = lr
+        self.lr_decay = lr_decay
+        self.criterion = nn.MSELoss()
+
+    def train(self, mode: bool = True):
+        # Lightning calls model.train() each epoch; keep backbone in eval mode
+        # regardless so its dropout layers stay off during head training.
+        super().train(mode)
+        self.backbone.eval()
+        return self
+
+    def forward(self, x: Tensor) -> Tensor:
+        # x: (B, L) → backbone → (B, L, 1) → head → (B, 1) → (B,)
+        with torch.no_grad():
+            reconstructed = self.backbone(x.unsqueeze(-1))  # (B, L, 1)
+        return self.head(reconstructed).squeeze(-1)
+
+    def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
+        flux, mask, frot = batch
+        y_hat = self(flux)
+        return self.criterion(y_hat, frot), y_hat, frot
+
+    def training_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+
+    def on_test_epoch_start(self):
+        self._test_preds: list[Tensor] = []
+        self._test_labels: list[Tensor] = []
+
+    def test_step(self, batch, batch_idx):
+        loss, y_hat, y = self._step(batch)
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
+        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt(),
+                 on_step=False, on_epoch=True)
+        self.log("test/mae", (y_hat - y).abs().mean(), on_step=False, on_epoch=True)
+        self._test_preds.append(y_hat.detach().cpu())
+        self._test_labels.append(y.detach().cpu())
+
+    def on_test_epoch_end(self):
+        y_hat = torch.cat(self._test_preds)
+        y = torch.cat(self._test_labels)
+        ss_res = (y_hat - y).pow(2).sum()
+        ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
+        self.log("test/r2", 1.0 - ss_res / ss_tot)
+
+    def configure_optimizers(self):
+        # Only head parameters are trainable
+        opt = optim.AdamW(self.head.parameters(), lr=self.lr)
+        sched = optim.lr_scheduler.ExponentialLR(opt, gamma=self.lr_decay)
+        return {"optimizer": opt, "lr_scheduler": {"scheduler": sched, "interval": "epoch"}}

@@ -1,0 +1,51 @@
+# Frozen S4D backbone + MLP regression head: TESS flux → frot.
+# Requires: checkpoints/tess_s4d_reconstruction/best.ckpt (train reconstruction first).
+#
+# Usage: python main.py fit --config configs/TESS/train_tess_s4d_head_regression.yaml
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_s4d_head_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: tess_s4d_head_regression
+
+model:
+  class_path: tasks.TESS.tess_regression.TESSFrozenBackboneRegressionMSE
+  init_args:
+    backbone_ckpt: checkpoints/tess_s4d_reconstruction/best.ckpt
+    backbone_cfg: configs/TESS/train_tess_s4d_reconstruction.yaml
+    lr: 1.0e-3
+    lr_decay: 0.99
+    head:
+      class_path: models.mlp.MLPRegressor
+      init_args:
+        seq_len: 1100
+        d_output: 1
+        hidden_dims: [256, 128, 64]
+        dropout: 0.1
+
+data:
+  class_path: dataloader.tess_dataloader.TESSRegressionDataModule
+  init_args:
+    data_dir: data/TESS/.cache/TESS
+    batch_size: 64
+    num_workers: 8
+    seq_len: 1100

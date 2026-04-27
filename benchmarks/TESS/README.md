@@ -1,0 +1,121 @@
+# TESS Benchmarking Pipeline
+
+Benchmarks MLP and S4D models on two TESS variable-star tasks:
+- **Regression**: predict stellar rotation frequency (`frot`) from flux
+- **Classification**: predict variability class (8 labels) from flux
+
+---
+
+## What was built
+
+| File | Purpose |
+|------|---------|
+| `src/dataloader/tess_dataloader.py` | Datasets + DataModules for regression, classification, and reconstruction pretraining |
+| `src/tasks/TESS/tess_regression.py` | `TESSRegressionMSE` (end-to-end) and `TESSFrozenBackboneRegressionMSE` (frozen S4D + MLP head) |
+| `src/tasks/TESS/tess_classification.py` | `TESSClassificationCE` and `TESSFrozenBackboneClassificationCE` |
+| `src/tasks/TESS/tess_reconstruction.py` | `TESSReconstructionMSE` — self-supervised S4D pretraining via denoising |
+| `configs/TESS/` | Seven LightningCLI YAML configs (see table below) |
+| `benchmarks/TESS/setup_data.sh` | Downloads TESS Parquet files from HuggingFace (run once from login node) |
+| `benchmarks/TESS/run.sh` | SLURM submission script for MIT Engaging |
+| `benchmarks/TESS/eval_pipeline.py` | Standalone evaluation: metrics, scatter/confusion plots, CSVs |
+
+### Training configs
+
+| Config | Model | Task |
+|--------|-------|------|
+| `train_tess_s4d_reconstruction.yaml` | S4ModelSeq2Seq | Denoising pretraining (run first) |
+| `train_tess_mlp_regression.yaml` | MLP | End-to-end regression |
+| `train_tess_s4d_regression.yaml` | S4D | End-to-end regression |
+| `train_tess_s4d_head_regression.yaml` | Frozen S4D + MLP head | Regression (requires reconstruction checkpoint) |
+| `train_tess_mlp_classification.yaml` | MLP | End-to-end classification |
+| `train_tess_s4d_classification.yaml` | S4D | End-to-end classification |
+| `train_tess_s4d_head_classification.yaml` | Frozen S4D + MLP head | Classification (requires reconstruction checkpoint) |
+
+### Data preprocessing
+
+- Sequences cropped or zero-padded to `seq_len=1100`; bool mask marks valid positions
+- Per-sample z-score normalization: `(flux − median) / std`
+- Splits: 70 / 15 / 15 train / val / test, stratified by label (classification) or frot decile (regression), fixed `seed=42`
+
+---
+
+## Running locally
+
+**Smoke test** (no GPU, 1 epoch):
+```bash
+cd /path/to/TimeSeriesPhysics
+uv run python main.py fit \
+    --config configs/TESS/train_tess_mlp_regression.yaml \
+    --trainer.max_epochs 1 \
+    --trainer.accelerator cpu \
+    --trainer.logger false
+```
+
+**Full training order** (if running manually):
+
+1. Reconstruction pretraining (required before frozen-backbone runs):
+```bash
+uv run python main.py fit --config configs/TESS/train_tess_s4d_reconstruction.yaml
+```
+
+2. End-to-end models (independent, can run in any order):
+```bash
+uv run python main.py fit --config configs/TESS/train_tess_mlp_regression.yaml
+uv run python main.py fit --config configs/TESS/train_tess_s4d_regression.yaml
+uv run python main.py fit --config configs/TESS/train_tess_mlp_classification.yaml
+uv run python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+```
+
+3. Frozen-backbone models (after step 1 completes):
+```bash
+uv run python main.py fit --config configs/TESS/train_tess_s4d_head_regression.yaml
+uv run python main.py fit --config configs/TESS/train_tess_s4d_head_classification.yaml
+```
+
+**Evaluation** (after any subset of models are trained):
+```bash
+uv run python benchmarks/TESS/eval_pipeline.py \
+    --data_dir data/TESS/.cache/TESS \
+    --out_dir  benchmarks/TESS
+```
+Writes `*_regression_results.csv`, `*_classification_results.csv`, and `.png` plots into `--out_dir`. Pass `--skip_regression` or `--skip_classification` to run only one task. Models with missing checkpoints are skipped automatically.
+
+---
+
+## Running on MIT Engaging
+
+First, sync the repository to Engaging (login node):
+```bash
+rsync -r -av --progress \
+    --exclude .git --exclude '.venv' --exclude '.claude' \
+    --exclude checkpoints --exclude '*.parquet' --exclude '*.csv' \
+    TimeSeriesPhysics allisone@orcd-login001.mit.edu:/home/allisone/documents/UROP_2025_Summer/
+```
+
+Then, from the Engaging login node, download the data (only needed once; login nodes have internet, compute nodes do not):
+```bash
+bash benchmarks/TESS/setup_data.sh
+```
+
+Then submit the full pipeline:
+```bash
+bash benchmarks/TESS/run.sh
+```
+
+This submits 8 SLURM jobs with the correct dependency chain:
+- `JOB_RECON` runs first
+- `JOB_HEAD_REG` and `JOB_HEAD_CLS` wait for `JOB_RECON`
+- All end-to-end jobs run in parallel
+- `JOB_EVAL` waits for all training jobs
+
+Monitor progress with `squeue -u $USER`. Logs are written to `benchmarks/TESS/logs/`.
+
+Both scripts derive the repo root from their own location (`dirname "$0"/../..`), so they work regardless of where you call them from.
+
+---
+
+## Notes
+
+- **LinOSS** (JAX) is not included here — it requires the separate JAX training infrastructure and has no seq2seq mode, so it cannot use the frozen-backbone approach.
+- The reconstruction pretraining adds synthetic Gaussian noise (`noise_std=0.3`) to the clean flux — the original flux serves as the reconstruction target.
+- Frozen backbone: the S4D backbone is loaded and its weights are locked; only the MLP head is trained. Lightning's `model.train()` call is overridden to keep the backbone in eval mode (preserving dropout-off behavior) throughout head training.

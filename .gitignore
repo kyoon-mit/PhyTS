@@ -34,6 +34,8 @@ slurm/
 
 # Large data directories (symlink or populate locally, see each dir's README)
 data/TIDMAD/*.h5
+# Hugging Face TESS downloads (data/TESS/explore_tess.py)
+data/TESS/.cache/
 
 # Plots (exclude generated plots everywhere except the plots/ directory)
 *.png

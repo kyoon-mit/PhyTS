@@ -7,16 +7,24 @@ name = "TimeSeriesPhysics"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "einops>=0.7.0",
     "h5py>=3.16.0",
     "jaxtyping>=0.3.9",
     "jsonargparse[signatures]>=4.48.0",
     "lightning>=2.6.1",
+    "pyarrow>=16.0.0",
     "torch>=2.11.0",
     "wandb>=0.26.0",
 ]
 
 [project.optional-dependencies]
-jax = ["optax>=0.2.8", "equinox>=0.13.2", "jax>=0.7.2"]
+jax = [
+    "optax>=0.2.8",
+    "equinox>=0.13.2",
+    "huggingface_hub>=0.20.0",
+    "jax>=0.7.2",
+    "matplotlib>=3.8.0",
+]
 cu12 = ["jax[cuda12]>=0.7.2"]
 
 

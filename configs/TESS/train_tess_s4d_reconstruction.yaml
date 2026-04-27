@@ -1,0 +1,53 @@
+# S4D seq2seq backbone pretraining: noisy TESS flux → clean flux (masked MSE).
+# Run this first; the checkpoint is used by the frozen-backbone downstream tasks.
+#
+# Usage: python main.py fit --config configs/TESS/train_tess_s4d_reconstruction.yaml
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_s4d_reconstruction
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: tess_s4d_reconstruction
+
+model:
+  class_path: tasks.TESS.tess_reconstruction.TESSReconstructionMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+      init_args:
+        d_input: 1
+        d_output: 1
+        d_model: 256
+        d_state: 64
+        n_layers: 4
+        dropout: 0.1
+
+data:
+  class_path: dataloader.tess_dataloader.TESSReconstructionDataModule
+  init_args:
+    data_dir: data/TESS/.cache/TESS
+    batch_size: 64
+    num_workers: 8
+    seq_len: 1100
+    noise_std: 0.3
+    task: regression
