@@ -33,8 +33,6 @@ trainer:
 model:
   class_path: tasks.Project8.project8_regression.Project8RegressionGaussianNLL
   init_args:
-    target: energy_eV
-    apply_fft: true
     learning_rate: 1.0e-3
     gamma: 0.25
     lr_patience: 5
@@ -57,7 +55,7 @@ data:
     val_dir:   data/Project8Sim/hdf5/val
     test_dir:  data/Project8Sim/hdf5/test
     inputs:    [output_ts_I, output_ts_Q]
-    variables: [energy_eV, pitch_angle_deg]
+    variables: [energy_eV]
     cutoff:    8192
     norm:      true
     noise_type: cav
