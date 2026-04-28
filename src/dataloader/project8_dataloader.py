@@ -258,81 +258,6 @@ class Project8SimDataset(Dataset):
     def __del__(self):
         self.close()
 
-
-# ─── denoising dataset ──────────────────────────────────────────────────────
-class Project8SimDenoisingDataset(Dataset):
-    """Project 8 denoising dataset.  Returns (X_noisy, X_clean) of shape
-    (cutoff, n_inputs).  When norm=True both are divided by std(X_noisy) so
-    they share a coordinate space.
-    """
-
-    def __init__(
-        self,
-        data_dir:    str,
-        inputs:      list[str],
-        cutoff:      int = 4000,
-        norm:        bool = True,
-        noise_type:  str = 'gauss',
-    ):
-        super().__init__()
-        self.paths      = _list_hdf5(data_dir)
-        self.inputs     = inputs
-        self.cutoff     = cutoff
-        self.norm       = norm
-        self.noise_type = noise_type
-        self.noise_keys = [_noise_key(k, noise_type) for k in inputs]
-
-        self._index = _build_index(self.paths, inputs[0])
-        self._file_handles: dict = {}
-
-    def _get_handle(self, path):
-        if path not in self._file_handles:
-            self._file_handles[path] = h5py.File(path, 'r')
-        return self._file_handles[path]
-
-    def _read_row(self, path, local_idx, keys):
-        f = self._get_handle(path)
-        return {k: f[k][local_idx] for k in keys}
-
-    def __len__(self):
-        return len(self._index)
-
-    def __getitem__(self, idx):
-        path, local_idx = self._index[idx]
-        row = self._read_row(path, local_idx, self.inputs + self.noise_keys)
-
-        X_clean = np.stack([row[k] for k in self.inputs],     axis=-1)[:self.cutoff]
-        noise   = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
-        X_noisy = X_clean + noise
-
-        X_noisy_norm = np.zeros_like(X_clean, dtype=np.float32)
-        X_clean_norm = np.zeros_like(X_clean, dtype=np.float32)
-        for j in range(X_clean.shape[1]):
-            if self.norm:
-                s = np.std(X_noisy[:, j]) + 1e-8
-                X_noisy_norm[:, j] = X_noisy[:, j] / s
-                X_clean_norm[:, j] = X_clean[:, j] / s
-            else:
-                X_noisy_norm[:, j] = X_noisy[:, j]
-                X_clean_norm[:, j] = X_clean[:, j]
-
-        return (
-            torch.from_numpy(X_noisy_norm),
-            torch.from_numpy(X_clean_norm),
-        )
-
-    def indim(self):
-        return len(self.inputs)
-
-    def close(self):
-        for fh in self._file_handles.values():
-            fh.close()
-        self._file_handles.clear()
-
-    def __del__(self):
-        self.close()
-
-
 # ─── DataModules ────────────────────────────────────────────────────────────
 class Project8DataModule(L.LightningDataModule):
     """Lightning DataModule for the joint Project 8 task.
@@ -387,56 +312,6 @@ class Project8DataModule(L.LightningDataModule):
         self.mu, self.stds             = mu, stds
         self.input_channels_ts         = self.train.indim_ts()
         self.input_channels_fft        = self.train.indim_fft()
-
-    def _loader(self, ds, shuffle):
-        return DataLoader(
-            ds,
-            batch_size  = self.hparams.batch_size,
-            num_workers = self.hparams.num_workers,
-            pin_memory  = self.hparams.pin_memory,
-            shuffle     = shuffle,
-            worker_init_fn = hdf5_worker_init_fn if self.hparams.num_workers > 0 else None,
-        )
-
-    def train_dataloader(self):   return self._loader(self.train, shuffle=True)
-    def val_dataloader(self):     return self._loader(self.val,   shuffle=False)
-    def test_dataloader(self):    return self._loader(self.test,  shuffle=False)
-    def predict_dataloader(self): return self.test_dataloader()
-
-
-class Project8DenoisingDataModule(L.LightningDataModule):
-    """Lightning DataModule for the S4D denoising task."""
-
-    def __init__(
-        self,
-        train_dir:    str,
-        val_dir:      str,
-        test_dir:     str,
-        inputs:       list[str],
-        cutoff:       int   = 4000,
-        norm:         bool  = True,
-        noise_type:   str   = 'gauss',
-        batch_size:   int   = 512,
-        num_workers:  int   = 4,
-        pin_memory:   bool  = False,
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-
-    def _make_dataset(self, data_dir):
-        return Project8SimDenoisingDataset(
-            data_dir   = data_dir,
-            inputs     = self.hparams.inputs,
-            cutoff     = self.hparams.cutoff,
-            norm       = self.hparams.norm,
-            noise_type = self.hparams.noise_type,
-        )
-
-    def setup(self, stage: str | None = None):
-        self.train = self._make_dataset(self.hparams.train_dir)
-        self.val   = self._make_dataset(self.hparams.val_dir)
-        self.test  = self._make_dataset(self.hparams.test_dir)
-        self.input_channels = self.train.indim()
 
     def _loader(self, ds, shuffle):
         return DataLoader(
