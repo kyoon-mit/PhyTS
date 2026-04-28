@@ -1,0 +1,45 @@
+# Smoke test — verifies the pipeline runs end-to-end. No wandb, no checkpoints.
+# Usage:
+#   python main.py fit --config configs/Project8/smoke_test.yaml
+
+trainer:
+  max_epochs: 1
+  limit_train_batches: 2
+  limit_val_batches: 2
+  limit_test_batches: 2
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_progress_bar: true
+  log_every_n_steps: 1
+
+model:
+  class_path: tasks.Project8.project8_regression.Project8Regression
+  init_args:
+    learning_rate: 1.0e-3
+    encoder:
+      class_path: models.s4d.S4Model
+      init_args:
+        d_input: 2
+        d_output: 2
+        d_model: 16
+        d_state: 8
+        n_layers: 1
+        dropout: 0.0
+        prenorm: false
+
+data:
+  class_path: dataloader.project8_dataloader.Project8DataModule
+  init_args:
+    train_dir: data/Project8Sim/hdf5/train
+    val_dir:   data/Project8Sim/hdf5/val
+    test_dir:  data/Project8Sim/hdf5/test
+    inputs:    [output_ts_I, output_ts_Q]
+    variables: [energy_eV]
+    cutoff:    1024
+    norm:      true
+    noise_type: cav
+    freq_transform: fft
+    batch_size: 4
+    num_workers: 0
