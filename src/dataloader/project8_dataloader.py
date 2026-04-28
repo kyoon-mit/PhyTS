@@ -38,9 +38,10 @@ Usage (LightningCLI YAML):
         cutoff:     4000
 
 Batch convention:
-    Project8DataModule (freq_transform='fft', the default):
-        ts        (B, cutoff, C)        float32  time-series, per-channel std-norm
-        fft       (B, cutoff, C)        float32  FFT(I,Q), real/imag stacked into channels
+    Project8DataModule:
+        X         (B, cutoff, C)        float32
+            freq_transform=None  -> time-series, per-channel std-norm
+            freq_transform='fft' -> FFT(I,Q), real/imag stacked into channels (z-scored)
         var       (B, n_variables)      float32  z-scored regression targets
 
     Project8DenoisingDataModule:
@@ -66,10 +67,10 @@ def fft_func_IQ_complex_channels(signal_I, signal_Q):
 
 
 # ─── batch-tuple indices for the joint task ─────────────────────────────────
-# Position depends on freq_transform; see Project8SimDataset.__getitem__.
+# __getitem__ always returns (X, var); X is ts or fft depending on freq_transform.
 class JointBatch(IntEnum):
-    ts  = 0
-    var = 1   # 2 if a freq tensor sits in front
+    X   = 0
+    var = 1
 
 
 class DenoisingBatch(IntEnum):
@@ -225,17 +226,16 @@ class Project8SimDataset(Dataset):
         y_raw    = np.array([row[v] for v in self.variables], dtype=np.float32)
         var_norm = (y_raw - self.mu) / (self.stds + 1e-8) if self.norm else y_raw
 
-        ts  = torch.from_numpy(X_ts)
         var = torch.from_numpy(var_norm.astype(np.float32))
 
         if self.freq_transform is None:
-            return ts, var
+            return torch.from_numpy(X_ts), var
 
         if self.freq_transform == 'fft':
             iI = self.inputs.index('output_ts_I')
             iQ = self.inputs.index('output_ts_Q')
-            fft_t = torch.from_numpy(self._compute_fft(X_ts, iI, iQ).astype(np.float32))
-            return ts, fft_t, var
+            X_fft = self._compute_fft(X_ts, iI, iQ).astype(np.float32)
+            return torch.from_numpy(X_fft), var
 
         raise ValueError(
             f"freq_transform must be 'fft' | None, got {self.freq_transform!r}"
