@@ -15,7 +15,7 @@ logged in both z-score space and original units (using the DataModule's
 
 Usage (LightningCLI YAML):
     model:
-      class_path: tasks.Project8.project8_regression.Project8RegressionGaussianNLL
+      class_path: tasks.Project8.project8_regression.Project8Regression
       init_args:
         encoder:
           class_path: models.s4d.S4Model
@@ -41,7 +41,7 @@ from torch import optim
 import lightning as L
 
 
-class Project8RegressionGaussianNLL(L.LightningModule):
+class Project8Regression(L.LightningModule):
     """Heteroscedastic regression of a single Project 8 variable via GaussianNLL.
 
     The encoder predicts (mu, log_var); loss is GaussianNLL on z-scored target.
@@ -79,7 +79,7 @@ class Project8RegressionGaussianNLL(L.LightningModule):
         variables = list(dm.hparams.variables)
         if len(variables) != 1:
             raise ValueError(
-                f"Project8RegressionGaussianNLL expects exactly one variable in the "
+                f"Project8Regression expects exactly one variable in the "
                 f"DataModule, got {variables}"
             )
         self._target_name = variables[0]

@@ -31,7 +31,7 @@ trainer:
       name: project8_s4d_regression_energy_gaussiannll
 
 model:
-  class_path: tasks.Project8.project8_regression.Project8RegressionGaussianNLL
+  class_path: tasks.Project8.project8_regression.Project8Regression
   init_args:
     learning_rate: 1.0e-3
     gamma: 0.25
