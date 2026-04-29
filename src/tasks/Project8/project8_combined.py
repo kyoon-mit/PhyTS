@@ -11,12 +11,11 @@ is a weighted sum of a denoising loss and a regression loss::
 Lambdas are constants here (no curriculum scheduler).  ``denoising_loss``
 selects one of:
 
-  * ``'MSELoss'``           — plain time-domain MSE.
-  * ``'PSDLoss'``           — MSE between ``|rfft|^2`` of prediction and target.
-  * ``'MixtureMSEPSDLoss'`` — convex mixture (default), parameterised by
-    ``denoising_spectral_alpha``: ``alpha * MSE + (1 - alpha) * PSDLoss``.
-    Mirrors ``MixtureMSESpectralLoss`` from the reference repo, with the
-    PSD formulation used by ``tasks.toy.toy_denoising.PSDLoss``.
+  * ``'MSELoss'``                — plain time-domain MSE.
+  * ``'MixtureMSESpectralLoss'`` — convex mixture (default), parameterised
+    by ``denoising_spectral_alpha``:
+    ``alpha * MSE + (1 - alpha) * MSE(|rfft(x)|, |rfft(y)|)``.  Verbatim
+    port of the loss in the original neutrino_project denoising branch.
 
 The regression head is heteroscedastic: the regressor must produce ``(B, 2)``
 interpreted as ``[mean, raw_var]``; ``F.softplus`` enforces positive variance,
@@ -34,7 +33,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
 
-from functions.losses import MixtureMSEPSDLoss, PSDLoss
+from functions.losses import MixtureMSESpectralLoss
 
 
 class Project8CombinedRegression(L.LightningModule):
@@ -61,7 +60,7 @@ class Project8CombinedRegression(L.LightningModule):
         lambda_denoise: float = 1.0,
         lambda_regress: float = 1.0,
         freeze_denoiser: bool = False,
-        denoising_loss: str = 'MixtureMSEPSDLoss',
+        denoising_loss: str = 'MixtureMSESpectralLoss',
         denoising_spectral_alpha: float = 0.5,
     ):
         super().__init__()
@@ -87,19 +86,18 @@ class Project8CombinedRegression(L.LightningModule):
             for p in self.encoder.denoiser.parameters():
                 p.requires_grad = False
 
-        # PSD-based losses operate on the time axis (dim=1) of (B, L, C) batches.
+        # MixtureMSESpectralLoss takes its FFT along dim=1 (the time axis of
+        # (B, L, C) batches), matching the reference implementation.
         if denoising_loss == 'MSELoss':
             self.denoising_criterion = nn.MSELoss()
-        elif denoising_loss == 'PSDLoss':
-            self.denoising_criterion = PSDLoss(dim=1)
-        elif denoising_loss == 'MixtureMSEPSDLoss':
-            self.denoising_criterion = MixtureMSEPSDLoss(
-                alpha=denoising_spectral_alpha, dim=1,
+        elif denoising_loss == 'MixtureMSESpectralLoss':
+            self.denoising_criterion = MixtureMSESpectralLoss(
+                alpha=denoising_spectral_alpha,
             )
         else:
             raise ValueError(
                 f"Unknown denoising_loss {denoising_loss!r}; expected one of "
-                "'MSELoss', 'PSDLoss', 'MixtureMSEPSDLoss'."
+                "'MSELoss', 'MixtureMSESpectralLoss'."
             )
 
         self._target_name: Optional[str] = None
