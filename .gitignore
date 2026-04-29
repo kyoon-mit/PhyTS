@@ -41,3 +41,4 @@ data/TIDMAD/*.h5
 
 # Wandb
 wandb/
+tea_debug.log

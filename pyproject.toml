@@ -16,11 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-jax = [
-    "optax>=0.2.8",
-    "equinox>=0.13.2",
-    "jax>=0.7.2",
-]
+jax = ["optax>=0.2.8", "equinox>=0.13.2", "jax>=0.7.2"]
 cu12 = ["jax[cuda12]>=0.7.2"]
 
 
@@ -34,7 +30,17 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["C", "E", "F", "I", "W", "D", "N"]
-ignore = ["E741", "W605", "C408", "E402", "F722", "N806", "N803", "D107", "N812"]
+ignore = [
+    "E741",
+    "W605",
+    "C408",
+    "E402",
+    "F722",
+    "N806",
+    "N803",
+    "D107",
+    "N812",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

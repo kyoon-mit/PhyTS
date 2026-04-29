@@ -45,7 +45,7 @@ model:
         output_dim: 3 # must match len(target_params)
         task: regression
         output_step: 1
-        discretization: IM
+        discretization: damped_IMEX
         seed: 0
 
 data:
