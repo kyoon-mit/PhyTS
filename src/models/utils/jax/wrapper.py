@@ -15,7 +15,7 @@ from jaxtyping import PRNGKeyArray, PyTree
 
 from .load_model import load_model
 from .training import LossFunction, jax_apply_training_step, jax_inference
-from .utils import jax_to_tensor, tensor_to_jax
+from .utils import tensor_to_jax
 
 # Define a type for batches of PyTorch tensors
 type Batch = tuple[PyTree[torch.Tensor], ...]
