@@ -9,9 +9,10 @@ HDF5 file contains, per event:
                a parallel dataset ``K_N_noise`` (e.g. ``output_ts_I_cav_noise``)
                holding the (T,) float32 noise trace for that channel.
 
-The active noise type is selected by ``noise_type`` (``'cav'`` | ``'gauss'``);
-in __getitem__ the matching noise row is read alongside the clean row and
-added channel-wise.
+The active noise type is selected by ``noise_type`` (``'cav'`` | ``'gauss'`` |
+``'none'``); in __getitem__ the matching noise row is read alongside the clean
+row and added channel-wise.  When ``noise_type='none'`` no noise is read or
+added — the dataset returns the clean trace.
 
 Two tasks are supported:
   Project8SimDataset           - joint task: ts (+ optional fft),
@@ -79,7 +80,7 @@ class DenoisingBatch(IntEnum):
 
 
 # ─── noise key naming ───────────────────────────────────────────────────────
-NOISE_TYPES = ('cav', 'gauss')
+NOISE_TYPES = ('cav', 'gauss', 'none')
 
 
 def _noise_key(input_key: str, noise_type: str) -> str:
@@ -150,7 +151,10 @@ class Project8SimDataset(Dataset):
         self.cutoff         = cutoff
         self.norm           = norm
         self.noise_type     = noise_type
-        self.noise_keys     = [_noise_key(k, noise_type) for k in inputs]
+        if noise_type == 'none':
+            self.noise_keys = []
+        else:
+            self.noise_keys = [_noise_key(k, noise_type) for k in inputs]
         self.freq_transform = freq_transform
 
         probe_key   = (variables + inputs)[0]
@@ -216,9 +220,12 @@ class Project8SimDataset(Dataset):
             self.inputs + self.noise_keys + self.variables,
         )
 
-        X_clean = np.stack([row[k] for k in self.inputs],     axis=-1)[:self.cutoff]
-        noise   = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
-        X_ts    = (X_clean + noise).astype(np.float32, copy=True)
+        X_clean = np.stack([row[k] for k in self.inputs], axis=-1)[:self.cutoff]
+        if self.noise_keys:
+            noise = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
+            X_ts  = (X_clean + noise).astype(np.float32, copy=True)
+        else:
+            X_ts  = X_clean.astype(np.float32, copy=True)
         if self.norm:
             for j in range(X_ts.shape[1]):
                 X_ts[:, j] = X_ts[:, j] / (np.std(X_ts[:, j]) + 1e-8)

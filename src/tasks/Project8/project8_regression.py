@@ -8,10 +8,11 @@ DataModule to choose the input domain:
     freq_transform=None   -> time-series I/Q
     freq_transform='fft'  -> FFT real/imag (z-scored)
 
-The encoder outputs ``[mu, log_var]`` and the loss is
-``torch.nn.functional.gaussian_nll_loss`` on the z-scored target.  RMSE is
-logged in both z-score space and original units (using the DataModule's
-``mu``/``stds``).
+The encoder outputs two channels which are split via ``torch.chunk`` into
+``mean`` and a raw variance term; ``F.softplus`` enforces positivity before
+``torch.nn.functional.gaussian_nll_loss`` is applied on the z-scored target.
+RMSE is logged in both z-score space and original units (using the
+DataModule's ``mu``/``stds``).
 
 Usage (LightningCLI YAML):
     model:
@@ -21,7 +22,7 @@ Usage (LightningCLI YAML):
           class_path: models.s4d.S4Model
           init_args:
             d_input: 2
-            d_output: 2     # [mu, log_var] for one target
+            d_output: 2     # [mean, raw_var] for one target
             d_model: 128
             n_layers: 6
             dropout: 0.0
@@ -56,7 +57,7 @@ class Project8Regression(L.LightningModule):
         lr_patience: int = 5,
         threshold: float = 1e-3,
         lr_min: float = 1e-6,
-        var_min: float = 1e-6,
+        eps: float = 1e-6,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['encoder'])
@@ -66,7 +67,7 @@ class Project8Regression(L.LightningModule):
         self.lr_patience = lr_patience
         self.threshold = threshold
         self.lr_min = lr_min
-        self.var_min = var_min
+        self.eps = eps
 
         # Filled in `setup` from the DataModule.
         self._target_name: Optional[str] = None
@@ -96,11 +97,14 @@ class Project8Regression(L.LightningModule):
 
     def _step(self, batch):
         x, var = batch
-        y = var.squeeze(-1)                                # (B,)
+        y = var
+        if y.ndim > 1 and y.shape[-1] == 1:
+            y = y.squeeze(-1)                              # (B,)
         out = self(x)                                      # (B, 2)
-        mu, log_var = out[:, 0], out[:, 1]
-        v = log_var.exp().clamp(min=self.var_min)
-        loss = F.gaussian_nll_loss(mu, y, v)
+        mean, raw_var = torch.chunk(out, 2, dim=-1)        # (B, 1) each
+        mu = mean.squeeze(-1)
+        v  = F.softplus(raw_var).squeeze(-1)
+        loss = F.gaussian_nll_loss(mu, y, v, eps=self.eps)
         return loss, mu, v, y
 
     def _log_rmse(self, mu, y, prefix):
