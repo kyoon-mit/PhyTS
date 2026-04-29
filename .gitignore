@@ -42,3 +42,4 @@ data/TESS/*.parquet
 
 # Wandb
 wandb/
+tea_debug.log

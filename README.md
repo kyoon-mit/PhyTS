@@ -136,6 +136,8 @@ huggingface-cli download time-series-foundation-models/Lag-Llama lag-llama.ckpt 
 
 All training goes through `main.py` (LightningCLI). Pick any config and run:
 
+(Make sure to activate the python environment or prefix with `uv run` as described in the setup section.)
+
 ```bash
 python main.py fit --config <path/to/config.yaml>
 ```
