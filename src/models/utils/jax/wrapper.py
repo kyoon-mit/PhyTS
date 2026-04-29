@@ -14,6 +14,7 @@ import torch
 from jaxtyping import PRNGKeyArray, PyTree
 
 from .load_model import load_model
+from .print_params import print_param_tree
 from .training import LossFunction, jax_apply_training_step, jax_inference
 from .utils import tensor_to_jax
 
@@ -70,6 +71,9 @@ class JAXLightningModule(L.LightningModule):
         self.jax_model_filter_spec = model_filter_spec or jax.tree_util.tree_map(
             eqx.is_inexact_array, self.jax_model
         )
+
+        # Print number of parameters and tree structure for debugging
+        print_param_tree(self.jax_model, 3)
 
         # load model and optimizer state from checkpoint if provided
         if load_from_checkpoint is not None:
