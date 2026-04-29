@@ -75,6 +75,9 @@ def _get_wrapper(name: str):
     if name in ("lagllama", "lag_llama", "lag-llama"):
         from foundation.wrappers.lagllama_wrapper import LagLlamaWrapper
         return LagLlamaWrapper()
+    if name in ("granite_ttm", "granite-ttm", "ttm"):
+        from foundation.wrappers.granite_ttm_wrapper import GraniteTTMWrapper
+        return GraniteTTMWrapper()
     raise ValueError(f"Unknown model '{name}'")
 
 
@@ -110,7 +113,7 @@ def main():
     p.add_argument("--data_dir", default="data/toy/sinusoidal_signal_white_noise")
     p.add_argument("--out_dir",  default="plots/toy/foundation")
     p.add_argument("--models",   nargs="+", required=True,
-                   help="One or more of: moment chronos timesfm timemoe moirai lagllama")
+                   help="One or more of: moment chronos timesfm timemoe moirai lagllama granite_ttm")
     p.add_argument("--tasks",    nargs="+", default=["forecasting"],
                    choices=["forecasting", "denoising", "embedding"])
     p.add_argument("--mode",     choices=["zero_shot", "finetuned", "both"],

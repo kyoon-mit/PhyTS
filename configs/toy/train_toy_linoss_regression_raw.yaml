@@ -1,0 +1,56 @@
+# Usage: python main.py fit --config configs/toy/train_toy_linoss_regression_raw.yaml
+# Trains a LinOSS (JAX/equinox) regressor on raw noisy signals (sig_bkg).
+
+trainer:
+  max_epochs: 1000
+  accelerator: cpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/toy_linoss_regression_raw
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: toy_linoss_regression_raw
+
+model:
+  class_path: tasks.toy.toy_regression_jax.LinOSSToyRegression
+  init_args:
+    target_params:
+      - amplitude
+      - frequency_hz
+      - phase_rad
+    lr: 1e-3
+    clip_grad_norm: 1.0
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 2
+        N: 1 # input feature dim (sig_bkg is (B, L, 1))
+        ssm_size: 16
+        H: 64
+        output_dim: 3 # must match len(target_params)
+        task: regression
+        output_step: 1
+        discretization: damped_IMEX
+        seed: 0
+
+data:
+  class_path: dataloader.toy_dataloader.ToyDataModule
+  init_args:
+    data_dir: data/toy/sinusoidal_signal_white_noise
+    batch_size: 64
+    num_workers: 0
