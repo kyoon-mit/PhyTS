@@ -5,13 +5,22 @@ https://github.com/chreissel/neutrino_project/blob/denoising/src/models/model.py
 the encoder is expected to return ``(x_denoised, y_preds)`` and the total loss
 is a weighted sum of a denoising loss and a regression loss::
 
-    loss = lambda_denoise * MSE(x_denoised, x_clean)
+    loss = lambda_denoise * denoising_loss(x_denoised, x_clean)
          + lambda_regress * GaussianNLL(y_preds, y)
 
-Lambdas are constants here (no curriculum scheduler).  The regression head is
-heteroscedastic: the regressor must produce ``(B, 2)`` interpreted as
-``[mean, raw_var]``; ``F.softplus`` enforces positive variance, matching
-``Project8Regression``.
+Lambdas are constants here (no curriculum scheduler).  ``denoising_loss``
+selects one of:
+
+  * ``'MSELoss'``           — plain time-domain MSE.
+  * ``'PSDLoss'``           — MSE between ``|rfft|^2`` of prediction and target.
+  * ``'MixtureMSEPSDLoss'`` — convex mixture (default), parameterised by
+    ``denoising_spectral_alpha``: ``alpha * MSE + (1 - alpha) * PSDLoss``.
+    Mirrors ``MixtureMSESpectralLoss`` from the reference repo, with the
+    PSD formulation used by ``tasks.toy.toy_denoising.PSDLoss``.
+
+The regression head is heteroscedastic: the regressor must produce ``(B, 2)``
+interpreted as ``[mean, raw_var]``; ``F.softplus`` enforces positive variance,
+matching ``Project8Regression``.
 
 Expected DataModule batches: ``(X_noisy, X_clean, var)`` from
 ``Project8DataModule(combined=True)``.
@@ -24,6 +33,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
+
+from functions.losses import MixtureMSEPSDLoss, PSDLoss
 
 
 class Project8CombinedRegression(L.LightningModule):
@@ -50,6 +61,8 @@ class Project8CombinedRegression(L.LightningModule):
         lambda_denoise: float = 1.0,
         lambda_regress: float = 1.0,
         freeze_denoiser: bool = False,
+        denoising_loss: str = 'MixtureMSEPSDLoss',
+        denoising_spectral_alpha: float = 0.5,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['encoder'])
@@ -74,7 +87,20 @@ class Project8CombinedRegression(L.LightningModule):
             for p in self.encoder.denoiser.parameters():
                 p.requires_grad = False
 
-        self.denoising_criterion = nn.MSELoss()
+        # PSD-based losses operate on the time axis (dim=1) of (B, L, C) batches.
+        if denoising_loss == 'MSELoss':
+            self.denoising_criterion = nn.MSELoss()
+        elif denoising_loss == 'PSDLoss':
+            self.denoising_criterion = PSDLoss(dim=1)
+        elif denoising_loss == 'MixtureMSEPSDLoss':
+            self.denoising_criterion = MixtureMSEPSDLoss(
+                alpha=denoising_spectral_alpha, dim=1,
+            )
+        else:
+            raise ValueError(
+                f"Unknown denoising_loss {denoising_loss!r}; expected one of "
+                "'MSELoss', 'PSDLoss', 'MixtureMSEPSDLoss'."
+            )
 
         self._target_name: Optional[str] = None
         self._target_mu: Optional[float] = None
