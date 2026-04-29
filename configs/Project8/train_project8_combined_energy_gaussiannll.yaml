@@ -1,0 +1,90 @@
+# Usage:
+#   python main.py fit --config configs/Project8/train_project8_combined_energy_gaussiannll.yaml
+#
+# Combined denoising + energy_eV regression on cav-noised Project 8 I/Q time
+# series.  Encoder is S4DCombinedModel: an S4ModelSeq2Seq denoiser feeds an
+# S4Model regression head, so forward(x_noisy) returns (x_denoised, y_preds).
+# Total loss is
+#     lambda_denoise * MixtureMSESpectralLoss(alpha)(x_denoised, x_clean)
+#   + lambda_regress * GaussianNLL(y_preds, y)
+# matching the reference LitS4CombinedModel from neutrino_project (denoising).
+#
+# combined=true is incompatible with freq_transform != null -- the denoiser
+# operates in the time domain.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/project8_combined_energy_gaussiannll
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: project8_combined_energy_gaussiannll
+
+model:
+  class_path: tasks.Project8.project8_combined.Project8CombinedRegression
+  init_args:
+    learning_rate: 1.0e-3
+    gamma: 0.25
+    lr_patience: 5
+    threshold: 1.0e-3
+    lr_min: 1.0e-6
+    lambda_denoise: 1.0
+    lambda_regress: 1.0
+    freeze_denoiser: false
+    denoising_loss: MixtureMSESpectralLoss
+    denoising_spectral_alpha: 0.5
+    encoder:
+      class_path: models.s4d_combined.S4DCombinedModel
+      init_args:
+        denoiser:
+          class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+          init_args:
+            d_input:  2     # I/Q channels
+            d_output: 2     # denoised I/Q
+            d_model:  128
+            d_state:  64
+            n_layers: 4
+            dropout:  0.0
+            prenorm:  false
+        regressor:
+          class_path: models.s4d.S4Model
+          init_args:
+            d_input:  2     # denoised I/Q
+            d_output: 2     # [mean, raw_var] for energy_eV
+            d_model:  128
+            d_state:  64
+            n_layers: 6
+            dropout:  0.0
+            prenorm:  false
+
+data:
+  class_path: dataloader.project8_dataloader.Project8DataModule
+  init_args:
+    train_dir: /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/train
+    val_dir:   /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/valid
+    test_dir:  /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/test
+    inputs:    [output_ts_I, output_ts_Q]
+    variables: [energy_eV]
+    cutoff:    8192
+    norm:      true
+    noise_type: cav
+    freq_transform: null
+    combined:  true
+    batch_size: 128
+    num_workers: 4
