@@ -44,8 +44,15 @@ model:
     lr_patience: 5
     threshold: 1.0e-3
     lr_min: 1.0e-6
+    trainer_max_epochs: 100
     lambda_denoise: 1.0
     lambda_regress: 1.0
+    lambda_regress_schedule:
+      schedule_type: step
+      step_schedule:
+        - [0,  0.0]   # epochs  0-29: regression off
+        - [30, 0.5]   # epochs 30-59: regression at half weight
+        - [60, 1.0]   # epochs 60+:   regression at full weight
     freeze_denoiser: false
     denoising_loss: MixtureMSESpectralLoss
     denoising_spectral_alpha: 0.5

@@ -8,7 +8,21 @@ is a weighted sum of a denoising loss and a regression loss::
     loss = lambda_denoise * denoising_loss(x_denoised, x_clean)
          + lambda_regress * GaussianNLL(y_preds, y)
 
-Lambdas are constants here (no curriculum scheduler).  ``denoising_loss``
+Each lambda can either stay constant (default) or follow a
+:class:`functions.curriculum_scheduler.LambdaScheduler` schedule passed as a
+dict via ``lambda_denoise_schedule`` / ``lambda_regress_schedule``, e.g.::
+
+    lambda_regress_schedule:
+      schedule_type: step
+      step_schedule:
+        - [0,  0.0]   # epochs  0-29: regression off
+        - [30, 0.5]   # epochs 30-59: regression at half weight
+        - [60, 1.0]   # epochs 60+:   regression at full weight
+
+The current lambda values are refreshed at the start of every training
+epoch and logged as ``lambda/denoise`` and ``lambda/regress``.
+
+``denoising_loss``
 selects one of:
 
   * ``'MSELoss'``                — plain time-domain MSE.
@@ -33,6 +47,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
 
+from functions.curriculum_scheduler import LambdaScheduler
 from functions.losses import MixtureMSESpectralLoss
 
 
@@ -59,6 +74,9 @@ class Project8CombinedRegression(L.LightningModule):
         eps: float = 1e-6,
         lambda_denoise: float = 1.0,
         lambda_regress: float = 1.0,
+        lambda_denoise_schedule: Optional[dict] = None,
+        lambda_regress_schedule: Optional[dict] = None,
+        trainer_max_epochs: int = 100,
         freeze_denoiser: bool = False,
         denoising_loss: str = 'MixtureMSESpectralLoss',
         denoising_spectral_alpha: float = 0.5,
@@ -74,7 +92,27 @@ class Project8CombinedRegression(L.LightningModule):
         self.eps = eps
         self.lambda_denoise = lambda_denoise
         self.lambda_regress = lambda_regress
+        self.trainer_max_epochs = trainer_max_epochs
         self.freeze_denoiser = freeze_denoiser
+
+        def _make_scheduler(schedule_cfg, default_value):
+            if schedule_cfg is None:
+                return LambdaScheduler(
+                    schedule_type='constant',
+                    start_value=default_value,
+                    total_epochs=trainer_max_epochs,
+                )
+            cfg = dict(schedule_cfg)
+            cfg.setdefault('start_value', default_value)
+            cfg.setdefault('total_epochs', trainer_max_epochs)
+            return LambdaScheduler(**cfg)
+
+        self.denoise_lambda_scheduler = _make_scheduler(
+            lambda_denoise_schedule, lambda_denoise,
+        )
+        self.regress_lambda_scheduler = _make_scheduler(
+            lambda_regress_schedule, lambda_regress,
+        )
 
         if self.freeze_denoiser:
             if not hasattr(self.encoder, 'denoiser'):
@@ -131,6 +169,16 @@ class Project8CombinedRegression(L.LightningModule):
             self._target_std = float(dm.stds[0])
         else:
             self._target_mu, self._target_std = 0.0, 1.0
+
+    # ─── curriculum schedulers ──────────────────────────────────────────────
+    def on_train_epoch_start(self):
+        epoch = self.trainer.current_epoch
+        self.lambda_denoise = self.denoise_lambda_scheduler.get_lambda(epoch)
+        self.lambda_regress = self.regress_lambda_scheduler.get_lambda(epoch)
+        self.log('lambda/denoise', self.lambda_denoise,
+                 on_step=False, on_epoch=True, logger=True)
+        self.log('lambda/regress', self.lambda_regress,
+                 on_step=False, on_epoch=True, logger=True)
 
     # ─── forward / step ─────────────────────────────────────────────────────
     def forward(self, x):
