@@ -45,6 +45,12 @@ Batch convention:
             freq_transform='fft' -> FFT(I,Q), real/imag stacked into channels (z-scored)
         var       (B, n_variables)      float32  z-scored regression targets
 
+        With combined=True (incompatible with freq_transform != None) the
+        DataModule instead emits the 3-tuple
+            noisy   (B, cutoff, C)      float32  signal + noise, per-channel std-norm
+            clean   (B, cutoff, C)      float32  signal, normalised by the *same* std
+            var     (B, n_variables)    float32  z-scored regression targets
+
     Project8DenoisingDataModule:
         noisy     (B, cutoff, C)        float32  signal + noise, per-channel std-norm
         clean     (B, cutoff, C)        float32  signal, normalised by the *same* std
@@ -77,6 +83,13 @@ class JointBatch(IntEnum):
 class DenoisingBatch(IntEnum):
     noisy = 0
     clean = 1
+
+
+# Combined denoising + regression task: (X_noisy, X_clean, var).
+class CombinedBatch(IntEnum):
+    noisy = 0
+    clean = 1
+    var   = 2
 
 
 # ─── noise key naming ───────────────────────────────────────────────────────
@@ -143,8 +156,15 @@ class Project8SimDataset(Dataset):
         freq_transform: Optional[str] = 'fft',   # 'fft' | None
         mu:             Optional[np.ndarray] = None,
         stds:           Optional[np.ndarray] = None,
+        combined:       bool = False,
     ):
         super().__init__()
+        if combined and freq_transform is not None:
+            raise ValueError(
+                "combined=True is incompatible with freq_transform="
+                f"{freq_transform!r}: combined denoising + regression operates "
+                "on the time-domain signal. Set freq_transform=None."
+            )
         self.paths          = _list_hdf5(data_dir)
         self.inputs         = inputs
         self.variables      = variables
@@ -156,6 +176,7 @@ class Project8SimDataset(Dataset):
         else:
             self.noise_keys = [_noise_key(k, noise_type) for k in inputs]
         self.freq_transform = freq_transform
+        self.combined       = combined
 
         probe_key   = (variables + inputs)[0]
         self._index = _build_index(self.paths, probe_key)
@@ -221,19 +242,28 @@ class Project8SimDataset(Dataset):
         )
 
         X_clean = np.stack([row[k] for k in self.inputs], axis=-1)[:self.cutoff]
+        X_clean_f = X_clean.astype(np.float32, copy=True)
         if self.noise_keys:
             noise = np.stack([row[k] for k in self.noise_keys], axis=-1)[:self.cutoff]
-            X_ts  = (X_clean + noise).astype(np.float32, copy=True)
+            X_ts  = (X_clean_f + noise.astype(np.float32, copy=False)).astype(np.float32, copy=True)
         else:
-            X_ts  = X_clean.astype(np.float32, copy=True)
+            X_ts  = X_clean_f.copy()
         if self.norm:
             for j in range(X_ts.shape[1]):
-                X_ts[:, j] = X_ts[:, j] / (np.std(X_ts[:, j]) + 1e-8)
+                scale = np.std(X_ts[:, j]) + 1e-8
+                X_ts[:, j] = X_ts[:, j] / scale
+                # In combined mode the clean target shares the noisy input's
+                # per-channel scale so the denoiser does not also re-scale.
+                if self.combined:
+                    X_clean_f[:, j] = X_clean_f[:, j] / scale
 
         y_raw    = np.array([row[v] for v in self.variables], dtype=np.float32)
         var_norm = (y_raw - self.mu) / (self.stds + 1e-8) if self.norm else y_raw
 
         var = torch.from_numpy(var_norm.astype(np.float32))
+
+        if self.combined:
+            return torch.from_numpy(X_ts), torch.from_numpy(X_clean_f), var
 
         if self.freq_transform is None:
             return torch.from_numpy(X_ts), var
@@ -290,8 +320,15 @@ class Project8DataModule(L.LightningDataModule):
         batch_size:     int   = 512,
         num_workers:    int   = 4,
         pin_memory:     bool  = False,
+        combined:       bool  = False,
     ):
         super().__init__()
+        if combined and freq_transform is not None:
+            raise ValueError(
+                "combined=True is incompatible with freq_transform="
+                f"{freq_transform!r}: combined denoising + regression operates "
+                "on the time-domain signal. Set freq_transform=None."
+            )
         self.save_hyperparameters()
 
     def _make_dataset(self, data_dir, mu, stds):
@@ -305,6 +342,7 @@ class Project8DataModule(L.LightningDataModule):
             freq_transform = self.hparams.freq_transform,
             mu             = mu,
             stds           = stds,
+            combined       = self.hparams.combined,
         )
 
     def setup(self, stage: str | None = None):
