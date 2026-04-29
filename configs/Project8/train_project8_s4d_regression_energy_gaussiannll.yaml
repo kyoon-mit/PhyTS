@@ -7,7 +7,7 @@
 # selects only the energy_eV column for loss/metrics.
 
 trainer:
-  max_epochs: 1000
+  max_epochs: 100
   accelerator: gpu
   devices: 1
   log_every_n_steps: 1
@@ -51,9 +51,9 @@ model:
 data:
   class_path: dataloader.project8_dataloader.Project8DataModule
   init_args:
-    train_dir: data/Project8Sim/hdf5/train
-    val_dir:   data/Project8Sim/hdf5/val
-    test_dir:  data/Project8Sim/hdf5/test
+    train_dir: /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/train
+    val_dir:   /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/valid
+    test_dir:  /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/test
     inputs:    [output_ts_I, output_ts_Q]
     variables: [energy_eV]
     cutoff:    8192
