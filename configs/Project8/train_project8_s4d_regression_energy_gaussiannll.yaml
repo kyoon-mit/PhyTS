@@ -42,7 +42,7 @@ model:
       class_path: models.s4d.S4Model
       init_args:
         d_input: 2
-        d_output: 2     # [mu, log_var] for energy_eV
+        d_output: 2     # [mean, raw_var] for energy_eV
         d_model: 128
         n_layers: 6
         dropout: 0.0
