@@ -158,7 +158,12 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
             sync_dist=True,
         )
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list = []
+        self._val_labels: list = []
+
     def validation_step(self, batch, batch_idx):
+        import numpy as np
         batch = tensor_to_jax(batch)
         x, y = self._prepare_batch(batch)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
@@ -167,6 +172,16 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         rmse = float(jnp.sqrt(jnp.mean((outputs.squeeze(-1) - y) ** 2)))
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("val/rmse", rmse, on_step=False, on_epoch=True, sync_dist=True)
+        self._val_preds.append(np.asarray(outputs.squeeze(-1)))
+        self._val_labels.append(np.asarray(y))
+
+    def on_validation_epoch_end(self):
+        import numpy as np
+        y_hat = np.concatenate(self._val_preds)
+        y = np.concatenate(self._val_labels)
+        ss_res = float(np.sum((y_hat - y) ** 2))
+        ss_tot = float(max(np.sum((y - y.mean()) ** 2), 1e-8))
+        self.log("val/r2", 1.0 - ss_res / ss_tot)
 
     def on_test_epoch_start(self):
         self._test_preds: list = []
@@ -262,7 +277,12 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
             sync_dist=True,
         )
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list = []
+        self._val_labels: list = []
+
     def validation_step(self, batch, batch_idx):
+        import numpy as np
         batch = tensor_to_jax(batch)
         x, y = self._prepare_batch(batch)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
@@ -272,6 +292,19 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         acc = float(jnp.mean(preds == y))
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("val/acc", acc, on_step=False, on_epoch=True, sync_dist=True)
+        self._val_preds.append(np.asarray(preds))
+        self._val_labels.append(np.asarray(y))
+
+    def on_validation_epoch_end(self):
+        import numpy as np
+        preds  = np.concatenate(self._val_preds)
+        labels = np.concatenate(self._val_labels)
+        per_class = [
+            float(np.mean(preds[labels == c] == c))
+            for c in range(self.num_classes) if np.any(labels == c)
+        ]
+        if per_class:
+            self.log("val/balanced_acc", sum(per_class) / len(per_class))
 
     def on_test_epoch_start(self):
         self._test_preds: list = []

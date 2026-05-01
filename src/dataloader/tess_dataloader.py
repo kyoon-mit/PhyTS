@@ -1,20 +1,18 @@
 """TESS lightcurve datasets and Lightning DataModules for PhyTS-bench.
 
 Dataset files (from HuggingFace PhyTS-team/PhyTS-bench):
-  data/TESS/.cache/TESS/tess_regression.parquet      — 4,183 rows, target: frot
-  data/TESS/.cache/TESS/tess_classification.parquet  — 25,935 rows, target: label
+  data/TESS/.cache/TESS/tess_regression.parquet       — 4,183 rows, target: frot
+  data/TESS/.cache/TESS/tess_classification_*.parquet — Hub train/val/test shards (8 classes)
+    (``data/TESS/download_tess.py`` mirrors Hub ``TESS/split/*.parquet`` into ``TESS/``)
 
-All three Dataset classes share the same preprocessing:
+Preprocessing (shared):
   - z-score normalization per sample (median centering, std scaling)
   - crop or pad to seq_len=1100 with 0.0; bool mask (True = valid cadence)
-  - 70 / 15 / 15 train / val / test split, stratified by target (fixed seed=42):
-      regression     — frot binned into 10 quantile deciles
-      classification — label string (8 classes)
 
 Batch formats:
-  TESSRegressionDataset       → (flux, mask, frot)    floats (L,), bool (L,), float scalar
-  TESSClassificationDataset   → (flux, mask, label)   floats (L,), bool (L,), int64 scalar
-  TESSReconstructionDataset   → (noisy_flux, flux, mask)  floats (L,), floats (L,), bool (L,)
+  TESSRegressionDataset             → (flux, mask, frot)   (L,), (L,), float scalar
+  TESSClassificationDataset         → (flux, mask, label)  (L,), (L,), int64
+  TESSReconstructionDataset         → (noisy_flux, flux, mask)
 """
 
 import json
@@ -185,92 +183,6 @@ class TESSRegressionDataModule(L.LightningDataModule):
         return self.test_dataloader()
 
 
-# ── Classification ───────────────────────────────────────────────────────────
-
-class TESSClassificationDataset(Dataset):
-    """TESS classification: flux → variability class label."""
-
-    def __init__(self, data_dir: str, split: str, seq_len: int = 1100, seed: int = 42):
-        import pyarrow.parquet as pq
-
-        parquet_path = str(Path(data_dir) / "tess_classification.parquet")
-        label_map_path = Path(data_dir) / "label_map.json"
-
-        table = pq.read_table(parquet_path, columns=["label", "flux"])
-
-        # Build or load label map (alphabetically sorted for determinism)
-        if label_map_path.exists():
-            with open(label_map_path) as f:
-                self.label_map = json.load(f)
-        else:
-            unique_labels = sorted(set(table["label"].to_pylist()))
-            self.label_map = {lbl: i for i, lbl in enumerate(unique_labels)}
-            with open(label_map_path, "w") as f:
-                json.dump(self.label_map, f, indent=2)
-
-        label_col = table["label"].to_pylist()
-        labels_all = np.array([self.label_map[l] for l in label_col], dtype=np.int64)
-        splits = _stratified_splits(labels_all, seed=seed)
-        idx = splits[split]
-
-        self._fluxes, self._masks = _load_flux_arrays(parquet_path, idx, seq_len)
-        self._labels = labels_all[idx]
-
-    @property
-    def num_classes(self) -> int:
-        return len(self.label_map)
-
-    @property
-    def label_names(self) -> list[str]:
-        return [k for k, _ in sorted(self.label_map.items(), key=lambda x: x[1])]
-
-    def __len__(self) -> int:
-        return len(self._labels)
-
-    def __getitem__(self, i: int) -> tuple[Tensor, Tensor, Tensor]:
-        return (
-            torch.as_tensor(self._fluxes[i]),
-            torch.as_tensor(self._masks[i]),
-            torch.tensor(self._labels[i]),
-        )
-
-
-class TESSClassificationDataModule(L.LightningDataModule):
-    def __init__(
-        self,
-        data_dir: str,
-        batch_size: int = 32,
-        num_workers: int = 0,
-        seq_len: int = 1100,
-        seed: int = 42,
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-
-    def setup(self, stage: str | None = None):
-        hp = self.hparams
-        if stage == "fit":
-            self.train = TESSClassificationDataset(hp.data_dir, "train", hp.seq_len, hp.seed)
-            self.val = TESSClassificationDataset(hp.data_dir, "val", hp.seq_len, hp.seed)
-        elif stage in ("test", "predict"):
-            self.test = TESSClassificationDataset(hp.data_dir, "test", hp.seq_len, hp.seed)
-
-    def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.hparams.batch_size,
-                          shuffle=True, num_workers=self.hparams.num_workers, pin_memory=True)
-
-    def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
-
-    def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
-
-    def predict_dataloader(self):
-        return self.test_dataloader()
-
-
 # ── Reconstruction (backbone pretraining) ────────────────────────────────────
 
 class TESSReconstructionDataset(Dataset):
@@ -373,19 +285,60 @@ class TESSReconstructionDataModule(L.LightningDataModule):
         return self.test_dataloader()
 
 
-# ── Pre-split Classification (HuggingFace TESS/split) ────────────────────────
+# ── Classification (HuggingFace shard names in data_dir) ───────────────────────
 
-def _read_presplit_parquet(data_dir: Path, split: str, columns: list[str]):
-    """Read a pre-split parquet shard or file set for the given split.
+def _maybe_promote_split_parquets_to_data_dir(data_dir: Path) -> None:
+    """If ``data_dir/split/*.parquet`` exists, copy missing files into ``data_dir``.
 
-    Tries in order:
-      1. {data_dir}/{split}.parquet            (single file)
-      2. {data_dir}/validation.parquet         (alias, only when split=="val")
-      3. {data_dir}/{split}-*.parquet          (HuggingFace sharded naming)
-      4. {data_dir}/validation-*.parquet       (sharded alias for val)
+    HuggingFace leaves shards under ``TESS/split``; training uses a single
+    ``data_dir`` of ``TESS`` with hub-style filenames alongside regression parquets.
+    """
+    import shutil
+
+    split_sub = data_dir / "split"
+    if not split_sub.is_dir():
+        return
+    for src in split_sub.glob("*.parquet"):
+        dest = data_dir / src.name
+        if dest.is_file():
+            continue
+        shutil.copy2(src, dest)
+
+
+def _read_presplit_parquet(
+    data_dir: Path,
+    split: str,
+    columns: list[str],
+    *,
+    shard_prefix: str | None = "tess_classification",
+):
+    """Read pre-split parquet for one split name.
+
+    Tries in order (first match wins):
+
+      1. PhyTS Hub layout: ``{shard_prefix}_{split}.parquet`` or
+         ``{shard_prefix}_{split}-*.parquet`` (sharded)
+      2. Legacy flat names: ``{split}.parquet``, ``validation.parquet``, and
+         ``{split}-*.parquet`` / ``validation-*.parquet``
+
+    Parameters
+    ----------
+    shard_prefix
+        PhyTS Hub uses ``tess_classification_<split>.parquet`` (mirrored into ``data_dir``).
+        Set ``None`` to skip this layout and only use legacy names.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
+
+    if shard_prefix:
+        prefixed = data_dir / f"{shard_prefix}_{split}.parquet"
+        if prefixed.is_file():
+            return pq.read_table(prefixed, columns=columns)
+        shard_pat = sorted(data_dir.glob(f"{shard_prefix}_{split}-*.parquet"))
+        if shard_pat:
+            return pa.concat_tables(
+                [pq.read_table(f, columns=columns) for f in shard_pat]
+            )
 
     candidates = [f"{split}.parquet"]
     if split == "val":
@@ -393,10 +346,9 @@ def _read_presplit_parquet(data_dir: Path, split: str, columns: list[str]):
 
     for name in candidates:
         p = data_dir / name
-        if p.exists():
+        if p.is_file():
             return pq.read_table(p, columns=columns)
 
-    # Sharded files
     globs = [f"{split}-*.parquet"]
     if split == "val":
         globs.append("validation-*.parquet")
@@ -406,19 +358,17 @@ def _read_presplit_parquet(data_dir: Path, split: str, columns: list[str]):
             return pa.concat_tables([pq.read_table(f, columns=columns) for f in files])
 
     raise FileNotFoundError(
-        f"No parquet files for split='{split}' in {data_dir}. "
-        f"Expected one of: {[str(data_dir / c) for c in candidates]}"
+        f"No parquet files for split={split!r} in {data_dir}. "
+        f"Looking for PhyTS-hub style {shard_prefix}_{split}.parquet or legacy {split}.parquet etc."
     )
 
 
 class TESSClassificationDataset(Dataset):
-    """TESS classification from HuggingFace pre-split parquet files.
+    """TESS classification from HuggingFace split shards under ``data_dir``.
 
-    Reads {data_dir}/{split}.parquet where split ∈ {"train", "val", "test"}.
-    "validation" is accepted as an alias for "val".
-    Columns required: flux (list<float>), label (string).
+    Prefers ``tess_classification_{split}.parquet`` (PhyTS Hub), else legacy
+    ``{split}.parquet`` / ``validation.parquet``. Columns: flux (list<float>), label (string).
 
-    Preprocessing is identical to TESSClassificationDataset:
     z-score normalization → crop/pad to seq_len → bool mask.
 
     The label map is derived alphabetically from the current split's unique
@@ -428,7 +378,10 @@ class TESSClassificationDataset(Dataset):
 
     def __init__(self, data_dir: str, split: str, seq_len: int = 1100):
         data_dir = Path(data_dir)
-        table = _read_presplit_parquet(data_dir, split, columns=["flux", "label"])
+        _maybe_promote_split_parquets_to_data_dir(data_dir)
+        table = _read_presplit_parquet(
+            data_dir, split, columns=["flux", "label"], shard_prefix="tess_classification"
+        )
 
         label_strings = table["label"].to_pylist()
         unique_labels = sorted(set(label_strings))
@@ -488,9 +441,9 @@ class TESSClassificationDataModule(L.LightningDataModule):
     Parameters
     ----------
     data_dir:
-        Directory containing train.parquet, val.parquet, test.parquet
-        (or HuggingFace sharded equivalents).  Set TESS_DATA_DIR env var
-        or pass explicitly.
+        Same TESS root as regression (e.g. ``data/TESS/.cache/TESS``): classification
+        shards ``tess_classification_{train,val,test}.parquet`` plus optional
+        ``label_map.json``. Set ``TESS_DATA_DIR`` or pass explicitly.
     """
 
     def __init__(

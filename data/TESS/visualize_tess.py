@@ -1,20 +1,27 @@
 """
-Plot and summarize cached PhyTS TESS Parquet (histograms, example light curves, time coverage).
+Plot and summarize PhyTS pre-split TESS Parquet (Hub stores shards under
+``TESS/split/``; this tool expects them mirrored into ``TESS/*.parquet``).
 
-Loads ``tess_regression.parquet`` and ``tess_classification.parquet`` from
-``data/TESS/.cache/`` (or downloads via Hugging Face Hub).
+Expects Hub-style names under ``data-dir`` (typically ``…/.cache/TESS``)::
+  tess_classification_(train|val|test).parquet
+  tess_regression_(train|val|test).parquet
+
+Same layout as ``src/dataloader.tess_dataloader`` classification data and
+``data/TESS/download_tess.py``. Missing files trigger a Hugging Face
+``snapshot_download`` plus promotion from ``TESS/split`` into ``TESS``.
 
 Dependencies: ``uv sync --extra jax`` (pyarrow, huggingface_hub, matplotlib).
 
 Example
 -------
-    python data/TESS/visualize_tess.py
+    uv run --extra jax python data/TESS/visualize_tess.py
 """
 
 from __future__ import annotations
 
 import argparse
 import gc
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -24,21 +31,103 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import pyarrow as pa
+import pyarrow.dataset as pads
 import pyarrow.parquet as pq
 from matplotlib.ticker import MaxNLocator
 
 try:
-    from huggingface_hub import hf_hub_download
+    from huggingface_hub import snapshot_download
     from huggingface_hub.errors import HfHubHTTPError
 except ImportError:  # pragma: no cover
     print("Install: uv sync --extra jax", file=sys.stderr)
     raise SystemExit(1) from None
 
 REPO = "PhyTS-team/PhyTS-bench"
-REG_NAME = "tess_regression.parquet"
-CLS_NAME = "tess_classification.parquet"
-SCRIPT_DIR = Path(__file__).resolve().parent
-_DEFAULT_DATA_DIR = SCRIPT_DIR / ".cache" / "TESS"
+HF_SPLIT_PATTERN = "TESS/split/*"
+_SCRIPT_DIR = Path(__file__).resolve().parent
+# Unpacked Hub tree: parquets live under `.cache/TESS/` (see download_tess.promote_split_parquets_to_tess_root).
+_DEFAULT_TESS_DIR = _SCRIPT_DIR / ".cache" / "TESS"
+
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+from download_tess import promote_split_parquets_to_tess_root  # noqa: E402
+
+
+def tess_task_parquet_paths(data_dir: Path, task: str) -> list[Path]:
+    """Return ordered paths for train → val → test for one task."""
+    prefix = f"tess_{task}"
+    out: list[Path] = []
+    for split in ("train", "val", "test"):
+        one = data_dir / f"{prefix}_{split}.parquet"
+        if one.is_file():
+            out.append(one)
+            continue
+        shards = sorted(data_dir.glob(f"{prefix}_{split}-*.parquet"))
+        if shards:
+            out.extend(shards)
+            continue
+        raise FileNotFoundError(
+            f"Missing {task} split {split!r}: expected {one} or "
+            f"{prefix}_{split}-*.parquet under {data_dir}"
+        )
+    return out
+
+
+def hub_cache_parent_for_tess_dir(tess_dir: Path) -> Path:
+    """Infer Hugging Face ``local_dir`` (cache root) from ``…/TESS`` or legacy ``…/TESS/split``."""
+    r = tess_dir.resolve()
+    if r.name == "TESS":
+        return r.parent
+    if r.name == "split" and r.parent.name == "TESS":
+        return r.parent.parent
+    return _SCRIPT_DIR / ".cache"
+
+
+def ensure_tess_splits_downloaded(tess_dir: Path, *, hub_cache_parent: Path | None) -> Path:
+    """Ensure ``tess_dir`` contains promoted PhyTS parquet shards (download via Hub if needed)."""
+    tess_dir = Path(tess_dir).resolve()
+    marker = tess_dir / "tess_classification_train.parquet"
+    if marker.is_file():
+        return tess_dir
+
+    promote_split_parquets_to_tess_root(tess_dir)
+    if marker.is_file():
+        return tess_dir
+
+    hf_root = Path(hub_cache_parent).resolve() if hub_cache_parent else hub_cache_parent_for_tess_dir(
+        tess_dir
+    )
+    hf_root.mkdir(parents=True, exist_ok=True)
+    try:
+        snapshot_download(
+            repo_id=REPO,
+            repo_type="dataset",
+            allow_patterns=[HF_SPLIT_PATTERN],
+            local_dir=str(hf_root),
+        )
+    except (OSError, HfHubHTTPError) as e:
+        print(f"Download failed ({HF_SPLIT_PATTERN}): {e}", file=sys.stderr)
+        raise SystemExit(1) from e
+
+    tess_hub = hf_root / "TESS"
+    promote_split_parquets_to_tess_root(tess_hub)
+
+    if tess_dir.resolve() != tess_hub.resolve():
+        for p in tess_hub.glob("tess_*.parquet"):
+            dest = tess_dir / p.name
+            if not dest.is_file():
+                shutil.copy2(p, dest)
+
+    if not marker.is_file():
+        print(
+            f"After snapshot, expected shard missing at {marker}. "
+            f"hub_cache_parent was {hf_root}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    return tess_dir
 
 N_EXAMPLE_CURVES = 6
 RNG_SEED = 42
@@ -52,49 +141,8 @@ COVERAGE_PREVIEW_MAX_H = 900
 COVERAGE_PREVIEW_MAX_W = 700
 
 
-def resolve_parquet(filename: str, data_dir: Path) -> Path:
-    """Return path to ``filename``, downloading from the Hub if missing.
-
-    Parameters
-    ----------
-    filename
-        Basename of the Parquet file (e.g. ``tess_regression.parquet``).
-    data_dir
-        Directory that contains (or should contain) the Parquet files.
-        Matches the ``data_dir`` used by the dataloaders and ``eval_pipeline.py``.
-
-    Returns
-    -------
-    Path
-        Local Parquet file path.
-
-    Raises
-    ------
-    SystemExit
-        If download fails.
-    """
-    direct = data_dir / filename
-    if direct.is_file():
-        return direct
-    # Fall back to downloading via the Hub into the default cache location.
-    cache = SCRIPT_DIR / ".cache"
-    cache.mkdir(parents=True, exist_ok=True)
-    try:
-        return Path(
-            hf_hub_download(
-                repo_id=REPO,
-                repo_type="dataset",
-                filename=f"TESS/{filename}",
-                local_dir=str(cache),
-            )
-        )
-    except (OSError, HfHubHTTPError) as e:
-        print(f"Download failed ({filename}): {e}", file=sys.stderr)
-        raise SystemExit(1) from e
-
-
 def estimate_median_dt(
-    path: Path,
+    paths: Sequence[Path],
     rng: np.random.Generator,
     *,
     n_sample_rows: int,
@@ -103,8 +151,8 @@ def estimate_median_dt(
 
     Parameters
     ----------
-    path
-        Parquet file with a ``time`` list column.
+    paths
+        PhyTS parquet shard paths (logical row order follows train→val→test).
     rng
         NumPy random generator (row subsample).
     n_sample_rows
@@ -115,13 +163,14 @@ def estimate_median_dt(
     float
         ``dt`` in the same time units as the Parquet ``time`` column.
     """
-    pf = pq.ParquetFile(path)
-    n = pf.metadata.num_rows
-    k = min(max(1, n_sample_rows), n)
-    pick = set(int(x) for x in rng.choice(n, size=k, replace=False))
+    plist = list(paths)
+    n_total = sum(pq.ParquetFile(p).metadata.num_rows for p in plist)
+    k = min(max(1, n_sample_rows), n_total)
+    pick = set(int(x) for x in rng.choice(n_total, size=k, replace=False))
     medians: list[float] = []
     seen = 0
-    for batch in pf.iter_batches(columns=["time"], batch_size=1024):
+    ds = pads.dataset(plist, format="parquet")
+    for batch in ds.to_batches(columns=["time"], batch_size=2048):
         for j in range(batch.num_rows):
             if seen in pick:
                 t = np.asarray(batch.column("time")[j].as_py(), dtype=np.float64)
@@ -384,24 +433,19 @@ def _save_combined_coverage_figure(
 
 
 def _build_time_coverage_layer(
-    path: Path,
+    paths: list[Path],
     dt: float,
     n_bins: int,
 ) -> tuple[np.ndarray, list[int], int]:
-    """Two-pass scan: sort by (sector, start time) without storing per-row occupancy lists.
+    """Two-pass scan: sort by (sector, start time); ``paths`` concatenated row order."""
 
-    Returns
-    -------
-    idx_layer, unique_sectors, h_logical
-        ``idx_layer`` is ``float32`` with ``NaN`` = empty cadence; sector indices
-        0 … n_sec−1 where occupied. ``h_logical`` equals row count.
-    """
-    pf = pq.ParquetFile(path)
-    n = pf.metadata.num_rows
+    plist = paths
+    n = sum(pq.ParquetFile(p).metadata.num_rows for p in plist)
     sectors = np.empty(n, dtype=np.int32)
     t0s = np.empty(n, dtype=np.float64)
     row_i = 0
-    for batch in pf.iter_batches(columns=["time", "sector"], batch_size=1024):
+    dataset = pads.dataset(plist, format="parquet")
+    for batch in dataset.to_batches(columns=["time", "sector"], batch_size=1024):
         secs = batch.column("sector")
         for j in range(batch.num_rows):
             t = np.asarray(batch.column("time")[j].as_py(), dtype=np.float64)
@@ -419,7 +463,7 @@ def _build_time_coverage_layer(
 
     idx_layer = np.full((n, n_bins), np.nan, dtype=np.float32)
     row_i = 0
-    for batch in pf.iter_batches(columns=["time", "sector"], batch_size=1024):
+    for batch in dataset.to_batches(columns=["time", "sector"], batch_size=1024):
         for j in range(batch.num_rows):
             t = np.asarray(batch.column("time")[j].as_py(), dtype=np.float64)
             occ = _row_occupancy(t, dt, n_bins)
@@ -435,7 +479,7 @@ def _build_time_coverage_layer(
 
 
 def _render_time_coverage_dataset(
-    path: Path,
+    paths: list[Path],
     title: str,
     out_path: Path,
     *,
@@ -443,7 +487,7 @@ def _render_time_coverage_dataset(
     n_bins: int,
 ) -> None:
     """Build full logical grid, downsample for display only, write PNG + smaller preview."""
-    idx_layer, unique_sectors, h = _build_time_coverage_layer(path, dt, n_bins)
+    idx_layer, unique_sectors, h = _build_time_coverage_layer(paths, dt, n_bins)
 
     idx_disp, sr, sc = _downsample_nn_2d(
         idx_layer,
@@ -494,30 +538,45 @@ def main() -> None:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=_DEFAULT_DATA_DIR,
-        help="Directory containing tess_regression.parquet and tess_classification.parquet. "
-             f"Default: {_DEFAULT_DATA_DIR}",
+        default=_DEFAULT_TESS_DIR,
+        help=(
+            "Directory with tess_classification_* / tess_regression_* train|val|test parquet "
+            "(mirrored from Hub TESS/split into TESS/). "
+            f"Default: {_DEFAULT_TESS_DIR}"
+        ),
+    )
+    parser.add_argument(
+        "--hub-cache-parent",
+        type=Path,
+        default=None,
+        help=(
+            "If shards are missing, snapshot_download uses this as Hugging Face local_dir. "
+            "Default: parent of --data-dir when it ends with …/TESS, "
+            f"otherwise {str(_SCRIPT_DIR / '.cache')}."
+        ),
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=SCRIPT_DIR / "figures",
+        default=_SCRIPT_DIR / "figures",
         help="Output directory for figures (default: data/TESS/figures)",
     )
     args = parser.parse_args()
-    data_dir = args.data_dir.resolve()
+    tess_data = ensure_tess_splits_downloaded(
+        args.data_dir, hub_cache_parent=args.hub_cache_parent
+    )
     out_dir = args.out_dir.resolve()
 
-    reg_path = resolve_parquet(REG_NAME, data_dir)
-    cls_path = resolve_parquet(CLS_NAME, data_dir)
+    reg_paths = tess_task_parquet_paths(tess_data, "regression")
+    cls_paths = tess_task_parquet_paths(tess_data, "classification")
 
     rng = np.random.default_rng(RNG_SEED)
     rng_dt = np.random.default_rng(RNG_SEED + 31337)
-    dt_reg = estimate_median_dt(reg_path, rng_dt, n_sample_rows=DT_SAMPLE_ROWS)
-    dt_cls = estimate_median_dt(cls_path, rng_dt, n_sample_rows=DT_SAMPLE_ROWS)
+    dt_reg = estimate_median_dt(reg_paths, rng_dt, n_sample_rows=DT_SAMPLE_ROWS)
+    dt_cls = estimate_median_dt(cls_paths, rng_dt, n_sample_rows=DT_SAMPLE_ROWS)
 
-    reg_meta = pq.read_table(reg_path, columns=["sector", "frot"])
-    cls_meta = pq.read_table(cls_path, columns=["sector", "label"])
+    reg_meta = pa.concat_tables([pq.read_table(p, columns=["sector", "frot"]) for p in reg_paths])
+    cls_meta = pa.concat_tables([pq.read_table(p, columns=["sector", "label"]) for p in cls_paths])
     reg_sectors = reg_meta["sector"].to_numpy(zero_copy_only=False)
     frot_col = reg_meta["frot"].to_numpy(zero_copy_only=False)
     cls_sectors = cls_meta["sector"].to_numpy(zero_copy_only=False)
@@ -531,10 +590,10 @@ def main() -> None:
     )
 
     n_ex = max(1, N_EXAMPLE_CURVES)
-    reg_full = pq.read_table(reg_path)
+    reg_full = pa.concat_tables([pq.read_table(p) for p in reg_paths])
     n_reg = reg_full.num_rows
     pick_reg = rng.choice(n_reg, size=min(n_ex, n_reg), replace=False)
-    reg_sub = reg_full.take(pick_reg)
+    reg_sub = reg_full.take(np.asarray(sorted(pick_reg.tolist()), dtype=np.int64))
     times_r = reg_sub["time"].to_pylist()
     fluxes_r = reg_sub["flux"].to_pylist()
     sectors_r = reg_sub["sector"].to_pylist()
@@ -547,33 +606,30 @@ def main() -> None:
         times_r,
         fluxes_r,
         titles_r,
-        "TESS regression — example light curves",
+        "TESS regression — example light curves (pre-split shards)",
         out_dir / "tess_regression_lightcurves.png",
         median_dt=dt_reg,
     )
 
-    pf_cls = pq.ParquetFile(cls_path)
-    n_cls = pf_cls.metadata.num_rows
+    n_cls = sum(pq.ParquetFile(p).metadata.num_rows for p in cls_paths)
     pick_cls = rng.choice(n_cls, size=min(n_ex, n_cls), replace=False)
-    want: set[int] = {int(i) for i in pick_cls.tolist()}
+    want_cls: set[int] = set(int(i) for i in pick_cls.tolist())
     by_row: dict[int, tuple[list[float], list[float], str]] = {}
     seen_idx = 0
-    for batch in pf_cls.iter_batches(
-        columns=["time", "flux", "TIC", "sector", "label"],
-        batch_size=2048,
-    ):
+    ds_cls = pads.dataset(cls_paths, format="parquet")
+    for batch in ds_cls.to_batches(columns=["time", "flux", "TIC", "sector", "label"], batch_size=2048):
         for j in range(batch.num_rows):
-            if seen_idx in want:
+            if seen_idx in want_cls:
                 t_py = batch.column("time")[j].as_py()
                 f_py = batch.column("flux")[j].as_py()
                 tic = batch.column("TIC")[j].as_py()
                 sec = batch.column("sector")[j].as_py()
                 lab = batch.column("label")[j].as_py()
                 by_row[seen_idx] = (t_py, f_py, f"TIC={tic} sector={sec} label={lab}")
-                if len(by_row) == len(want):
+                if len(by_row) == len(want_cls):
                     break
             seen_idx += 1
-        if len(by_row) == len(want):
+        if len(by_row) == len(want_cls):
             break
 
     order_cls = [int(i) for i in pick_cls.tolist()]
@@ -585,20 +641,20 @@ def main() -> None:
         times_c,
         fluxes_c,
         titles_c,
-        "TESS classification — example light curves",
+        "TESS classification — example light curves (pre-split shards)",
         out_dir / "tess_classification_lightcurves.png",
         median_dt=dt_cls,
     )
 
     _render_time_coverage_dataset(
-        reg_path,
+        reg_paths,
         "TESS regression — sampling on fixed dt grid (colored by sector)",
         out_dir / "tess_regression_time_coverage.png",
         dt=dt_reg,
         n_bins=N_CADENCE_BINS,
     )
     _render_time_coverage_dataset(
-        cls_path,
+        cls_paths,
         "TESS classification — sampling on fixed dt grid (colored by sector)",
         out_dir / "tess_classification_time_coverage.png",
         dt=dt_cls,

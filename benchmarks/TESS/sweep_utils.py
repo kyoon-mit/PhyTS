@@ -3,6 +3,8 @@
 Imported by sweep_classification.py and sweep_regression.py.  Both scripts
 support the same six model types at the same four size tiers; only the output
 dimension (num_classes vs 1), task class, and dataloader differ.
+
+Width per tier (xs/sm/md/lg) is loaded from sweep_configs/all_model_sweep_dims.yaml.
 """
 from __future__ import annotations
 
@@ -11,6 +13,7 @@ import sys
 from pathlib import Path
 
 import torch.nn as nn
+import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT / "src") not in sys.path:
@@ -25,16 +28,26 @@ TORCH_MODELS = {"mlp", "s4d", "cnn", "cnn_attn"}
 JAX_MODELS   = {"linoss_imex", "linoss_damped"}
 ALL_MODELS   = TORCH_MODELS | JAX_MODELS
 
-# ── Size tiers ────────────────────────────────────────────────────────────────
-# All tiers target ~10K / ~100K / ~300K / ~700K parameters.
-# Changing d_output from 8 (classification) to 1 (regression) shifts counts by
-# less than 2% at every tier, so the same dims serve both tasks.
 
-_MLP_DIMS   = {"xs":   9, "sm":  83, "md": 224, "lg": 448}
-_S4D_DIMS   = {"xs":  16, "sm":  80, "md": 160, "lg": 264}
-_CNN_DIMS   = {"xs":  25, "sm":  80, "md": 140, "lg": 216}
-_CATTN_DIMS = {"xs":  24, "sm":  72, "md": 124, "lg": 192}  # must be div by num_heads=4
-_LIN_DIMS   = {"xs":  20, "sm":  64, "md": 112, "lg": 170}
+def _load_model_dim_tiers() -> tuple[dict[str, int], ...]:
+    """Load per-architecture hidden widths from sweep_configs/all_model_sweep_dims.yaml."""
+    path = Path(__file__).resolve().parent / "sweep_configs" / "all_model_sweep_dims.yaml"
+    tiers = {"xs", "sm", "md", "lg"}
+    with path.open(encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    keys = ("mlp", "s4d", "cnn", "cnn_attn", "linoss")
+    out = []
+    for k in keys:
+        d = raw[k]
+        if set(d.keys()) != tiers:
+            raise ValueError(
+                f"{path}: section {k!r} must define exactly tiers {sorted(tiers)}, got {sorted(d)}"
+            )
+        out.append({t: int(d[t]) for t in tiers})
+    return tuple(out)
+
+
+_MLP_DIMS, _S4D_DIMS, _CNN_DIMS, _CATTN_DIMS, _LIN_DIMS = _load_model_dim_tiers()
 
 
 # ── Model builders ────────────────────────────────────────────────────────────

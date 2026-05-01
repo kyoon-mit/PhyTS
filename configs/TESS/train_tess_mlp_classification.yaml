@@ -1,10 +1,6 @@
 # MLP end-to-end classification: TESS flux → variability class label.
 #
-# Before running: determine num_classes and update both fields below.
-#   python -c "
-#   from dataloader.tess_dataloader import TESSClassificationDataset
-#   ds = TESSClassificationDataset('data/TESS/.cache/TESS', 'train')
-#   print(ds.num_classes, ds.label_names)"
+# num_classes is 8 (read from label_map.json or check TESSClassificationDataset).
 #
 # Usage: python main.py fit --config configs/TESS/train_tess_mlp_classification.yaml
 

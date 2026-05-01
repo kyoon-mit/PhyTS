@@ -1,33 +1,32 @@
-"""TESS classification hyperparameter sweep script.
+"""TESS regression hyperparameter sweep script.
 
-Supports all six model types end-to-end (no pretraining):
+Supports all six model types end-to-end predicting stellar rotation frequency (frot):
   mlp          — MLPRegressor (flattened seq → MLP)
   s4d          — S4Model (S4D stack + mean pool)
-  cnn          — ConvAE with num_classes (encoder + global avg pool + Linear head)
-  cnn_attn     — ConvAttnAE with num_classes (encoder + bottleneck MHA + pool + Linear head)
+  cnn          — ConvAE (encoder + global avg pool + Linear(C, 1))
+  cnn_attn     — ConvAttnAE (encoder + bottleneck MHA + pool + Linear(C, 1))
   linoss_imex  — LinOSS with IMEX discretization (JAX/Equinox)
   linoss_damped — LinOSS with damped_IMEX discretization (JAX/Equinox)
 
-Called by ``wandb agent`` during a sweep, or directly for single runs / debugging.
-All hyperparameters flow through CLI args (which seed wandb.config); the sweep
-controller overwrites them per trial.
+All models output a single scalar; MSE loss is used for training.
+Sweep optimization target: val/r2 (coefficient of determination, maximize).
 
-Sweep configs live in configs/TESS/sweep_cls_*.yaml.
+Sweep configs live in configs/TESS/sweep_reg_*.yaml.
 
 Usage
 -----
 # Create a sweep (once, on login node or local machine):
-    wandb sweep configs/TESS/sweep_cls_mlp.yaml   # prints sweep_id
+    wandb sweep configs/TESS/sweep_reg_mlp.yaml   # prints sweep_id
 
 # Launch agents on Engaging:
     bash benchmarks/TESS/run_sweep.sh --model_type mlp --sweep_id <id>
 
 # Single run for debugging (wandb disabled):
-    WANDB_MODE=disabled uv run python benchmarks/TESS/sweep_classification.py \\
-        --model_type cnn --size xs --lr 1e-3 --batch_size 32 --dropout 0.1
+    WANDB_MODE=disabled uv run python benchmarks/TESS/sweep_regression.py \\
+        --model_type s4d --size xs --lr 1e-3 --batch_size 32
 
 # LinOSS requires the jax extra:
-    uv run --extra jax python benchmarks/TESS/sweep_classification.py \\
+    uv run --extra jax python benchmarks/TESS/sweep_regression.py \\
         --model_type linoss_imex ...
 
 Environment variables
@@ -44,7 +43,6 @@ import sys
 import types
 from pathlib import Path
 
-# Allow importing sweep_utils from the same directory.
 _BENCH_DIR = Path(__file__).resolve().parent
 if str(_BENCH_DIR) not in sys.path:
     sys.path.insert(0, str(_BENCH_DIR))
@@ -64,16 +62,14 @@ import wandb
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 
-from dataloader.tess_dataloader import TESSClassificationDataModule
-from tasks.TESS.tess_classification import TESSClassificationCE
+from dataloader.tess_dataloader import TESSRegressionDataModule
+from tasks.TESS.tess_regression import TESSRegressionMSE
 
 
 # ── Task builders ─────────────────────────────────────────────────────────────
 
-def _build_torch_task(model, num_classes: int, lr: float,
-                      weight_decay: float) -> L.LightningModule:
-    task = TESSClassificationCE(model=model, num_classes=num_classes, lr=lr, lr_decay=0.99)
-    # Patch AdamW weight_decay into configure_optimizers without subclassing.
+def _build_torch_task(model, lr: float, weight_decay: float) -> L.LightningModule:
+    task = TESSRegressionMSE(model=model, lr=lr, lr_decay=0.99)
     _wd = weight_decay
 
     def _configure_optimizers(self):
@@ -86,23 +82,19 @@ def _build_torch_task(model, num_classes: int, lr: float,
     return task
 
 
-def _build_linoss_task(model, num_classes: int, lr: float,
-                       seed: int) -> L.LightningModule:
-    from tasks.TESS.tess_linoss import TESSLinOSSClassificationCE
-    return TESSLinOSSClassificationCE(
-        model=model, num_classes=num_classes, lr=lr, clip_grad_norm=1.0, seed=seed,
-    )
+def _build_linoss_task(model, lr: float, seed: int) -> L.LightningModule:
+    from tasks.TESS.tess_linoss import TESSLinOSSRegressionMSE
+    return TESSLinOSSRegressionMSE(model=model, lr=lr, clip_grad_norm=1.0, seed=seed)
 
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="TESS classification sweep")
+    p = argparse.ArgumentParser(description="TESS regression sweep")
     add_infra_args(p)
     p.add_argument("--data_dir",
                    default=os.environ.get("TESS_DATA_DIR",
                                           "data/TESS/.cache/TESS"))
-    p.add_argument("--num_classes", type=int, default=8)
     add_sweep_args(p)
     return p.parse_args()
 
@@ -132,34 +124,34 @@ def main():
 
     # ── Build model & task ────────────────────────────────────────────────────
     if cfg.model_type == "mlp":
-        model = build_mlp(cfg.size, args.num_classes, args.seq_len, cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+        model = build_mlp(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
+        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "s4d":
-        model = build_s4d(cfg.size, args.num_classes, cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+        model = build_s4d(cfg.size, d_output=1, dropout=cfg.dropout)
+        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "cnn":
-        model = build_cnn(cfg.size, args.num_classes)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+        model = build_cnn(cfg.size, d_output=1)
+        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "cnn_attn":
-        model = build_cnn_attn(cfg.size, args.num_classes)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+        model = build_cnn_attn(cfg.size, d_output=1)
+        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "linoss_imex":
-        model = build_linoss(cfg.size, args.num_classes, "IMEX", cfg.seed)
-        task  = _build_linoss_task(model, args.num_classes, cfg.lr, cfg.seed)
+        model = build_linoss(cfg.size, d_output=1, discretization="IMEX", seed=cfg.seed)
+        task  = _build_linoss_task(model, cfg.lr, cfg.seed)
 
     elif cfg.model_type == "linoss_damped":
-        model = build_linoss(cfg.size, args.num_classes, "damped_IMEX", cfg.seed)
-        task  = _build_linoss_task(model, args.num_classes, cfg.lr, cfg.seed)
+        model = build_linoss(cfg.size, d_output=1, discretization="damped_IMEX", seed=cfg.seed)
+        task  = _build_linoss_task(model, cfg.lr, cfg.seed)
 
     else:
         raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
 
     # ── Data ──────────────────────────────────────────────────────────────────
-    dm = TESSClassificationDataModule(
+    dm = TESSRegressionDataModule(
         data_dir=args.data_dir,
         batch_size=cfg.batch_size,
         num_workers=args.num_workers,
@@ -168,7 +160,7 @@ def main():
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
     run_id   = run.id if run is not None else "local"
-    ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "classification" / cfg.model_type / run_id
+    ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "regression" / cfg.model_type / run_id
 
     early_stop = EarlyStopping(monitor="val/loss", patience=args.patience, mode="min")
 

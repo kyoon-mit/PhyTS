@@ -1,0 +1,37 @@
+# Model width per sweep size tier (xs / sm / md / lg).
+#
+# All tiers target ~10K / ~100K / ~300K / ~700K parameters.
+# Changing d_output from 8 (classification) to 1 (regression) shifts counts by
+# less than 2% at every tier, so the same dims serve both tasks.
+#
+# Consumed by benchmarks/TESS/sweep_utils.py when building Torch/JAX models.
+
+mlp:
+  xs: 9
+  sm: 83
+  md: 224
+  lg: 448
+
+s4d:
+  xs: 16
+  sm: 80
+  md: 160
+  lg: 264
+
+cnn:
+  xs: 25
+  sm: 80
+  md: 140
+  lg: 216
+
+cnn_attn:
+  xs: 24
+  sm: 72
+  md: 124
+  lg: 192 # must divide num_heads=4 in ConvAttnAE
+
+linoss:
+  xs: 20
+  sm: 64
+  md: 112
+  lg: 170

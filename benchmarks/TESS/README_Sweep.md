@@ -7,7 +7,8 @@ No pretraining — all models are trained from scratch.
 
 ### New data loading (`src/dataloader/tess_dataloader.py`)
 `TESSClassificationDataset` and `TESSClassificationDataModule` read
-from the HuggingFace pre-split files (`TESS/split/`) instead of performing the
+Hub split shards (`tess_classification_{train,val,test}.parquet`, typically
+mirrored into `data/TESS/.cache/TESS/`) instead of performing a random
 70/15/15 split in code.  Preprocessing is identical to the previous classes
 (z-score normalization, pad/crop to `seq_len=1100`, bool mask).
 
@@ -35,28 +36,20 @@ from the HuggingFace pre-split files (`TESS/split/`) instead of performing the
 
 ## Data setup
 
-Download the pre-split parquet files from HuggingFace to
-`data/TESS/.cache/TESS/split/` (login node only):
+Download from HuggingFace into `data/TESS/.cache/TESS/` (login node or any
+machine with Hub access). `data/TESS/download_tess.py` runs `snapshot_download`
+for `TESS/split/*` and **copies** shards into `TESS/*.parquet` so classification
+and regression share one `data_dir`.
 
 ```bash
-# The split directory (TESS/split/) on PhyTS-team/PhyTS-bench
-# Expected files: train.parquet, val.parquet (or validation.parquet), test.parquet
-# HuggingFace sharded naming (train-00000-of-00001.parquet) is also supported.
-
 export HF_TOKEN=hf_...   # optional but recommended to avoid rate limits
-uv run --extra jax python - <<'EOF'
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id="PhyTS-team/PhyTS-bench",
-    repo_type="dataset",
-    allow_patterns="TESS/split/*",
-    local_dir="data/TESS/.cache/TESS",
-)
-EOF
+uv run --extra jax python data/TESS/download_tess.py
+# or: uv run --extra jax python data/TESS/download_tess.py --cache-dir /path/to/cache
 ```
 
-The datamodule expects the files to live at the path you pass as `--data_dir`
-(default: `data/TESS/.cache/TESS/split`, or `$TESS_DATA_DIR` on Engaging).
+The datamodule expects `--data_dir` to be that TESS root
+(default: `data/TESS/.cache/TESS`, or `$TESS_DATA_DIR` on Engaging — set by
+`benchmarks/TESS/run_sweep.sh`).
 
 ---
 
@@ -106,14 +99,14 @@ squeue -u $USER
 WANDB_MODE=disabled \
 uv run python benchmarks/TESS/sweep_classification.py \
     --model_type s4d \
-    --data_dir data/TESS/.cache/TESS/split \
+    --data_dir data/TESS/.cache/TESS \
     --size xs --lr 1e-3 --batch_size 32 --dropout 0.1 --weight_decay 1e-4
 
 # LinOSS requires the jax extra:
 WANDB_MODE=disabled \
 uv run --extra jax python benchmarks/TESS/sweep_classification.py \
     --model_type linoss_imex \
-    --data_dir data/TESS/.cache/TESS/split \
+    --data_dir data/TESS/.cache/TESS \
     --size xs --lr 1e-3 --batch_size 32
 ```
 

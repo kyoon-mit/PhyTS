@@ -87,11 +87,27 @@ class TESSClassificationCE(L.LightningModule):
         self.log("train/acc", acc, on_step=False, on_epoch=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list[Tensor] = []
+        self._val_labels: list[Tensor] = []
+
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
         acc = (preds == labels).float().mean()
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/acc", acc, on_step=False, on_epoch=True)
+        self._val_preds.append(preds.cpu())
+        self._val_labels.append(labels.cpu())
+
+    def on_validation_epoch_end(self):
+        preds  = torch.cat(self._val_preds)
+        labels = torch.cat(self._val_labels)
+        per_class = [
+            (preds[labels == c] == c).float().mean().item()
+            for c in range(self.num_classes) if (labels == c).any()
+        ]
+        if per_class:
+            self.log("val/balanced_acc", sum(per_class) / len(per_class))
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []
@@ -193,11 +209,27 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
         self.log("train/acc", acc, on_step=False, on_epoch=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list[Tensor] = []
+        self._val_labels: list[Tensor] = []
+
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
         acc = (preds == labels).float().mean()
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/acc", acc, on_step=False, on_epoch=True)
+        self._val_preds.append(preds.cpu())
+        self._val_labels.append(labels.cpu())
+
+    def on_validation_epoch_end(self):
+        preds  = torch.cat(self._val_preds)
+        labels = torch.cat(self._val_labels)
+        per_class = [
+            (preds[labels == c] == c).float().mean().item()
+            for c in range(self.num_classes) if (labels == c).any()
+        ]
+        if per_class:
+            self.log("val/balanced_acc", sum(per_class) / len(per_class))
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []

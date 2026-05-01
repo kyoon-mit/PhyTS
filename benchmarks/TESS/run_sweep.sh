@@ -1,9 +1,9 @@
 #!/bin/bash
-# TESS classification hyperparameter sweep — submit wandb agents as SLURM jobs.
+# TESS hyperparameter sweep — submit wandb agents as SLURM jobs.
 #
 # Workflow:
 #   1. Create a sweep (run ONCE from a machine with internet + wandb login):
-#        wandb sweep benchmarks/TESS/sweep_configs/<model_type>.yaml \
+#        wandb sweep configs/TESS/sweep_<cls|reg>_<model_type>.yaml \
 #            --project TimeSeriesPhysics
 #      → prints: sweep_id (e.g. abc123def)
 #
@@ -29,8 +29,8 @@ set -e
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 POOL=/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics
-DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS/split
-CKPT_DIR=$POOL/checkpoints/sweeps/classification
+DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
+CKPT_DIR=$POOL/checkpoints/sweeps
 WANDB_ROOT=$POOL/wandb
 LOGS=$WORKDIR/benchmarks/TESS/logs
 mkdir -p "$LOGS" "$CKPT_DIR" "$WANDB_ROOT"
@@ -54,7 +54,11 @@ done
 if [ -z "$MODEL_TYPE" ] || [ -z "$SWEEP_ID" ]; then
     echo "Usage: $0 --model_type <type> --sweep_id <id> [--n_agents N] [--jax]"
     echo "  model_type: mlp | s4d | cnn | cnn_attn | linoss_imex | linoss_damped"
-    echo "  --jax: required for linoss_imex / linoss_damped"
+    echo "  --jax: required for linoss_imex / linoss_damped (set automatically)"
+    echo ""
+    echo "Sweep config paths (pass to 'wandb sweep' once to create the sweep):"
+    echo "  Classification: configs/TESS/sweep_cls_<model_type>.yaml"
+    echo "  Regression:     configs/TESS/sweep_reg_<model_type>.yaml"
     exit 1
 fi
 
@@ -109,6 +113,8 @@ SBATCH_COMMON="
   --chdir=$WORKDIR
 "
 
+# Classification + regression sweeps use the same TESS root (Hub shards mirrored
+# into .../.cache/TESS). Override via TESS_DATA_DIR if needed.
 BASE_ENV="module load cuda miniforge &&
   export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8
   OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1

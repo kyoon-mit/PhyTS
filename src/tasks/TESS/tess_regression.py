@@ -84,11 +84,24 @@ class TESSRegressionMSE(L.LightningModule):
                  on_step=False, on_epoch=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list[Tensor] = []
+        self._val_labels: list[Tensor] = []
+
     def validation_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
                  on_step=False, on_epoch=True)
+        self._val_preds.append(y_hat.detach().cpu())
+        self._val_labels.append(y.detach().cpu())
+
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat(self._val_preds)
+        y = torch.cat(self._val_labels)
+        ss_res = (y_hat - y).pow(2).sum()
+        ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
+        self.log("val/r2", 1.0 - ss_res / ss_tot)
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []
@@ -186,11 +199,24 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
                  on_step=False, on_epoch=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list[Tensor] = []
+        self._val_labels: list[Tensor] = []
+
     def validation_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
                  on_step=False, on_epoch=True)
+        self._val_preds.append(y_hat.detach().cpu())
+        self._val_labels.append(y.detach().cpu())
+
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat(self._val_preds)
+        y = torch.cat(self._val_labels)
+        ss_res = (y_hat - y).pow(2).sum()
+        ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
+        self.log("val/r2", 1.0 - ss_res / ss_tot)
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []
