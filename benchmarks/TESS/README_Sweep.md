@@ -28,6 +28,9 @@ mirrored into `data/TESS/.cache/TESS/`) instead of performing a random
 | `configs/TESS/sweep/sweep_cls_*.yaml` | wandb sweep configs for classification (one per architecture) |
 | `configs/TESS/sweep/sweep_reg_*.yaml` | wandb sweep configs for regression |
 | `configs/TESS/sweep/all_model_sweep_dims.yaml` | Hidden widths per size tier (xs/sm/md/lg), read by `sweep_utils.py` |
+| `benchmarks/TESS/sweep_aggregate_utils.py` | Helpers for aggregated sweep summaries |
+| `benchmarks/TESS/analyze_classification_sweep.py` | Merge N classification sweeps → heatmaps + CSV/JSON/HTML |
+| `benchmarks/TESS/analyze_regression_sweep.py` | Merge N regression sweeps → heatmaps + CSV/JSON/HTML |
 | `benchmarks/TESS/run_sweep.sh` | SLURM agent submission script |
 
 ---
@@ -61,6 +64,10 @@ wandb sweep configs/TESS/sweep/sweep_cls_mlp.yaml --project TimeSeriesPhysics
 # → prints: sweep ID, e.g. abc123def
 ```
 
+Each sweep YAML sets **`run_cap: 150`**, so a **single** sweep stops after wandb schedules 200 trials (Hyperband may still prune many of those runs early).
+
+**Important:** wandb budgets are **per sweep**, not pooled across architectures. Running all twelve classifier `sweep_cls_*` and regressors `sweep_reg_*` to completion yields **up to 12 × 200** trials unless you pause sweeps sooner. To approximate **200 trials shared across \(N\) sweeps**, divide manually (for example **`run_cap: 16`** on every file when \(N = 12\) gives 192; bump a subset to **17** to hit 200 exactly) **before** calling `wandb sweep`, or shorten the list of architectures you tune.
+
 ### Step 2 — Launch agents on Engaging
 
 ```bash
@@ -87,6 +94,28 @@ parallelize.
 squeue -u $USER
 # or visit wandb.ai → TimeSeriesPhysics → Sweeps → <sweep_id>
 ```
+
+### Step 4 — Merge all sweep IDs (classification or regression)
+
+After every architecture sweep you care about reports **Finished** with test metrics logged, pull them in one shot (from a machine that can reach the wandb API). Pass **every** sweep id printed by ``wandb sweep`` for that task (classification vs regression separately):
+
+```bash
+# Classification — repeat --sweep_id or use --from_file sweep_ids_cls.txt:
+uv run python benchmarks/TESS/analyze_classification_sweep.py \
+    --sweep_id aaa111 --sweep_id bbb222 --sweep_id ccc333
+
+# Regression:
+uv run python benchmarks/TESS/analyze_regression_sweep.py \
+    --from_file sweep_ids_reg.txt \
+    --out_dir benchmarks/TESS/sweep_reports/my_reg_run
+```
+
+Default output dirs (overridable with ``--out_dir``):
+
+* ``benchmarks/TESS/sweep_reports/classification_all_sweeps/``
+* ``benchmarks/TESS/sweep_reports/regression_all_sweeps/``
+
+Each run writes ``report.html``, CSVs, ``best_hyperparameters.json``, and heatmap PNGs. See script docstrings for metric definitions and caveats.
 
 ---
 

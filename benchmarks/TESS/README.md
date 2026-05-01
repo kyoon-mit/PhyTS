@@ -120,7 +120,7 @@ Sync results or code back from Engaging to your local machine (run this on your 
 rsync -r -av --progress \
     --exclude .git --exclude '.venv' \
     --exclude checkpoints --exclude '*.parquet' --exclude '*.csv' --exclude '*.npz' \
-    --exclude '*.wandb' --exclude '*.err' --exclude '*.out' --exclude '*/logs/' --exclude 'wandb' \
+    --exclude '*.wandb' --exclude '*.err' --exclude '*.out' --exclude '*/logs/' --exclude wandb \
     allisone@orcd-login001.mit.edu:/home/allisone/documents/UROP_2025_Summer/TimeSeriesPhysics ./
 ```
 

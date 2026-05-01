@@ -17,6 +17,7 @@ command:
   - ${args}
 
 method: bayes
+run_cap: 150
 metric:
   name: val/r2
   goal: maximize
