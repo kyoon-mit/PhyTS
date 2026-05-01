@@ -4,7 +4,7 @@
 # Changing d_output from 8 (classification) to 1 (regression) shifts counts by
 # less than 2% at every tier, so the same dims serve both tasks.
 #
-# Consumed by benchmarks/TESS/sweep_utils.py when building Torch/JAX models.
+# Consumed by benchmarks/TESS/sweep_utils.py (repo root: configs/TESS/sweep/all_model_sweep_dims.yaml).
 
 mlp:
   xs: 9

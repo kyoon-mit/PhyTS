@@ -3,7 +3,7 @@
 #
 # Before running: determine num_classes (see train_tess_mlp_classification.yaml).
 #
-# Usage: python main.py fit --config configs/TESS/train_tess_s4d_head_classification.yaml
+# Usage: python main.py fit --config configs/TESS/other/train_tess_s4d_head_classification.yaml
 
 trainer:
   max_epochs: 200
@@ -33,7 +33,7 @@ model:
   class_path: tasks.TESS.tess_classification.TESSFrozenBackboneClassificationCE
   init_args:
     backbone_ckpt: checkpoints/tess_s4d_reconstruction/best.ckpt
-    backbone_cfg: configs/TESS/train_tess_s4d_reconstruction.yaml
+    backbone_cfg: configs/TESS/other/train_tess_s4d_reconstruction.yaml
     num_classes: 8   # APERIODIC, CONTACT_ROT, DSCT_BCEP, ECLIPSE, GDOR_SPB, INSTRUMENT/JUNK, RRLYR_CEPH, SOLARLIKE
     lr: 1.0e-3
     lr_decay: 0.99

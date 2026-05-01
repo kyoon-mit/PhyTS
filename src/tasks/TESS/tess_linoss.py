@@ -15,7 +15,7 @@ Batch convention (from TESSRegressionDataset / TESSClassificationDataset):
 LinOSS expects (B, L, N) input; _prepare_batch adds the feature dim.
 
 Usage (LightningCLI YAML):
-    python main.py fit --config configs/TESS/train_tess_linoss_regression.yaml
+    python main.py fit --config configs/TESS/other/train_tess_linoss_regression.yaml
 """
 
 import os
@@ -31,6 +31,8 @@ from jaxtyping import Array, PyTree
 from models.utils.jax.training import jax_inference
 from models.utils.jax.utils import jax_to_tensor, tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
+from tasks.param_count import attach_scalar_hyperparams, jax_equinox_model_hyper_dict
+from tasks.TESS.eval_plots import log_validation_plots_to_wandb
 
 
 # ── Checkpoint callback ───────────────────────────────────────────────────────
@@ -136,6 +138,8 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
             clip_grad_norm=clip_grad_norm,
             seed=seed,
         )
+        self.save_hyperparameters(ignore=["model"])
+        attach_scalar_hyperparams(self, jax_equinox_model_hyper_dict(self.jax_model, self.jax_model_state))
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
         """Extract (flux, frot) from the TESS batch; add feature dim to flux."""
@@ -182,6 +186,12 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         ss_res = float(np.sum((y_hat - y) ** 2))
         ss_tot = float(max(np.sum((y - y.mean()) ** 2), 1e-8))
         self.log("val/r2", 1.0 - ss_res / ss_tot)
+        log_validation_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y,
+            y_hat=y_hat,
+        )
 
     def on_test_epoch_start(self):
         self._test_preds: list = []
@@ -254,6 +264,8 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
             seed=seed,
         )
         self.num_classes = num_classes
+        self.save_hyperparameters(ignore=["model"])
+        attach_scalar_hyperparams(self, jax_equinox_model_hyper_dict(self.jax_model, self.jax_model_state))
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
         """Extract (flux, label) from the TESS batch; add feature dim to flux."""
@@ -305,6 +317,12 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         ]
         if per_class:
             self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        log_validation_plots_to_wandb(
+            self,
+            kind="classification",
+            y_true=labels,
+            y_hat=preds,
+        )
 
     def on_test_epoch_start(self):
         self._test_preds: list = []

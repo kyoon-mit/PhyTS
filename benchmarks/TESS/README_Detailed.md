@@ -123,7 +123,7 @@ All training uses PyTorch Lightning + LightningCLI (launched via `python main.py
 ### Stage 1 — Reconstruction Pretraining (`tess_reconstruction.py`)
 
 **Class:** `TESSReconstructionMSE`  
-**Config:** `configs/TESS/train_tess_s4d_reconstruction.yaml`
+**Config:** `configs/TESS/other/train_tess_s4d_reconstruction.yaml`
 
 Trains `S4ModelSeq2Seq` to map noisy flux back to clean flux. Loss is MSE computed only over the valid (non-padded) positions:
 
@@ -170,7 +170,7 @@ Loss:   CrossEntropy(logits, label)
 Requires the reconstruction checkpoint from Stage 1.
 
 **Classes:** `TESSFrozenBackboneRegressionMSE`, `TESSFrozenBackboneClassificationCE`  
-**Configs:** `train_tess_s4d_head_regression.yaml`, `train_tess_s4d_head_classification.yaml`
+**Configs:** `configs/TESS/other/train_tess_s4d_head_regression.yaml`, `configs/TESS/other/train_tess_s4d_head_classification.yaml`
 
 At construction time, `S4ModelSeq2Seq` is loaded from the checkpoint, all its parameters are frozen (`requires_grad=False`), and it is permanently kept in `eval()` mode. Only the MLP head is trained.
 
@@ -291,7 +291,7 @@ Verifies data loading, model construction, and the training loop all wire togeth
 
 ```bash
 uv run python main.py fit \
-    --config configs/TESS/train_tess_mlp_regression.yaml \
+    --config configs/TESS/other/train_tess_mlp_regression.yaml \
     --trainer.max_epochs 1 \
     --trainer.accelerator cpu \
     --trainer.logger false
@@ -313,17 +313,17 @@ The three stages have the following dependency structure — reconstruction must
 
 ```bash
 # Stage 1: Reconstruction pretraining
-uv run python main.py fit --config configs/TESS/train_tess_s4d_reconstruction.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_reconstruction.yaml
 
 # Stage 2: End-to-end (run in any order, or in parallel in separate terminals)
-uv run python main.py fit --config configs/TESS/train_tess_mlp_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_mlp_classification.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_mlp_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_mlp_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_classification.yaml
 
 # Stage 3: Frozen backbone (after Stage 1 completes)
-uv run python main.py fit --config configs/TESS/train_tess_s4d_head_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_head_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_head_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_head_classification.yaml
 
 # Evaluation
 uv run python benchmarks/TESS/eval_pipeline.py \

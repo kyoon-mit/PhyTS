@@ -12,12 +12,12 @@ Called by ``wandb agent`` during a sweep, or directly for single runs / debuggin
 All hyperparameters flow through CLI args (which seed wandb.config); the sweep
 controller overwrites them per trial.
 
-Sweep configs live in configs/TESS/sweep_cls_*.yaml.
+Sweep configs live in configs/TESS/sweep/sweep_cls_*.yaml.
 
 Usage
 -----
 # Create a sweep (once, on login node or local machine):
-    wandb sweep configs/TESS/sweep_cls_mlp.yaml   # prints sweep_id
+    wandb sweep configs/TESS/sweep/sweep_cls_mlp.yaml   # prints sweep_id
 
 # Launch agents on Engaging:
     bash benchmarks/TESS/run_sweep.sh --model_type mlp --sweep_id <id>
@@ -50,10 +50,18 @@ if str(_BENCH_DIR) not in sys.path:
     sys.path.insert(0, str(_BENCH_DIR))
 
 from sweep_utils import (
-    _REPO_ROOT,
     JAX_MODELS,
-    build_mlp, build_s4d, build_cnn, build_cnn_attn, build_linoss,
-    add_infra_args, add_sweep_args,
+    add_infra_args,
+    add_sweep_args,
+    build_cnn,
+    build_cnn_attn,
+    build_linoss,
+    build_mlp,
+    build_s4d,
+    collect_benchmark_param_counters,
+    dump_sweep_run_config,
+    tess_sweep_artifact_dir,
+    _REPO_ROOT,
 )
 
 if str(_REPO_ROOT / "src") not in sys.path:
@@ -62,7 +70,7 @@ if str(_REPO_ROOT / "src") not in sys.path:
 import lightning as L
 import wandb
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
-from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 from dataloader.tess_dataloader import TESSClassificationDataModule
 from tasks.TESS.tess_classification import TESSClassificationCE
@@ -122,6 +130,7 @@ def main():
             "weight_decay": args.weight_decay,
             "batch_size":   args.batch_size,
             "seed":         args.seed,
+            "num_classes":  args.num_classes,
         },
     )
     cfg = wandb.config
@@ -158,6 +167,12 @@ def main():
     else:
         raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
 
+    wandb.summary.update(collect_benchmark_param_counters(cfg.model_type, task))
+
+    run_id = run.id if run is not None else "local"
+    art_dir = tess_sweep_artifact_dir("classification", cfg.model_type, run_id)
+    dump_sweep_run_config(art_dir / "run_config.yaml", args, run)
+
     # ── Data ──────────────────────────────────────────────────────────────────
     dm = TESSClassificationDataModule(
         data_dir=args.data_dir,
@@ -167,7 +182,6 @@ def main():
     )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
-    run_id   = run.id if run is not None else "local"
     ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "classification" / cfg.model_type / run_id
 
     early_stop = EarlyStopping(monitor="val/loss", patience=args.patience, mode="min")
@@ -182,7 +196,8 @@ def main():
         )
 
     # ── Trainer ───────────────────────────────────────────────────────────────
-    logger = WandbLogger(experiment=run)
+    csv_logger = CSVLogger(save_dir=str(art_dir), name="metrics_csv")
+    logger = [csv_logger, WandbLogger(experiment=run)]
     trainer = L.Trainer(
         max_epochs=args.max_epochs,
         accelerator="gpu",

@@ -2,7 +2,7 @@
 #
 # Before running: determine num_classes (see train_tess_mlp_classification.yaml).
 #
-# Usage: python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+# Usage: python main.py fit --config configs/TESS/other/train_tess_s4d_classification.yaml
 
 trainer:
   max_epochs: 200

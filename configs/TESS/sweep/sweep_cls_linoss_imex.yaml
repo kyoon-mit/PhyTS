@@ -1,22 +1,24 @@
-# wandb sweep config — CNN (ConvAE encoder + pool + Linear head) classification
+# wandb sweep config — LinOSS-IMEX end-to-end classification (JAX/Equinox)
+#
+# Requires the jax extra:
+#   uv sync --extra jax --extra cu13
 #
 # Create sweep:
-#   wandb sweep benchmarks/TESS/sweep_configs/cnn.yaml --project TimeSeriesPhysics
-#
-# Then launch agents via:
-#   bash benchmarks/TESS/run_sweep.sh --model_type cnn --sweep_id <id>
+#   wandb sweep configs/TESS/sweep/sweep_cls_linoss_imex.yaml --project TimeSeriesPhysics
+# Launch agents (--jax added automatically for linoss_* model types):
+#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_imex --sweep_id <id>
 
 program: benchmarks/TESS/sweep_classification.py
 command:
   - ${env}
   - python
   - ${program}
-  - --model_type=cnn
+  - --model_type=linoss_imex
   - ${args}
 
 method: bayes
 metric:
-  name: val/acc
+  name: val/balanced_acc
   goal: maximize
 
 early_terminate:
@@ -30,11 +32,9 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 0.00005
-    max: 0.01
-  # CNN has no dropout in the standard conv encoder; dropout is unused
-  # but kept for API consistency (set to 0.0 range)
+    max: 0.005
   dropout:
-    value: 0.0
+    value: 0.05
   weight_decay:
     distribution: log_uniform_values
     min: 0.000001

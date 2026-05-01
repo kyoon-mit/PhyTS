@@ -87,7 +87,7 @@ JOB_RECON=$(sbatch --parsable \
   --output="$LOGS/tess_s4d_recon_%j.out" \
   --error="$LOGS/tess_s4d_recon_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_s4d_reconstruction && $RUN main.py fit \
-    --config configs/TESS/train_tess_s4d_reconstruction.yaml \
+    --config configs/TESS/other/train_tess_s4d_reconstruction.yaml \
     --data.init_args.data_dir $DATA_DIR")
 echo "[1/8] S4D reconstruction submitted: job $JOB_RECON"
 
@@ -98,7 +98,7 @@ JOB_MLP_REG=$(sbatch --parsable \
   --output="$LOGS/tess_mlp_reg_%j.out" \
   --error="$LOGS/tess_mlp_reg_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_mlp_regression && $RUN main.py fit \
-    --config configs/TESS/train_tess_mlp_regression.yaml \
+    --config configs/TESS/other/train_tess_mlp_regression.yaml \
     --data.init_args.data_dir $DATA_DIR")
 echo "[2/8] MLP regression submitted: job $JOB_MLP_REG"
 
@@ -108,7 +108,7 @@ JOB_MLP_CLS=$(sbatch --parsable \
   --output="$LOGS/tess_mlp_cls_%j.out" \
   --error="$LOGS/tess_mlp_cls_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_mlp_classification && $RUN main.py fit \
-    --config configs/TESS/train_tess_mlp_classification.yaml \
+    --config configs/TESS/other/train_tess_mlp_classification.yaml \
     --data.init_args.data_dir $DATA_DIR")
 echo "[3/8] MLP classification submitted: job $JOB_MLP_CLS"
 
@@ -118,7 +118,7 @@ JOB_S4D_REG=$(sbatch --parsable \
   --output="$LOGS/tess_s4d_reg_%j.out" \
   --error="$LOGS/tess_s4d_reg_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_s4d_regression && $RUN main.py fit \
-    --config configs/TESS/train_tess_s4d_regression.yaml \
+    --config configs/TESS/other/train_tess_s4d_regression.yaml \
     --data.init_args.data_dir $DATA_DIR")
 echo "[4/8] S4D regression submitted: job $JOB_S4D_REG"
 
@@ -128,7 +128,7 @@ JOB_S4D_CLS=$(sbatch --parsable \
   --output="$LOGS/tess_s4d_cls_%j.out" \
   --error="$LOGS/tess_s4d_cls_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_s4d_classification && $RUN main.py fit \
-    --config configs/TESS/train_tess_s4d_classification.yaml \
+    --config configs/TESS/other/train_tess_s4d_classification.yaml \
     --data.init_args.data_dir $DATA_DIR")
 echo "[5/8] S4D classification submitted: job $JOB_S4D_CLS"
 
@@ -140,7 +140,7 @@ JOB_HEAD_REG=$(sbatch --parsable \
   --output="$LOGS/tess_s4d_head_reg_%j.out" \
   --error="$LOGS/tess_s4d_head_reg_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_s4d_head_regression && $RUN main.py fit \
-    --config configs/TESS/train_tess_s4d_head_regression.yaml \
+    --config configs/TESS/other/train_tess_s4d_head_regression.yaml \
     --data.init_args.data_dir $DATA_DIR \
     --model.init_args.backbone_ckpt $CKPT_DIR/tess_s4d_reconstruction/best.ckpt")
 echo "[6/8] S4D head regression submitted: job $JOB_HEAD_REG (depends on $JOB_RECON)"
@@ -152,7 +152,7 @@ JOB_HEAD_CLS=$(sbatch --parsable \
   --output="$LOGS/tess_s4d_head_cls_%j.out" \
   --error="$LOGS/tess_s4d_head_cls_%j.err" \
   --wrap="$ACTIVATE && export TESS_PYTORCH_CKPT_DIR=$CKPT_DIR/tess_s4d_head_classification && $RUN main.py fit \
-    --config configs/TESS/train_tess_s4d_head_classification.yaml \
+    --config configs/TESS/other/train_tess_s4d_head_classification.yaml \
     --data.init_args.data_dir $DATA_DIR \
     --model.init_args.backbone_ckpt $CKPT_DIR/tess_s4d_reconstruction/best.ckpt")
 echo "[7/8] S4D head classification submitted: job $JOB_HEAD_CLS (depends on $JOB_RECON)"

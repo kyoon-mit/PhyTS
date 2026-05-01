@@ -1,16 +1,16 @@
-# wandb sweep config — MLP end-to-end regression (frot prediction)
+# wandb sweep config — S4D end-to-end regression (frot prediction)
 #
 # Create sweep:
-#   wandb sweep configs/TESS/sweep_reg_mlp.yaml --project TimeSeriesPhysics
+#   wandb sweep configs/TESS/sweep/sweep_reg_s4d.yaml --project TimeSeriesPhysics
 # Launch agents:
-#   bash benchmarks/TESS/run_sweep.sh --model_type mlp --sweep_id <id>
+#   bash benchmarks/TESS/run_sweep.sh --model_type s4d --sweep_id <id>
 
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
   - python
   - ${program}
-  - --model_type=mlp
+  - --model_type=s4d
   - ${args}
 
 method: bayes
@@ -33,7 +33,7 @@ parameters:
   dropout:
     distribution: uniform
     min: 0.0
-    max: 0.5
+    max: 0.4
   weight_decay:
     distribution: log_uniform_values
     min: 0.000001

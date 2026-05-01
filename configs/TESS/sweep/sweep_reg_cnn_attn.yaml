@@ -1,22 +1,21 @@
-# wandb sweep config — S4D end-to-end classification
+# wandb sweep config — CNN+Attention end-to-end regression (frot prediction)
 #
 # Create sweep:
-#   wandb sweep benchmarks/TESS/sweep_configs/s4d.yaml --project TimeSeriesPhysics
-#
-# Then launch agents via:
-#   bash benchmarks/TESS/run_sweep.sh --model_type s4d --sweep_id <id>
+#   wandb sweep configs/TESS/sweep/sweep_reg_cnn_attn.yaml --project TimeSeriesPhysics
+# Launch agents:
+#   bash benchmarks/TESS/run_sweep.sh --model_type cnn_attn --sweep_id <id>
 
-program: benchmarks/TESS/sweep_classification.py
+program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
   - python
   - ${program}
-  - --model_type=s4d
+  - --model_type=cnn_attn
   - ${args}
 
 method: bayes
 metric:
-  name: val/acc
+  name: val/r2
   goal: maximize
 
 early_terminate:
@@ -32,9 +31,7 @@ parameters:
     min: 0.00005
     max: 0.01
   dropout:
-    distribution: uniform
-    min: 0.0
-    max: 0.4
+    value: 0.0
   weight_decay:
     distribution: log_uniform_values
     min: 0.000001

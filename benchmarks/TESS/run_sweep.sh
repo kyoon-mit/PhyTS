@@ -3,7 +3,7 @@
 #
 # Workflow:
 #   1. Create a sweep (run ONCE from a machine with internet + wandb login):
-#        wandb sweep configs/TESS/sweep_<cls|reg>_<model_type>.yaml \
+#        wandb sweep configs/TESS/sweep/sweep_<cls|reg>_<model_type>.yaml \
 #            --project TimeSeriesPhysics
 #      → prints: sweep_id (e.g. abc123def)
 #
@@ -57,8 +57,8 @@ if [ -z "$MODEL_TYPE" ] || [ -z "$SWEEP_ID" ]; then
     echo "  --jax: required for linoss_imex / linoss_damped (set automatically)"
     echo ""
     echo "Sweep config paths (pass to 'wandb sweep' once to create the sweep):"
-    echo "  Classification: configs/TESS/sweep_cls_<model_type>.yaml"
-    echo "  Regression:     configs/TESS/sweep_reg_<model_type>.yaml"
+    echo "  Classification: configs/TESS/sweep/sweep_cls_<model_type>.yaml"
+    echo "  Regression:     configs/TESS/sweep/sweep_reg_<model_type>.yaml"
     exit 1
 fi
 

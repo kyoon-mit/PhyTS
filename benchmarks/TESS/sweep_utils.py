@@ -4,23 +4,27 @@ Imported by sweep_classification.py and sweep_regression.py.  Both scripts
 support the same six model types at the same four size tiers; only the output
 dimension (num_classes vs 1), task class, and dataloader differ.
 
-Width per tier (xs/sm/md/lg) is loaded from sweep_configs/all_model_sweep_dims.yaml.
+Width per tier (xs/sm/md/lg) is loaded from configs/TESS/sweep/all_model_sweep_dims.yaml.
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
+from argparse import Namespace
 from pathlib import Path
+from typing import Any
 
 import torch.nn as nn
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_SWEEP_DIMS = _REPO_ROOT / "configs" / "TESS" / "sweep" / "all_model_sweep_dims.yaml"
 if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from models.mlp import MLPRegressor
-from models.s4d import S4Model
+from models.s4d import S4Model, count_s4model_nn_parameters
 from models.conv_ae import ConvAE
 from models.conv_attn_ae import ConvAttnAE
 
@@ -30,8 +34,8 @@ ALL_MODELS   = TORCH_MODELS | JAX_MODELS
 
 
 def _load_model_dim_tiers() -> tuple[dict[str, int], ...]:
-    """Load per-architecture hidden widths from sweep_configs/all_model_sweep_dims.yaml."""
-    path = Path(__file__).resolve().parent / "sweep_configs" / "all_model_sweep_dims.yaml"
+    """Load per-architecture hidden widths from configs/TESS/sweep/all_model_sweep_dims.yaml."""
+    path = _SWEEP_DIMS
     tiers = {"xs", "sm", "md", "lg"}
     with path.open(encoding="utf-8") as f:
         raw = yaml.safe_load(f)
@@ -127,15 +131,20 @@ def build_cnn_attn(size: str, d_output: int) -> nn.Module:
 def build_linoss(size: str, d_output: int, discretization: str, seed: int):
     """LinOSS with num_blocks=4, ssm_size == H (tied).
 
-    IMEX:   params ≈ 24*H² + 30*H + d_output
-    Damped: params ≈ 24*H² + 34*H + d_output
-    Inverse (IMEX, d_output=8): H = round((-30 + sqrt(900 + 96*(target − 8))) / 48)
+    IMEX:   params ≈ 24*H² + 30*H + H*d_output + d_output.  The coefficient 30 on
+            ``H`` folds in four affine=False BatchNorm blocks (each stores ``2H``
+            momentum placeholders alongside the residual stack).
+    Damped: params ≈ 24*H² + 34*H + H*d_output + d_output (``+4H`` vs IMEX for the
+            per-block ``G_diag`` vectors).
+    Inverse (IMEX, given target total ``T`` and integer ``d_output``)::
 
-    Tiers (H = ssm_size):
-        xs (~10K):  H=20  →  10,208 / 10,288 (IMEX/Damped)
-        sm (~100K): H=64  → 100,232 / 100,488
-        md (~300K): H=112 → 304,424 / 304,872
-        lg (~700K): H=170 → 698,708 / 699,388
+        H = round((-(30 + d_output) + sqrt((30 + d_output)**2 + 96*(T - d_output))) / 48)
+
+    Tiers (``H = ssm_size``; shown as **cls** ``d_output=8`` / **reg** ``d_output=1``):
+        xs (~10K):   H=20  →   10,368 / 10,221 IMEX · 10,448 / 10,301 Damped
+        sm (~100K): H=64  →  100,744 / 100,289 IMEX · 101,000 / 100,545 Damped
+        md (~300K): H=112 →  305,320 / 304,529 IMEX · 305,768 / 304,977 Damped
+        lg (~700K): H=170 →  700,068 / 698,871 IMEX · 700,748 / 699,551 Damped
     """
     from models.linoss import LinOSS
     h = _LIN_DIMS[size]
@@ -153,6 +162,42 @@ def build_linoss(size: str, d_output: int, discretization: str, seed: int):
 
 
 # ── Common argument helpers ───────────────────────────────────────────────────
+
+def collect_benchmark_param_counters(model_type: str, task) -> dict[str, int]:
+    """Return deterministic parameter sizes for wandb/logging (TESS sweep entrypoints).
+
+    PyTorch totals follow ``torch.nn.Module.parameters()`` (no buffers).
+
+    JAX tasks report floats stored on ``jax_model`` plus all array leaves in an
+    initial ``jax_model_state`` shard (Stateful layers such as BatchNorm).
+    """
+    if model_type in JAX_MODELS:
+        from models.utils.jax.print_params import (
+            count_array_elements,
+            count_inexact_array_elements,
+        )
+
+        return {
+            "param_count_jax_model_float": count_inexact_array_elements(task.jax_model),
+            "param_count_jax_state_arrays": count_array_elements(task.jax_model_state),
+        }
+
+    m = task.model
+    n = sum(p.numel() for p in m.parameters())
+    out = {"param_count_torch_nn": int(n)}
+    if model_type == "s4d":
+        layer0 = m.s4_layers[0]
+        out["param_count_s4_analytic_nn"] = int(
+            count_s4model_nn_parameters(
+                d_input=m.encoder.weight.shape[1],
+                d_output=m.decoder.bias.shape[0],
+                d_model=m.encoder.weight.shape[0],
+                d_state=layer0.n,
+                n_layers=len(m.s4_layers),
+            )
+        )
+    return out
+
 
 def add_infra_args(parser) -> None:
     """Add infrastructure args shared by cls and reg sweep scripts."""
@@ -174,3 +219,33 @@ def add_sweep_args(parser) -> None:
     parser.add_argument("--weight_decay", type=float, default=1e-4)
     parser.add_argument("--batch_size",   type=int,   default=64)
     parser.add_argument("--seed",         type=int,   default=42)
+
+
+def tess_sweep_artifact_dir(task: str, model_type: str, run_id: str) -> Path:
+    """Directory for ``metrics.csv`` (CSVLogger) and ``run_config.yaml`` for one sweep trial."""
+    root = Path(os.environ.get("TSP_LOCAL_LOG_DIR", "logs"))
+    return root / "tess_sweeps" / task / model_type / run_id
+
+
+def _namespace_to_plain(obj: Any) -> Any:
+    """Make argparse/jsonargparse namespaces round-trippable to YAML."""
+    if isinstance(obj, Namespace):
+        return {k: _namespace_to_plain(v) for k, v in vars(obj).items()}
+    if isinstance(obj, dict):
+        return {k: _namespace_to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_namespace_to_plain(v) for v in obj]
+    return obj
+
+
+def dump_sweep_run_config(path: Path, args: argparse.Namespace, wandb_run) -> None:
+    """Write CLI args and wandb config for offline reproducibility."""
+    payload = {
+        "cli_args": _namespace_to_plain(args),
+        "wandb": dict(wandb_run.config),
+        "wandb_run_id": getattr(wandb_run, "id", None),
+        "wandb_mode": os.environ.get("WANDB_MODE"),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(payload, f, sort_keys=False, default_flow_style=False)

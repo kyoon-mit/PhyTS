@@ -9,7 +9,7 @@ Usage:
         --out_dir  benchmarks/TESS
 
 Model checkpoints and configs are discovered automatically from checkpoints/
-and configs/TESS/ using hardcoded names. Pass --skip_regression or
+and configs/TESS/other/ using hardcoded names. Pass --skip_regression or
 --skip_classification to evaluate only one task.
 """
 
@@ -235,23 +235,12 @@ def evaluate_regression(
 
 
 def plot_regression(results: dict, model_name: str, out_dir: Path):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    fig.suptitle(f"{model_name}  |  RMSE={results['rmse']:.4f}  R²={results['r2']:.3f}")
+    from tasks.TESS.eval_plots import make_regression_figure
 
-    ax = axes[0]
-    lim = np.percentile(np.concatenate([results["y_true"], results["y_hat"]]), [1, 99])
-    ax.scatter(results["y_true"], results["y_hat"], s=4, alpha=0.3)
-    ax.plot(lim, lim, "r--", linewidth=1)
-    ax.set_xlabel("frot true"); ax.set_ylabel("frot predicted"); ax.set_title("Scatter")
-
-    ax = axes[1]
-    ax.hist(results["residuals"], bins=60, histtype="step", linewidth=1.5)
-    ax.set_xlabel(r"$\hat{f}_{rot} - f_{rot}$"); ax.set_ylabel("Count"); ax.set_title("Residuals")
-
-    plt.tight_layout()
+    fig = make_regression_figure(results, model_name)
     out_path = out_dir / f"{model_name}_regression.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     print(f"Saved {out_path}")
 
 
@@ -292,33 +281,12 @@ def evaluate_classification(
 
 
 def plot_classification(results: dict, model_name: str, label_names: list[str], out_dir: Path):
-    n = len(label_names)
-    conf = np.zeros((n, n), dtype=int)
-    for t, p in zip(results["y_true"], results["y_hat"]):
-        conf[int(t), int(p)] += 1
+    from tasks.TESS.eval_plots import make_classification_figure
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle(f"{model_name}  |  Accuracy={results['acc']:.3f}")
-
-    ax = axes[0]
-    im = ax.imshow(conf, cmap="Blues")
-    ax.set_xticks(range(n)); ax.set_yticks(range(n))
-    ax.set_xticklabels(label_names, rotation=45, ha="right", fontsize=8)
-    ax.set_yticklabels(label_names, fontsize=8)
-    ax.set_xlabel("Predicted"); ax.set_ylabel("True"); ax.set_title("Confusion matrix")
-    plt.colorbar(im, ax=ax)
-
-    ax = axes[1]
-    class_accs = [results["per_class_acc"].get(n, float("nan")) for n in label_names]
-    ax.barh(range(n), class_accs)
-    ax.set_yticks(range(n)); ax.set_yticklabels(label_names, fontsize=8)
-    ax.set_xlabel("Accuracy"); ax.set_title("Per-class accuracy")
-    ax.set_xlim(0, 1)
-
-    plt.tight_layout()
+    fig = make_classification_figure(results, model_name, label_names)
     out_path = out_dir / f"{model_name}_classification.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     print(f"Saved {out_path}")
 
 
@@ -353,17 +321,17 @@ def save_classification_csv(results: dict, model_name: str,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 REGRESSION_MODELS = [
-    ("mlp",      "tess_mlp_regression/best.ckpt",         "configs/TESS/train_tess_mlp_regression.yaml"),
-    ("s4d",      "tess_s4d_regression/best.ckpt",         "configs/TESS/train_tess_s4d_regression.yaml"),
-    ("s4d_head", "tess_s4d_head_regression/best.ckpt",    "configs/TESS/train_tess_s4d_head_regression.yaml"),
-    ("linoss",   "tess_linoss_regression/best.eqx",       "configs/TESS/train_tess_linoss_regression.yaml"),
+    ("mlp",      "tess_mlp_regression/best.ckpt",         "configs/TESS/other/train_tess_mlp_regression.yaml"),
+    ("s4d",      "tess_s4d_regression/best.ckpt",         "configs/TESS/other/train_tess_s4d_regression.yaml"),
+    ("s4d_head", "tess_s4d_head_regression/best.ckpt",    "configs/TESS/other/train_tess_s4d_head_regression.yaml"),
+    ("linoss",   "tess_linoss_regression/best.eqx",       "configs/TESS/other/train_tess_linoss_regression.yaml"),
 ]
 
 CLASSIFICATION_MODELS = [
-    ("mlp",      "tess_mlp_classification/best.ckpt",     "configs/TESS/train_tess_mlp_classification.yaml"),
-    ("s4d",      "tess_s4d_classification/best.ckpt",     "configs/TESS/train_tess_s4d_classification.yaml"),
-    ("s4d_head", "tess_s4d_head_classification/best.ckpt","configs/TESS/train_tess_s4d_head_classification.yaml"),
-    ("linoss",   "tess_linoss_classification/best.eqx",   "configs/TESS/train_tess_linoss_classification.yaml"),
+    ("mlp",      "tess_mlp_classification/best.ckpt",     "configs/TESS/other/train_tess_mlp_classification.yaml"),
+    ("s4d",      "tess_s4d_classification/best.ckpt",     "configs/TESS/other/train_tess_s4d_classification.yaml"),
+    ("s4d_head", "tess_s4d_head_classification/best.ckpt","configs/TESS/other/train_tess_s4d_head_classification.yaml"),
+    ("linoss",   "tess_linoss_classification/best.eqx",   "configs/TESS/other/train_tess_linoss_classification.yaml"),
 ]
 
 FROZEN_TASKS = {"s4d_head"}   # use load_task instead of load_model

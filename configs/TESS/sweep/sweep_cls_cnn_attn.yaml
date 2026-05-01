@@ -1,19 +1,16 @@
-# wandb sweep config — LinOSS-IMEX end-to-end classification (JAX/Equinox)
-#
-# Requires the jax extra:
-#   uv sync --extra jax --extra cu13
+# wandb sweep config — CNN+Attention end-to-end classification
 #
 # Create sweep:
-#   wandb sweep configs/TESS/sweep_cls_linoss_imex.yaml --project TimeSeriesPhysics
-# Launch agents (--jax added automatically for linoss_* model types):
-#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_imex --sweep_id <id>
+#   wandb sweep configs/TESS/sweep/sweep_cls_cnn_attn.yaml --project TimeSeriesPhysics
+# Launch agents:
+#   bash benchmarks/TESS/run_sweep.sh --model_type cnn_attn --sweep_id <id>
 
 program: benchmarks/TESS/sweep_classification.py
 command:
   - ${env}
   - python
   - ${program}
-  - --model_type=linoss_imex
+  - --model_type=cnn_attn
   - ${args}
 
 method: bayes
@@ -32,9 +29,9 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 0.00005
-    max: 0.005
+    max: 0.01
   dropout:
-    value: 0.05
+    value: 0.0
   weight_decay:
     distribution: log_uniform_values
     min: 0.000001

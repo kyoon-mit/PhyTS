@@ -34,6 +34,8 @@ import torch.nn as nn
 from torch import Tensor, optim
 import lightning as L
 
+from tasks.param_count import attach_scalar_hyperparams, torch_model_parameter_hyper_dict
+
 
 class TESSReconstructionMSE(L.LightningModule):
     """Seq2seq reconstruction pretraining: noisy_flux → clean_flux via masked MSE."""
@@ -45,10 +47,11 @@ class TESSReconstructionMSE(L.LightningModule):
         lr_decay: float = 0.99,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.lr = lr
         self.lr_decay = lr_decay
+        self.save_hyperparameters(ignore=["model"])
+        attach_scalar_hyperparams(self, torch_model_parameter_hyper_dict(model))
 
     def forward(self, x: Tensor) -> Tensor:
         # x: (B, L) → (B, L, 1) → model → (B, L, 1) → (B, L)

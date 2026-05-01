@@ -1,11 +1,11 @@
-# wandb sweep config — S4D end-to-end regression (frot prediction)
+# wandb sweep config — S4D end-to-end classification
 #
 # Create sweep:
-#   wandb sweep configs/TESS/sweep_reg_s4d.yaml --project TimeSeriesPhysics
+#   wandb sweep configs/TESS/sweep/sweep_cls_s4d.yaml --project TimeSeriesPhysics
 # Launch agents:
 #   bash benchmarks/TESS/run_sweep.sh --model_type s4d --sweep_id <id>
 
-program: benchmarks/TESS/sweep_regression.py
+program: benchmarks/TESS/sweep_classification.py
 command:
   - ${env}
   - python
@@ -15,7 +15,7 @@ command:
 
 method: bayes
 metric:
-  name: val/r2
+  name: val/balanced_acc
   goal: maximize
 
 early_terminate:

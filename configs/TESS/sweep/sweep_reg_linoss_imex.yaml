@@ -1,19 +1,19 @@
-# wandb sweep config — LinOSS-Damped end-to-end regression (JAX/Equinox)
+# wandb sweep config — LinOSS-IMEX end-to-end regression (JAX/Equinox)
 #
 # Requires the jax extra:
 #   uv sync --extra jax --extra cu13
 #
 # Create sweep:
-#   wandb sweep configs/TESS/sweep_reg_linoss_damped.yaml --project TimeSeriesPhysics
+#   wandb sweep configs/TESS/sweep/sweep_reg_linoss_imex.yaml --project TimeSeriesPhysics
 # Launch agents:
-#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_damped --sweep_id <id>
+#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_imex --sweep_id <id>
 
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
   - python
   - ${program}
-  - --model_type=linoss_damped
+  - --model_type=linoss_imex
   - ${args}
 
 method: bayes

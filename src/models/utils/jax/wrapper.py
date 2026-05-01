@@ -14,7 +14,11 @@ import torch
 from jaxtyping import PRNGKeyArray, PyTree
 
 from .load_model import load_model
-from .print_params import print_param_tree
+from .print_params import (
+    count_array_elements,
+    count_inexact_array_elements,
+    print_param_tree,
+)
 from .training import LossFunction, jax_apply_training_step, jax_inference
 from .utils import tensor_to_jax
 
@@ -72,9 +76,6 @@ class JAXLightningModule(L.LightningModule):
             eqx.is_inexact_array, self.jax_model
         )
 
-        # Print number of parameters and tree structure for debugging
-        print_param_tree(self.jax_model, 3)
-
         # load model and optimizer state from checkpoint if provided
         if load_from_checkpoint is not None:
             self.jax_model, self.jax_model_state = load_model(
@@ -82,6 +83,18 @@ class JAXLightningModule(L.LightningModule):
                 model=self.jax_model,
                 model_state=self.jax_model_state,
             )
+
+        # Parameter accounting after optional checkpoint hydration.
+        mod_elems = count_inexact_array_elements(self.jax_model)
+        state_elems = count_array_elements(self.jax_model_state)
+        summary = (
+            f"[{self.__class__.__name__}] jax_model floating leaves "
+            f"(``eqx.is_inexact_array``; includes BN slots in the module tree): {mod_elems:,} | "
+            f"jax_model_state array elements (``eqx.is_array``): {state_elems:,}"
+        )
+        print(summary, flush=True)
+        logger.info("%s", summary)
+        print_param_tree(self.jax_model, 3)
 
     def _prepare_batch(self, batch: Batch) -> tuple[PyTree[jax.Array], PyTree[jax.Array]]:
         """Return (x, y) from a JAX-converted batch. Override for dataset-specific layouts."""

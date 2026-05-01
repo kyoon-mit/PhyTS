@@ -23,13 +23,11 @@ mirrored into `data/TESS/.cache/TESS/`) instead of performing a random
 ### New files
 | File | Purpose |
 |------|---------|
-| `benchmarks/TESS/sweep_classification.py` | Unified sweep training script |
-| `benchmarks/TESS/sweep_configs/mlp.yaml` | wandb sweep config for MLP |
-| `benchmarks/TESS/sweep_configs/s4d.yaml` | wandb sweep config for S4D |
-| `benchmarks/TESS/sweep_configs/cnn.yaml` | wandb sweep config for CNN |
-| `benchmarks/TESS/sweep_configs/cnn_attn.yaml` | wandb sweep config for CNN+Attn |
-| `benchmarks/TESS/sweep_configs/linoss_imex.yaml` | wandb sweep config for LinOSS-IMEX |
-| `benchmarks/TESS/sweep_configs/linoss_damped.yaml` | wandb sweep config for LinOSS-Damped |
+| `benchmarks/TESS/sweep_classification.py` | Unified sweep training script (classification) |
+| `benchmarks/TESS/sweep_regression.py` | Unified sweep training script (regression) |
+| `configs/TESS/sweep/sweep_cls_*.yaml` | wandb sweep configs for classification (one per architecture) |
+| `configs/TESS/sweep/sweep_reg_*.yaml` | wandb sweep configs for regression |
+| `configs/TESS/sweep/all_model_sweep_dims.yaml` | Hidden widths per size tier (xs/sm/md/lg), read by `sweep_utils.py` |
 | `benchmarks/TESS/run_sweep.sh` | SLURM agent submission script |
 
 ---
@@ -58,8 +56,8 @@ The datamodule expects `--data_dir` to be that TESS root
 ### Step 1 — Create the sweep (once, on a machine with internet)
 
 ```bash
-# From the repo root:
-wandb sweep benchmarks/TESS/sweep_configs/mlp.yaml --project TimeSeriesPhysics
+# From the repo root (classification example; use sweep_reg_*.yaml for regression):
+wandb sweep configs/TESS/sweep/sweep_cls_mlp.yaml --project TimeSeriesPhysics
 # → prints: sweep ID, e.g. abc123def
 ```
 
@@ -169,21 +167,25 @@ inverse: C = round((-31 + sqrt(961 + 76*(target − 8))) / 38) → nearest multi
 
 ### LinOSS-IMEX (`LinOSS`, `num_blocks=4`, `ssm_size=H`)
 ```
-params = 24*H² + 30*H + 8    (ssm_size = H, tied)
-inverse: H = round((-30 + sqrt(900 + 96*(target − 8))) / 48)
+params = 24*H² + 30*H + H*d_output + d_output    (ssm_size = H; sweeps use tied H)
+inverse: H = round((-(30 + d_output) + sqrt((30 + d_output)² + 96*(target − d_output))) / 48)
+
+Classification (``d_output=8``) and regression (``d_output=1``) differ by ``7*(H+1)`` parameters.
 ```
-| size | H | params |
+| size | H | params (cls ``d_out=8``) |
 |------|---|--------|
-| xs   |  20 |  10,208 |
-| sm   |  64 | 100,232 |
-| md   | 112 | 304,424 |
-| lg   | 170 | 698,708 |
+| xs   |  20 |  10,368 |
+| sm   |  64 | 100,744 |
+| md   | 112 | 305,320 |
+| lg   | 170 | 700,068 |
+
+Regression (``d_output=1``) at the same H: 10,221 · 100,289 · 304,529 · 698,871.
 
 ### LinOSS-Damped (`LinOSS`, `num_blocks=4`, `ssm_size=H`, `discretization=damped_IMEX`)
 ```
-params = 24*H² + 34*H + 8    (adds G_diag per block)
+params = 24*H² + 34*H + H*d_output + d_output    (adds trainable G_diag per block: +4H vs IMEX)
 ```
-Identical tier values of H; parameter counts ~4H higher than IMEX.
+Same H column as IMEX; damped adds ``+4H`` (e.g. cls: 10,448 · 101,000 · 305,768 · 700,748 at the tiers above).
 
 ---
 
@@ -198,7 +200,7 @@ Identical tier values of H; parameter counts ~4H higher than IMEX.
 | `batch_size` | categorical | 32, 64, 128 |
 | `seed` | categorical | 0, 1, 2 |
 
-Search method: **Bayesian optimization** (`method: bayes`), optimising `val/acc`.
+Search method: **Bayesian optimization** (`method: bayes`), optimising `val/balanced_acc` (classification) or `val/r2` (regression).
 Early termination: **Hyperband** (`min_iter=10`, `eta=3`) — underperforming runs
 are stopped after epoch 10, 30, or 90 so compute is focused on promising trials.
 

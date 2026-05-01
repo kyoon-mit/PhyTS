@@ -103,7 +103,7 @@ RUN="srun --cpu-bind=none $PYTHON_EXE"
 #   --output="$LOGS/tess_linoss_reg_%j.out" \
 #   --error="$LOGS/tess_linoss_reg_%j.err" \
 #   --wrap="$ACTIVATE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_regression && $RUN main.py fit \
-#     --config configs/TESS/train_tess_linoss_regression.yaml \
+#     --config configs/TESS/other/train_tess_linoss_regression.yaml \
 #     --data.init_args.data_dir $DATA_DIR")
 # echo "[1/3] LinOSS regression submitted: job $JOB_LINOSS_REG"
 
@@ -114,7 +114,7 @@ RUN="srun --cpu-bind=none $PYTHON_EXE"
 #   --output="$LOGS/tess_linoss_cls_%j.out" \
 #   --error="$LOGS/tess_linoss_cls_%j.err" \
 #   --wrap="$ACTIVATE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_classification && $RUN main.py fit \
-#     --config configs/TESS/train_tess_linoss_classification.yaml \
+#     --config configs/TESS/other/train_tess_linoss_classification.yaml \
 #     --data.init_args.data_dir $DATA_DIR")
 # echo "[2/3] LinOSS classification submitted: job $JOB_LINOSS_CLS"
 

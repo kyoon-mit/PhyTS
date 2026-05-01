@@ -14,12 +14,15 @@ Benchmarks MLP and S4D models on two TESS variable-star tasks:
 | `src/tasks/TESS/tess_regression.py` | `TESSRegressionMSE` (end-to-end) and `TESSFrozenBackboneRegressionMSE` (frozen S4D + MLP head) |
 | `src/tasks/TESS/tess_classification.py` | `TESSClassificationCE` and `TESSFrozenBackboneClassificationCE` |
 | `src/tasks/TESS/tess_reconstruction.py` | `TESSReconstructionMSE` — self-supervised S4D pretraining via denoising |
-| `configs/TESS/` | Seven LightningCLI YAML configs (see table below) |
+| `configs/TESS/other/` | LightningCLI training configs (see table below) |
+| `configs/TESS/sweep/` | wandb sweep YAMLs + `all_model_sweep_dims.yaml` |
 | `benchmarks/TESS/setup_data.sh` | Downloads TESS Parquet files from HuggingFace (run once from login node) |
 | `benchmarks/TESS/run.sh` | SLURM submission script for MIT Engaging |
 | `benchmarks/TESS/eval_pipeline.py` | Standalone evaluation: metrics, scatter/confusion plots, CSVs |
 
 ### Training configs
+
+All files below are under `configs/TESS/other/`.
 
 | Config | Model | Task |
 |--------|-------|------|
@@ -45,7 +48,7 @@ Benchmarks MLP and S4D models on two TESS variable-star tasks:
 ```bash
 cd /path/to/TimeSeriesPhysics
 uv run python main.py fit \
-    --config configs/TESS/train_tess_mlp_regression.yaml \
+    --config configs/TESS/other/train_tess_mlp_regression.yaml \
     --trainer.max_epochs 1 \
     --trainer.accelerator cpu \
     --trainer.logger false
@@ -55,21 +58,21 @@ uv run python main.py fit \
 
 1. Reconstruction pretraining (required before frozen-backbone runs):
 ```bash
-uv run python main.py fit --config configs/TESS/train_tess_s4d_reconstruction.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_reconstruction.yaml
 ```
 
 2. End-to-end models (independent, can run in any order):
 ```bash
-uv run python main.py fit --config configs/TESS/train_tess_mlp_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_mlp_classification.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_mlp_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_mlp_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_classification.yaml
 ```
 
 3. Frozen-backbone models (after step 1 completes):
 ```bash
-uv run python main.py fit --config configs/TESS/train_tess_s4d_head_regression.yaml
-uv run python main.py fit --config configs/TESS/train_tess_s4d_head_classification.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_head_regression.yaml
+uv run python main.py fit --config configs/TESS/other/train_tess_s4d_head_classification.yaml
 ```
 
 **Evaluation** (after any subset of models are trained):

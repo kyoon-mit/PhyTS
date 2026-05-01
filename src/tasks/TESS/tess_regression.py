@@ -31,6 +31,14 @@ from torch import Tensor, optim
 import lightning as L
 import yaml
 
+from tasks.param_count import (
+    attach_scalar_hyperparams,
+    torch_model_parameter_hyper_dict,
+    torch_module_bundle_prefixed,
+    torch_nn_parameter_count,
+)
+from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+
 
 def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
     """Instantiate a seq2seq model from a LightningCLI YAML and load its weights."""
@@ -62,11 +70,12 @@ class TESSRegressionMSE(L.LightningModule):
         lr_decay: float = 0.99,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.lr = lr
         self.lr_decay = lr_decay
         self.criterion = nn.MSELoss()
+        self.save_hyperparameters(ignore=["model"])
+        attach_scalar_hyperparams(self, torch_model_parameter_hyper_dict(model))
 
     def forward(self, x: Tensor) -> Tensor:
         # x: (B, L) → (B, L, 1) → model → (B, 1) → (B,)
@@ -102,6 +111,12 @@ class TESSRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
+        log_validation_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y.numpy(),
+            y_hat=y_hat.numpy(),
+        )
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []
@@ -144,7 +159,7 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
           class_path: tasks.TESS.tess_regression.TESSFrozenBackboneRegressionMSE
           init_args:
             backbone_ckpt: checkpoints/tess_s4d_reconstruction/best.ckpt
-            backbone_cfg: configs/TESS/train_tess_s4d_reconstruction.yaml
+            backbone_cfg: configs/TESS/other/train_tess_s4d_reconstruction.yaml
             lr: 1.0e-3
             lr_decay: 0.99
             head:
@@ -163,7 +178,6 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         lr_decay: float = 0.99,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["head"])
         backbone = _load_seq2seq_backbone(backbone_ckpt, backbone_cfg)
         backbone.eval()
         for p in backbone.parameters():
@@ -173,6 +187,13 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         self.lr = lr
         self.lr_decay = lr_decay
         self.criterion = nn.MSELoss()
+        bundled = dict(**torch_module_bundle_prefixed("backbone", backbone))
+        bundled.update(torch_module_bundle_prefixed("head", head))
+        bundled["backbone_head_total_num_parameters_nn"] = (
+            torch_nn_parameter_count(backbone) + torch_nn_parameter_count(head)
+        )
+        self.save_hyperparameters(ignore=["head"])
+        attach_scalar_hyperparams(self, bundled)
 
     def train(self, mode: bool = True):
         # Lightning calls model.train() each epoch; keep backbone in eval mode
@@ -217,6 +238,12 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
+        log_validation_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y.numpy(),
+            y_hat=y_hat.numpy(),
+        )
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []

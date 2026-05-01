@@ -1,13 +1,12 @@
 # wandb sweep config — LinOSS-Damped end-to-end classification (JAX/Equinox)
 #
 # Requires the jax extra:
-#   uv sync --extra jax --extra cu13   (or cu12 / none)
+#   uv sync --extra jax --extra cu13
 #
 # Create sweep:
-#   wandb sweep benchmarks/TESS/sweep_configs/linoss_damped.yaml --project TimeSeriesPhysics
-#
-# Then launch agents via:
-#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_damped --sweep_id <id> --jax
+#   wandb sweep configs/TESS/sweep/sweep_cls_linoss_damped.yaml --project TimeSeriesPhysics
+# Launch agents:
+#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_damped --sweep_id <id>
 
 program: benchmarks/TESS/sweep_classification.py
 command:
@@ -19,7 +18,7 @@ command:
 
 method: bayes
 metric:
-  name: val/acc
+  name: val/balanced_acc
   goal: maximize
 
 early_terminate:
