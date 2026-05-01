@@ -98,14 +98,14 @@ WANDB_MODE=disabled \
 uv run python benchmarks/TESS/sweep_classification.py \
     --model_type s4d \
     --data_dir data/TESS/.cache/TESS \
-    --size xs --lr 1e-3 --batch_size 32 --dropout 0.1 --weight_decay 1e-4
+    --size xs --lr 1e-3 --batch_size 128 --dropout 0.1 --weight_decay 1e-4
 
 # LinOSS requires the jax extra:
 WANDB_MODE=disabled \
 uv run --extra jax python benchmarks/TESS/sweep_classification.py \
     --model_type linoss_imex \
     --data_dir data/TESS/.cache/TESS \
-    --size xs --lr 1e-3 --batch_size 32
+    --size xs --lr 1e-3 --batch_size 128
 ```
 
 ---
@@ -194,15 +194,15 @@ Same H column as IMEX; damped adds ``+4H`` (e.g. cls: 10,448 · 101,000 · 305,7
 | Parameter | Type | Range |
 |-----------|------|-------|
 | `size` | categorical | xs, sm, md, lg |
-| `lr` | log-uniform | 5×10⁻⁵ – 10⁻² |
+| `lr` | log-uniform | 5×10⁻⁵ – 2×10⁻² (MLP, S4D, CNN, CNN+Attn); 5×10⁻⁵ – 10⁻² (LinOSS) |
 | `dropout` | uniform | 0.0 – 0.5 (MLP/S4D); fixed 0.0 (CNN); fixed 0.05 (LinOSS) |
 | `weight_decay` | log-uniform | 10⁻⁶ – 10⁻² |
-| `batch_size` | categorical | 32, 64, 128 |
+| `batch_size` | categorical | 128, 256, 512 |
 | `seed` | categorical | 0, 1, 2 |
 
 Search method: **Bayesian optimization** (`method: bayes`), optimising `val/balanced_acc` (classification) or `val/r2` (regression).
-Early termination: **Hyperband** (`min_iter=10`, `eta=3`) — underperforming runs
-are stopped after epoch 10, 30, or 90 so compute is focused on promising trials.
+Early termination: **Hyperband** (`min_iter=15`, `eta=3`) — underperforming runs
+are stopped after epoch 15, 45, or 135 so compute is focused on promising trials.
 
 ---
 

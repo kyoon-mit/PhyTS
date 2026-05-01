@@ -7,9 +7,10 @@
 # Usage (from anywhere):
 #   bash benchmarks/TESS/setup_data.sh
 #
-# The two files (~225 MB total) are saved to:
-#   data/TESS/.cache/TESS/tess_regression.parquet
-#   data/TESS/.cache/TESS/tess_classification.parquet
+# The two files (~225 MB total) are saved under the pool tree (default), e.g.:
+#   $TESS_POOL_ROOT/data_engaging/TESS/.cache/TESS/tess_regression.parquet
+#
+# Optional: ``export TESS_POOL_ROOT=...`` when your pool path differs from the default.
 #
 # Optional: set HF_TOKEN for better HuggingFace rate limits.
 #   export HF_TOKEN=hf_...
@@ -18,7 +19,8 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
-DATA_DIR=/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics/data_engaging/TESS/.cache
+POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
+DATA_DIR="$POOL/data_engaging/TESS/.cache"
 
 # Skip if both files already present
 if [ -f "$DATA_DIR/TESS/tess_regression.parquet" ] && [ -f "$DATA_DIR/TESS/tess_classification.parquet" ]; then

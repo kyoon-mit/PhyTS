@@ -49,6 +49,7 @@ if str(_BENCH_DIR) not in sys.path:
 
 from sweep_utils import (
     JAX_MODELS,
+    ThrottledTQDMProgressBar,
     _REPO_ROOT,
     add_infra_args,
     add_sweep_args,
@@ -193,8 +194,8 @@ def main():
         max_epochs=args.max_epochs,
         accelerator="gpu",
         devices=1,
-        log_every_n_steps=1,
-        callbacks=[early_stop, ckpt_cb],
+        log_every_n_steps=10,
+        callbacks=[early_stop, ckpt_cb, ThrottledTQDMProgressBar()],
         logger=logger,
         enable_progress_bar=True,
     )

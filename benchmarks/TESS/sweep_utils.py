@@ -11,12 +11,14 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
 
 import torch.nn as nn
 import yaml
+from lightning.pytorch.callbacks import TQDMProgressBar
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _SWEEP_DIMS = _REPO_ROOT / "configs" / "TESS" / "sweep" / "all_model_sweep_dims.yaml"
@@ -24,13 +26,79 @@ if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from models.mlp import MLPRegressor
-from models.s4d import S4Model, count_s4model_nn_parameters
 from models.conv_ae import ConvAE
 from models.conv_attn_ae import ConvAttnAE
 
 TORCH_MODELS = {"mlp", "s4d", "cnn", "cnn_attn"}
 JAX_MODELS   = {"linoss_imex", "linoss_damped"}
 ALL_MODELS   = TORCH_MODELS | JAX_MODELS
+
+
+class ThrottledTQDMProgressBar(TQDMProgressBar):
+    """``tqdm`` progress bar with coarser updates than every step.
+
+    Updates at most every ``refresh_rate`` batches (default 40). If ``min_interval_s``
+    is set (default 30), also refreshes when that many seconds have passed since the
+    last refresh so very slow steps still show movement.
+
+    Parameters
+    ----------
+    refresh_rate : int
+        Lightning batch counter; refresh when ``current % refresh_rate == 0``.
+    min_interval_s : float or None
+        Minimum seconds between refreshes when the batch counter has not hit a
+        multiple of ``refresh_rate``. Use ``None`` to disable time-based updates.
+    """
+
+    def __init__(
+        self,
+        refresh_rate: int = 40,
+        min_interval_s: float | None = 30.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(refresh_rate=refresh_rate, **kwargs)
+        self._min_interval_s = min_interval_s
+        self._last_refresh_m = 0.0
+
+    def _reset_refresh_clock(self) -> None:
+        self._last_refresh_m = time.monotonic()
+
+    def on_sanity_check_start(self, *args: Any) -> None:
+        self._reset_refresh_clock()
+        super().on_sanity_check_start(*args)
+
+    def on_train_epoch_start(self, trainer: Any, *args: Any) -> None:
+        self._reset_refresh_clock()
+        super().on_train_epoch_start(trainer, *args)
+
+    def on_validation_start(self, trainer: Any, pl_module: Any) -> None:
+        self._reset_refresh_clock()
+        super().on_validation_start(trainer, pl_module)
+
+    def on_test_start(self, trainer: Any, pl_module: Any) -> None:
+        self._reset_refresh_clock()
+        super().on_test_start(trainer, pl_module)
+
+    def on_predict_start(self, trainer: Any, pl_module: Any) -> None:
+        self._reset_refresh_clock()
+        super().on_predict_start(trainer, pl_module)
+
+    def _should_update(self, current: int, total: int) -> bool:
+        if not self.is_enabled:
+            return False
+        if current == total:
+            return True
+        now = time.monotonic()
+        if current % self.refresh_rate == 0:
+            self._last_refresh_m = now
+            return True
+        if (
+            self._min_interval_s is not None
+            and (now - self._last_refresh_m) >= self._min_interval_s
+        ):
+            self._last_refresh_m = now
+            return True
+        return False
 
 
 def _load_model_dim_tiers() -> tuple[dict[str, int], ...]:
@@ -87,6 +155,8 @@ def build_s4d(size: str, d_output: int, dropout: float) -> nn.Module:
         md (~300K): d=160 → 292,168 (cls) / 288,329 (reg)
         lg (~700K): d=264 → 701,720 (cls) / 695,497 (reg)
     """
+    from models.s4d import S4Model
+
     d = _S4D_DIMS[size]
     return S4Model(d_input=1, d_output=d_output, d_model=d, d_state=64,
                    n_layers=4, dropout=dropout)
@@ -186,6 +256,8 @@ def collect_benchmark_param_counters(model_type: str, task) -> dict[str, int]:
     n = sum(p.numel() for p in m.parameters())
     out = {"param_count_torch_nn": int(n)}
     if model_type == "s4d":
+        from models.s4d import count_s4model_nn_parameters
+
         layer0 = m.s4_layers[0]
         out["param_count_s4_analytic_nn"] = int(
             count_s4model_nn_parameters(
@@ -217,7 +289,7 @@ def add_sweep_args(parser) -> None:
     parser.add_argument("--lr",           type=float, default=1e-3)
     parser.add_argument("--dropout",      type=float, default=0.1)
     parser.add_argument("--weight_decay", type=float, default=1e-4)
-    parser.add_argument("--batch_size",   type=int,   default=64)
+    parser.add_argument("--batch_size",   type=int,   default=128)
     parser.add_argument("--seed",         type=int,   default=42)
 
 

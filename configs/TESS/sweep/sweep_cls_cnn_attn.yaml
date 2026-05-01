@@ -20,7 +20,7 @@ metric:
 
 early_terminate:
   type: hyperband
-  min_iter: 10
+  min_iter: 20
   eta: 3
 
 parameters:
@@ -29,7 +29,7 @@ parameters:
   lr:
     distribution: log_uniform_values
     min: 0.00005
-    max: 0.01
+    max: 0.02
   dropout:
     value: 0.0
   weight_decay:
@@ -37,6 +37,6 @@ parameters:
     min: 0.000001
     max: 0.01
   batch_size:
-    values: [32, 64, 128]
+    values: [128, 256, 512]
   seed:
     values: [0, 1, 2]

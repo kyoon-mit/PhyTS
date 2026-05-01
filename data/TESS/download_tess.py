@@ -1,16 +1,18 @@
 """
 Download the pre-split PhyTS TESS parquet shards from Hugging Face
-(`PhyTS-team/PhyTS-bench` → ``TESS/split/*.parquet``), then copy shards into
-``TESS/*.parquet`` so ``data_dir`` is a single ``.cache/TESS`` root (same as
-regression parquet and HuggingFace split file names).
+(`PhyTS-team/PhyTS-bench`). The Hub stores them under ``TESS/split/*.parquet``;
+this script pulls that subtree, **moves** every shard into ``TESS/*.parquet``,
+and deletes the local ``TESS/split`` directory so ``data_dir`` is only
+``.cache/TESS`` with parquet files at the top level.
 
-Uses ``snapshot_download`` (Hub layout under ``TESS/split/``); promotion step
-matches ``src/dataloader/tess_dataloader.TESSClassificationDataset``.
+Uses ``snapshot_download`` for the remote ``TESS/split/*`` paths; the on-disk
+layout matches ``src/dataloader/tess_dataloader.TESSClassificationDataset``.
 Needs ``uv sync --extra jax`` (pyarrow + huggingface_hub).
 
 Usage
 -----
     uv run --extra jax python data/TESS/download_tess.py
+    uv run --extra jax python data/TESS/download_tess.py --where engaging
     uv run --extra jax python data/TESS/download_tess.py --cache-dir path/to/cache
 """
 
@@ -32,28 +34,41 @@ except ImportError:  # pragma: no cover
 REPO_ID = "PhyTS-team/PhyTS-bench"
 ALLOW_PATTERN = "TESS/split/*"
 _DEFAULT_CACHE_PARENT = Path(__file__).resolve().parent / ".cache"
+# ORCD Engaging: project mirror under data_engaging/TESS/.cache
+_ENGAGING_CACHE_PARENT = Path(
+    "/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics/data_engaging/TESS/.cache"
+)
 
 
-def promote_split_parquets_to_tess_root(tess_root: Path) -> int:
-    """Copy ``*.parquet`` from ``tess_root/split`` into ``tess_root`` (skip if dest exists).
+def flatten_hub_split_into_tess_root(tess_root: Path) -> tuple[int, int]:
+    """Move ``*.parquet`` from ``tess_root/split`` into ``tess_root``; remove ``split``.
+
+    If a shard already exists in ``tess_root``, the duplicate under ``split`` is
+    deleted so the tree can be removed.
 
     Returns
     -------
-    int
-        Number of files copied.
+    moved : int
+        Parquet files moved into ``tess_root``.
+    dropped_duplicate : int
+        Files only removed from ``split`` because ``tess_root`` already had them.
     """
     tess_root = Path(tess_root)
     split_sub = tess_root / "split"
     if not split_sub.is_dir():
-        return 0
-    n = 0
-    for src in split_sub.glob("*.parquet"):
+        return (0, 0)
+    moved = 0
+    dropped_duplicate = 0
+    for src in sorted(split_sub.glob("*.parquet")):
         dest = tess_root / src.name
         if dest.is_file():
-            continue
-        shutil.copy2(src, dest)
-        n += 1
-    return n
+            src.unlink()
+            dropped_duplicate += 1
+        else:
+            shutil.move(str(src), str(dest))
+            moved += 1
+    shutil.rmtree(split_sub)
+    return (moved, dropped_duplicate)
 
 
 def _cell(value: object) -> str:
@@ -80,21 +95,35 @@ def _cell(value: object) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Download PhyTS-bench TESS split shards and mirror them under TESS/."
+        description="Download PhyTS-bench TESS shards into cache/TESS/*.parquet (no TESS/split)."
+    )
+    parser.add_argument(
+        "--where",
+        choices=("local", "engaging"),
+        default="local",
+        help="Preset for --cache-dir: local → repo data/TESS/.cache; "
+        "engaging → ORCD data_engaging/TESS/.cache. Ignored if --cache-dir is set.",
     )
     parser.add_argument(
         "--cache-dir",
         type=Path,
-        default=_DEFAULT_CACHE_PARENT,
+        default=None,
         help="Root directory passed to Hugging Face snapshot_download. "
-             f"Creates TESS/split/ on the Hub layout and copies shards into TESS/. "
-             f"Default: {_DEFAULT_CACHE_PARENT}",
+        "Final layout: cache_parent/TESS/*.parquet (Hub TESS/split is flattened). "
+        f"Overrides --where. Default from --where: local={_DEFAULT_CACHE_PARENT}, "
+        f"engaging={_ENGAGING_CACHE_PARENT}",
     )
     args = parser.parse_args()
-    cache_parent = Path(args.cache_dir).resolve()
+    if args.cache_dir is not None:
+        cache_parent = Path(args.cache_dir).resolve()
+    elif args.where == "engaging":
+        cache_parent = _ENGAGING_CACHE_PARENT.resolve()
+    else:
+        cache_parent = _DEFAULT_CACHE_PARENT.resolve()
     cache_parent.mkdir(parents=True, exist_ok=True)
 
-    split_dir = cache_parent / "TESS" / "split"
+    tess_root = cache_parent / "TESS"
+    split_dir = tess_root / "split"
 
     print(f"Fetching {ALLOW_PATTERN} from {REPO_ID} into {cache_parent} …")
 
@@ -110,18 +139,30 @@ def main() -> None:
         raise SystemExit(1) from e
 
     if not split_dir.is_dir():
-        print(f"Expected directory missing after snapshot: {split_dir}", file=sys.stderr)
-        raise SystemExit(1)
+        if not any(tess_root.glob("*.parquet")):
+            print(f"Expected directory missing after snapshot: {split_dir}", file=sys.stderr)
+            raise SystemExit(1)
+        print(
+            f"No {split_dir} after snapshot; using existing parquet(s) under {tess_root}",
+        )
+    else:
+        parquets_pre = sorted(split_dir.glob("*.parquet"))
+        if not parquets_pre:
+            print(f"No parquet files under {split_dir}", file=sys.stderr)
+            raise SystemExit(1)
+        moved, dropped_dup = flatten_hub_split_into_tess_root(tess_root)
+        msg_parts = []
+        if moved:
+            msg_parts.append(f"moved {moved} into {tess_root}")
+        if dropped_dup:
+            msg_parts.append(f"removed {dropped_dup} duplicate(s) from split")
+        if msg_parts:
+            print(f"\nFlattened Hub layout: {', '.join(msg_parts)}; removed {split_dir}")
 
-    parquets = sorted(split_dir.glob("*.parquet"))
+    parquets = sorted(tess_root.glob("*.parquet"))
     if not parquets:
-        print(f"No parquet files under {split_dir}", file=sys.stderr)
+        print(f"No parquet files under {tess_root}", file=sys.stderr)
         raise SystemExit(1)
-
-    tess_root = cache_parent / "TESS"
-    n_promoted = promote_split_parquets_to_tess_root(tess_root)
-    if n_promoted:
-        print(f"\nPromoted {n_promoted} parquet shard(s) from {split_dir} → {tess_root}")
 
     for path in parquets:
         print()

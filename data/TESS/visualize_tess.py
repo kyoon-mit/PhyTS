@@ -8,13 +8,16 @@ Expects Hub-style names under ``data-dir`` (typically ``…/.cache/TESS``)::
 
 Same layout as ``src/dataloader.tess_dataloader`` classification data and
 ``data/TESS/download_tess.py``. Missing files trigger a Hugging Face
-``snapshot_download`` plus promotion from ``TESS/split`` into ``TESS``.
+``snapshot_download`` plus flattening of ``TESS/split`` into ``TESS/*.parquet``.
 
 Dependencies: ``uv sync --extra jax`` (pyarrow, huggingface_hub, matplotlib).
 
 Example
 -------
     uv run --extra jax python data/TESS/visualize_tess.py
+    uv run --extra jax python data/TESS/visualize_tess.py --where engaging
+    uv run --extra jax python data/TESS/visualize_tess.py --cache-dir path/to/cache
+    # Default --out-dir is <…/TESS>/figures next to .cache (pool path when using --where engaging).
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ import shutil
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib
 
@@ -46,12 +50,16 @@ except ImportError:  # pragma: no cover
 REPO = "PhyTS-team/PhyTS-bench"
 HF_SPLIT_PATTERN = "TESS/split/*"
 _SCRIPT_DIR = Path(__file__).resolve().parent
-# Unpacked Hub tree: parquets live under `.cache/TESS/` (see download_tess.promote_split_parquets_to_tess_root).
-_DEFAULT_TESS_DIR = _SCRIPT_DIR / ".cache" / "TESS"
 
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
-from download_tess import promote_split_parquets_to_tess_root  # noqa: E402
+from download_tess import (  # noqa: E402
+    _DEFAULT_CACHE_PARENT,
+    _ENGAGING_CACHE_PARENT,
+    flatten_hub_split_into_tess_root,
+)
+
+_DEFAULT_TESS_DIR = _DEFAULT_CACHE_PARENT / "TESS"
 
 
 def tess_task_parquet_paths(data_dir: Path, task: str) -> list[Path]:
@@ -81,17 +89,17 @@ def hub_cache_parent_for_tess_dir(tess_dir: Path) -> Path:
         return r.parent
     if r.name == "split" and r.parent.name == "TESS":
         return r.parent.parent
-    return _SCRIPT_DIR / ".cache"
+    return _DEFAULT_CACHE_PARENT
 
 
 def ensure_tess_splits_downloaded(tess_dir: Path, *, hub_cache_parent: Path | None) -> Path:
-    """Ensure ``tess_dir`` contains promoted PhyTS parquet shards (download via Hub if needed)."""
+    """Ensure ``tess_dir`` contains flat ``TESS/*.parquet`` shards (download via Hub if needed)."""
     tess_dir = Path(tess_dir).resolve()
     marker = tess_dir / "tess_classification_train.parquet"
     if marker.is_file():
         return tess_dir
 
-    promote_split_parquets_to_tess_root(tess_dir)
+    flatten_hub_split_into_tess_root(tess_dir)
     if marker.is_file():
         return tess_dir
 
@@ -111,7 +119,7 @@ def ensure_tess_splits_downloaded(tess_dir: Path, *, hub_cache_parent: Path | No
         raise SystemExit(1) from e
 
     tess_hub = hf_root / "TESS"
-    promote_split_parquets_to_tess_root(tess_hub)
+    flatten_hub_split_into_tess_root(tess_hub)
 
     if tess_dir.resolve() != tess_hub.resolve():
         for p in tess_hub.glob("tess_*.parquet"):
@@ -536,13 +544,30 @@ def _render_time_coverage_dataset(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Write TESS exploration figures under --out-dir.")
     parser.add_argument(
+        "--where",
+        choices=("local", "engaging"),
+        default="local",
+        help="Preset when --data-dir is omitted: local → repo data/TESS/.cache/TESS; "
+        "engaging → ORCD data_engaging/TESS/.cache/TESS. Ignored if --data-dir is set; "
+        "overridden by --cache-dir when --data-dir is omitted.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help=(
+            "When --data-dir is omitted: use <cache-dir>/TESS (same cache root as "
+            "data/TESS/download_tess.py). Overrides --where."
+        ),
+    )
+    parser.add_argument(
         "--data-dir",
         type=Path,
-        default=_DEFAULT_TESS_DIR,
+        default=None,
         help=(
             "Directory with tess_classification_* / tess_regression_* train|val|test parquet "
-            "(mirrored from Hub TESS/split into TESS/). "
-            f"Default: {_DEFAULT_TESS_DIR}"
+            "(flat TESS/*.parquet layout). Default: from --cache-dir or --where "
+            f"(local default: {_DEFAULT_TESS_DIR})."
         ),
     )
     parser.add_argument(
@@ -552,20 +577,38 @@ def main() -> None:
         help=(
             "If shards are missing, snapshot_download uses this as Hugging Face local_dir. "
             "Default: parent of --data-dir when it ends with …/TESS, "
-            f"otherwise {str(_SCRIPT_DIR / '.cache')}."
+            f"otherwise {_DEFAULT_CACHE_PARENT}."
         ),
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=_SCRIPT_DIR / "figures",
-        help="Output directory for figures (default: data/TESS/figures)",
+        default=None,
+        help=(
+            "Output directory for figures. Default: "
+            "<parent of Hub cache root>/figures — same as data/TESS/figures locally "
+            "and …/data_engaging/TESS/figures when data lives under the ORCD preset."
+        ),
     )
     args = parser.parse_args()
+
+    if args.data_dir is not None:
+        data_dir = args.data_dir.resolve()
+    elif args.cache_dir is not None:
+        data_dir = Path(args.cache_dir).resolve() / "TESS"
+    elif args.where == "engaging":
+        data_dir = (_ENGAGING_CACHE_PARENT / "TESS").resolve()
+    else:
+        data_dir = _DEFAULT_TESS_DIR.resolve()
+
     tess_data = ensure_tess_splits_downloaded(
-        args.data_dir, hub_cache_parent=args.hub_cache_parent
+        data_dir, hub_cache_parent=args.hub_cache_parent
     )
-    out_dir = args.out_dir.resolve()
+    if args.out_dir is not None:
+        out_dir = args.out_dir.resolve()
+    else:
+        cache_root = hub_cache_parent_for_tess_dir(tess_data)
+        out_dir = (cache_root.parent / "figures").resolve()
 
     reg_paths = tess_task_parquet_paths(tess_data, "regression")
     cls_paths = tess_task_parquet_paths(tess_data, "classification")

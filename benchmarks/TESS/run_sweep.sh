@@ -7,8 +7,7 @@
 #            --project TimeSeriesPhysics
 #      → prints: sweep_id (e.g. abc123def)
 #
-#   2. Set WANDB_ENTITY if needed (defaults to your wandb default entity):
-#        export WANDB_ENTITY=your-entity
+#   2. Optional: export WANDB_ENTITY=... (else default workspace from wandb.Api())
 #
 #   3. Submit agents (from the Engaging login node):
 #        bash benchmarks/TESS/run_sweep.sh \
@@ -28,7 +27,7 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL=/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics
+POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
 DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
 CKPT_DIR=$POOL/checkpoints/sweeps
 WANDB_ROOT=$POOL/wandb
@@ -95,12 +94,9 @@ if [ ! -x "$PYTHON_EXE" ]; then
     echo "ERROR: $PYTHON_EXE missing. Run uv sync first."; exit 1
 fi
 
-# Resolve wandb entity (env var or wandb CLI default)
-ENTITY="${WANDB_ENTITY:-}"
-if [ -z "$ENTITY" ]; then
-    ENTITY=$(wandb whoami 2>/dev/null | grep "Currently" | awk '{print $NF}' || true)
-fi
-SWEEP_PATH="${ENTITY:+$ENTITY/}TimeSeriesPhysics/$SWEEP_ID"
+ENTITY="${WANDB_ENTITY:-$(WANDB_SILENT=true "$PYTHON_EXE" -c 'import wandb; print(wandb.Api().viewer.entity)' 2>/dev/null)}"
+[ -z "$ENTITY" ] && { echo >&2 'Set WANDB_ENTITY or run wandb login'; exit 1; }
+SWEEP_PATH="$ENTITY/TimeSeriesPhysics/$SWEEP_ID"
 
 # ── SLURM common ──────────────────────────────────────────────────────────────
 SBATCH_COMMON="
@@ -116,17 +112,22 @@ SBATCH_COMMON="
 # Classification + regression sweeps use the same TESS root (Hub shards mirrored
 # into .../.cache/TESS). Override via TESS_DATA_DIR if needed.
 BASE_ENV="module load cuda miniforge &&
-  export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8
-  OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1
-  export WANDB_DIR=$WANDB_ROOT
-  export TESS_DATA_DIR=$DATA_DIR
-  export TESS_CKPT_DIR=$CKPT_DIR"
+  export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
+    OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
+    WANDB_DIR=$WANDB_ROOT TESS_DATA_DIR=$DATA_DIR TESS_CKPT_DIR=$CKPT_DIR"
+
+# wandb sweep YAMLs invoke bare ``python``; ensure PATH resolves to repo venv
+# (otherwise ``module load ...`` may expose a base conda python missing deps).
+VENV_BIN_PATH="export PATH=\"$WORKDIR/.venv/bin:\$PATH\""
 
 if [ "$JAX_MODE" = true ]; then
-    ACTIVATE="$BASE_ENV && export XLA_PYTHON_CLIENT_MEM_FRACTION=0.7"
+    ACTIVATE="$BASE_ENV && $VENV_BIN_PATH && export XLA_PYTHON_CLIENT_MEM_FRACTION=0.7"
 else
-    ACTIVATE="$BASE_ENV"
+    ACTIVATE="$BASE_ENV && $VENV_BIN_PATH"
 fi
+
+# Log visible GPU/driver in SLURM .out files (helps verify allocation on Engaging).
+NVIDIA_SMI_PROBE="echo '=== nvidia-smi (job start) ===' && nvidia-smi && echo ''"
 
 RUN="srun --cpu-bind=none $PYTHON_EXE"
 
@@ -139,7 +140,7 @@ for i in $(seq 1 "$N_AGENTS"); do
       --job-name="tess_sweep_${MODEL_TYPE}_${i}" \
       --output="$LOGS/tess_sweep_${MODEL_TYPE}_%j.out" \
       --error="$LOGS/tess_sweep_${MODEL_TYPE}_%j.err" \
-      --wrap="$ACTIVATE && wandb agent $SWEEP_PATH")
+      --wrap="$ACTIVATE && $NVIDIA_SMI_PROBE && wandb agent $SWEEP_PATH")
     echo "  Agent $i → job $JOB"
 done
 

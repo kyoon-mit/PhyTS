@@ -3,7 +3,7 @@
 Dataset files (from HuggingFace PhyTS-team/PhyTS-bench):
   data/TESS/.cache/TESS/tess_regression.parquet       — 4,183 rows, target: frot
   data/TESS/.cache/TESS/tess_classification_*.parquet — Hub train/val/test shards (8 classes)
-    (``data/TESS/download_tess.py`` mirrors Hub ``TESS/split/*.parquet`` into ``TESS/``)
+    (``data/TESS/download_tess.py`` fetches Hub ``TESS/split/*.parquet`` and stores only ``TESS/*.parquet``)
 
 Preprocessing (shared):
   - z-score normalization per sample (median centering, std scaling)
@@ -23,6 +23,13 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 import lightning as L
+
+
+def _dl_extra_kwargs(num_workers: int) -> dict:
+    """DataLoader options that only apply when using background workers."""
+    if num_workers <= 0:
+        return {}
+    return {"persistent_workers": True, "prefetch_factor": 2}
 
 
 # ── Preprocessing helpers ────────────────────────────────────────────────────
@@ -168,16 +175,37 @@ class TESSRegressionDataModule(L.LightningDataModule):
             self.test = TESSRegressionDataset(hp.data_dir, "test", hp.seq_len, hp.seed)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.hparams.batch_size,
-                          shuffle=True, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.train,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.val,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.test,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def predict_dataloader(self):
         return self.test_dataloader()
@@ -270,16 +298,37 @@ class TESSReconstructionDataModule(L.LightningDataModule):
             self.test = TESSReconstructionDataset(split="test", **kw)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.hparams.batch_size,
-                          shuffle=True, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.train,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.val,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.test,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def predict_dataloader(self):
         return self.test_dataloader()
@@ -466,16 +515,37 @@ class TESSClassificationDataModule(L.LightningDataModule):
             self.test  = TESSClassificationDataset(hp.data_dir, "test",  hp.seq_len)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.hparams.batch_size,
-                          shuffle=True,  num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.train,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val,   batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.val,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test,  batch_size=self.hparams.batch_size,
-                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+        nw = self.hparams.num_workers
+        return DataLoader(
+            self.test,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=nw,
+            pin_memory=True,
+            **_dl_extra_kwargs(nw),
+        )
 
     def predict_dataloader(self):
         return self.test_dataloader()

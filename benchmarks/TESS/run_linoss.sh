@@ -36,7 +36,7 @@ set -e
 # Resolve repo root from this script so WORKDIR is correct no matter where sbatch was invoked from.
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL=/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics
+POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
 DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
 CKPT_DIR=$POOL/checkpoints
 RESULTS_DIR=$POOL/results
@@ -57,8 +57,8 @@ if [ ! -d "$WORKDIR/.venv" ]; then
     exit 1
 fi
 # Sync on the submit host: LinOSS + CUDA 13 JAX (``cu13``; Engaging default ``cuda`` = 13.1.0).
-# Set LINOSS_JAX_CUDA_EXTRA=cu12 or none for other stacks.  Compute jobs use .venv only.
-LINOSS_JAX_CUDA_EXTRA="cu13"
+# Set ``LINOSS_JAX_CUDA_EXTRA=cu12`` or ``none`` for other stacks.  Compute jobs use .venv only.
+LINOSS_JAX_CUDA_EXTRA="${LINOSS_JAX_CUDA_EXTRA:-cu13}"
 if command -v uv >/dev/null 2>&1; then
     if [ "$LINOSS_JAX_CUDA_EXTRA" = "none" ] || [ "$LINOSS_JAX_CUDA_EXTRA" = "cpu" ]; then
         (cd "$WORKDIR" && uv sync --extra jax) || { echo "ERROR: uv sync --extra jax failed"; exit 1; }
@@ -89,10 +89,12 @@ SBATCH_COMMON="
 # own CUDA; node driver must satisfy JAX’s CUDA-13 requirements.  XLA mem cap vs dataloader:
 # WANDB_DIR keeps wandb/lightning artifacts on the pool (avoids nested ./TimeSeriesPhysics trees on NFS).
 ACTIVATE="module load cuda miniforge &&
-  export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8
-  OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1
-  XLA_PYTHON_CLIENT_MEM_FRACTION=0.7
-  export WANDB_DIR=$WANDB_ROOT"
+  export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
+    OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.7 WANDB_DIR=$WANDB_ROOT"
+
+# Log visible GPU/driver in SLURM .out files (helps verify allocation on Engaging).
+NVIDIA_SMI_PROBE="echo '=== nvidia-smi (job start) ===' && nvidia-smi && echo ''"
 
 RUN="srun --cpu-bind=none $PYTHON_EXE"
 
@@ -102,7 +104,7 @@ RUN="srun --cpu-bind=none $PYTHON_EXE"
 #   --job-name=tess_linoss_reg \
 #   --output="$LOGS/tess_linoss_reg_%j.out" \
 #   --error="$LOGS/tess_linoss_reg_%j.err" \
-#   --wrap="$ACTIVATE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_regression && $RUN main.py fit \
+#   --wrap="$ACTIVATE && $NVIDIA_SMI_PROBE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_regression && $RUN main.py fit \
 #     --config configs/TESS/other/train_tess_linoss_regression.yaml \
 #     --data.init_args.data_dir $DATA_DIR")
 # echo "[1/3] LinOSS regression submitted: job $JOB_LINOSS_REG"
@@ -113,7 +115,7 @@ RUN="srun --cpu-bind=none $PYTHON_EXE"
 #   --job-name=tess_linoss_cls \
 #   --output="$LOGS/tess_linoss_cls_%j.out" \
 #   --error="$LOGS/tess_linoss_cls_%j.err" \
-#   --wrap="$ACTIVATE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_classification && $RUN main.py fit \
+#   --wrap="$ACTIVATE && $NVIDIA_SMI_PROBE && export TESS_LINOSS_CKPT_DIR=$CKPT_DIR/tess_linoss_classification && $RUN main.py fit \
 #     --config configs/TESS/other/train_tess_linoss_classification.yaml \
 #     --data.init_args.data_dir $DATA_DIR")
 # echo "[2/3] LinOSS classification submitted: job $JOB_LINOSS_CLS"
@@ -131,7 +133,7 @@ JOB_EVAL=$(sbatch --parsable \
   --job-name=tess_eval \
   --output="$LOGS/tess_eval_%j.out" \
   --error="$LOGS/tess_eval_%j.err" \
-  --wrap="$ACTIVATE && $RUN benchmarks/TESS/eval_pipeline.py \
+  --wrap="$ACTIVATE && $NVIDIA_SMI_PROBE && $RUN benchmarks/TESS/eval_pipeline.py \
     --data_dir $DATA_DIR \
     --ckpt_dir $CKPT_DIR \
     --out_dir  $RESULTS_DIR")

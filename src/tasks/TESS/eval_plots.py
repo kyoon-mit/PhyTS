@@ -146,7 +146,7 @@ def log_validation_plots_to_wandb(
     label_names: list[str] | None = None,
     model_name: str | None = None,
 ) -> None:
-    """If a wandb run is active, log validation figures (Media panel, step = epoch)."""
+    """If a wandb run is active, log validation figures aligned with Lightning's W&B charts."""
     try:
         import wandb
     except ImportError:
@@ -154,16 +154,19 @@ def log_validation_plots_to_wandb(
     if wandb.run is None:
         return
     tr = getattr(pl_module, "trainer", None)
-    if tr is not None and getattr(tr, "sanity_checking", False):
+    if tr is None or getattr(tr, "sanity_checking", False):
         return
 
     name = model_name or pl_module.__class__.__name__
-    step = int(pl_module.current_epoch)
+    # Match Lightning's WandbLogger: it logs metrics with keys like trainer/global_step
+    # and does not pass wandb.log(step=...). Raw wandb.log(..., step=epoch) fights wandb's
+    # internal step counter (train + val epoch logs advance it twice per epoch).
+    gs = int(tr.global_step)
 
     if kind == "regression":
         results = regression_results_dict(y_true, y_hat)
         fig = make_regression_figure(results, name)
-        wandb.log({"val/regression_plot": wandb.Image(fig)}, step=step)
+        wandb.log({"val/regression_plot": wandb.Image(fig), "trainer/global_step": gs})
         plt.close(fig)
         return
 
@@ -176,5 +179,5 @@ def log_validation_plots_to_wandb(
         names = [str(i) for i in range(n_cls)]
     results = classification_results_dict(y_true, y_hat, names)
     fig = make_classification_figure(results, name, names)
-    wandb.log({"val/classification_plot": wandb.Image(fig)}, step=step)
+    wandb.log({"val/classification_plot": wandb.Image(fig), "trainer/global_step": gs})
     plt.close(fig)
