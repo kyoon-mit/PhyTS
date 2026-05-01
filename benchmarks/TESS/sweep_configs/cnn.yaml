@@ -1,0 +1,45 @@
+# wandb sweep config — CNN (ConvAE encoder + pool + Linear head) classification
+#
+# Create sweep:
+#   wandb sweep benchmarks/TESS/sweep_configs/cnn.yaml --project TimeSeriesPhysics
+#
+# Then launch agents via:
+#   bash benchmarks/TESS/run_sweep.sh --model_type cnn --sweep_id <id>
+
+program: benchmarks/TESS/sweep_classification.py
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --model_type=cnn
+  - ${args}
+
+method: bayes
+metric:
+  name: val/acc
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 10
+  eta: 3
+
+parameters:
+  size:
+    values: [xs, sm, md, lg]
+  lr:
+    distribution: log_uniform_values
+    min: 0.00005
+    max: 0.01
+  # CNN has no dropout in the standard conv encoder; dropout is unused
+  # but kept for API consistency (set to 0.0 range)
+  dropout:
+    value: 0.0
+  weight_decay:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.01
+  batch_size:
+    values: [32, 64, 128]
+  seed:
+    values: [0, 1, 2]

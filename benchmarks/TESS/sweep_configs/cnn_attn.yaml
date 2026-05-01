@@ -1,0 +1,46 @@
+# wandb sweep config — CNN+Attention (ConvAttnAE encoder + bottleneck MHA + pool + Linear head)
+#
+# Create sweep:
+#   wandb sweep benchmarks/TESS/sweep_configs/cnn_attn.yaml --project TimeSeriesPhysics
+#
+# Then launch agents via:
+#   bash benchmarks/TESS/run_sweep.sh --model_type cnn_attn --sweep_id <id>
+#
+# Note: latent_channels must be divisible by num_heads=4.
+# Tier sizes: xs=24, sm=72, md=124, lg=192 (all divisible by 4).
+
+program: benchmarks/TESS/sweep_classification.py
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --model_type=cnn_attn
+  - ${args}
+
+method: bayes
+metric:
+  name: val/acc
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 10
+  eta: 3
+
+parameters:
+  size:
+    values: [xs, sm, md, lg]
+  lr:
+    distribution: log_uniform_values
+    min: 0.00005
+    max: 0.01
+  dropout:
+    value: 0.0
+  weight_decay:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.01
+  batch_size:
+    values: [32, 64, 128]
+  seed:
+    values: [0, 1, 2]

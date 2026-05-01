@@ -371,3 +371,158 @@ class TESSReconstructionDataModule(L.LightningDataModule):
 
     def predict_dataloader(self):
         return self.test_dataloader()
+
+
+# ── Pre-split Classification (HuggingFace TESS/split) ────────────────────────
+
+def _read_presplit_parquet(data_dir: Path, split: str, columns: list[str]):
+    """Read a pre-split parquet shard or file set for the given split.
+
+    Tries in order:
+      1. {data_dir}/{split}.parquet            (single file)
+      2. {data_dir}/validation.parquet         (alias, only when split=="val")
+      3. {data_dir}/{split}-*.parquet          (HuggingFace sharded naming)
+      4. {data_dir}/validation-*.parquet       (sharded alias for val)
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    candidates = [f"{split}.parquet"]
+    if split == "val":
+        candidates.append("validation.parquet")
+
+    for name in candidates:
+        p = data_dir / name
+        if p.exists():
+            return pq.read_table(p, columns=columns)
+
+    # Sharded files
+    globs = [f"{split}-*.parquet"]
+    if split == "val":
+        globs.append("validation-*.parquet")
+    for pattern in globs:
+        files = sorted(data_dir.glob(pattern))
+        if files:
+            return pa.concat_tables([pq.read_table(f, columns=columns) for f in files])
+
+    raise FileNotFoundError(
+        f"No parquet files for split='{split}' in {data_dir}. "
+        f"Expected one of: {[str(data_dir / c) for c in candidates]}"
+    )
+
+
+class TESSClassificationDataset(Dataset):
+    """TESS classification from HuggingFace pre-split parquet files.
+
+    Reads {data_dir}/{split}.parquet where split ∈ {"train", "val", "test"}.
+    "validation" is accepted as an alias for "val".
+    Columns required: flux (list<float>), label (string).
+
+    Preprocessing is identical to TESSClassificationDataset:
+    z-score normalization → crop/pad to seq_len → bool mask.
+
+    The label map is derived alphabetically from the current split's unique
+    labels; when split=="train" the map is written to {data_dir}/label_map.json
+    so subsequent val/test loads can verify consistency.
+    """
+
+    def __init__(self, data_dir: str, split: str, seq_len: int = 1100):
+        data_dir = Path(data_dir)
+        table = _read_presplit_parquet(data_dir, split, columns=["flux", "label"])
+
+        label_strings = table["label"].to_pylist()
+        unique_labels = sorted(set(label_strings))
+        label_map = {lbl: i for i, lbl in enumerate(unique_labels)}
+
+        label_map_path = data_dir / "label_map.json"
+        if split == "train":
+            with open(label_map_path, "w") as f:
+                json.dump(label_map, f, indent=2)
+        elif label_map_path.exists():
+            with open(label_map_path) as f:
+                saved = json.load(f)
+            if saved != label_map:
+                raise ValueError(
+                    f"Label map mismatch between saved ({saved}) and {split} ({label_map}). "
+                    "Load the train split first so label_map.json is written before val/test."
+                )
+
+        self.label_map = label_map
+        labels = np.array([label_map[l] for l in label_strings], dtype=np.int64)
+
+        flux_col = table["flux"]
+        n = len(labels)
+        fluxes = np.zeros((n, seq_len), dtype=np.float32)
+        masks = np.zeros((n, seq_len), dtype=bool)
+        for i in range(n):
+            raw = np.asarray(flux_col[i].as_py(), dtype=np.float64)
+            normed = _normalize_flux(raw)
+            fluxes[i], masks[i] = _pad_and_mask(normed, seq_len)
+
+        self._fluxes = fluxes
+        self._masks = masks
+        self._labels = labels
+
+    @property
+    def num_classes(self) -> int:
+        return len(self.label_map)
+
+    @property
+    def label_names(self) -> list[str]:
+        return [k for k, _ in sorted(self.label_map.items(), key=lambda x: x[1])]
+
+    def __len__(self) -> int:
+        return len(self._labels)
+
+    def __getitem__(self, i: int) -> tuple[Tensor, Tensor, Tensor]:
+        return (
+            torch.as_tensor(self._fluxes[i]),
+            torch.as_tensor(self._masks[i]),
+            torch.tensor(self._labels[i]),
+        )
+
+
+class TESSClassificationDataModule(L.LightningDataModule):
+    """LightningDataModule for pre-split TESS classification data.
+
+    Parameters
+    ----------
+    data_dir:
+        Directory containing train.parquet, val.parquet, test.parquet
+        (or HuggingFace sharded equivalents).  Set TESS_DATA_DIR env var
+        or pass explicitly.
+    """
+
+    def __init__(
+        self,
+        data_dir: str,
+        batch_size: int = 64,
+        num_workers: int = 0,
+        seq_len: int = 1100,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+    def setup(self, stage: str | None = None):
+        hp = self.hparams
+        if stage == "fit":
+            # Train first so label_map.json is written before val reads it.
+            self.train = TESSClassificationDataset(hp.data_dir, "train", hp.seq_len)
+            self.val   = TESSClassificationDataset(hp.data_dir, "val",   hp.seq_len)
+        elif stage in ("test", "predict"):
+            self.test  = TESSClassificationDataset(hp.data_dir, "test",  hp.seq_len)
+
+    def train_dataloader(self):
+        return DataLoader(self.train, batch_size=self.hparams.batch_size,
+                          shuffle=True,  num_workers=self.hparams.num_workers, pin_memory=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.val,   batch_size=self.hparams.batch_size,
+                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.test,  batch_size=self.hparams.batch_size,
+                          shuffle=False, num_workers=self.hparams.num_workers, pin_memory=True)
+
+    def predict_dataloader(self):
+        return self.test_dataloader()
