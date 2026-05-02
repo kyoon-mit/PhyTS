@@ -1,0 +1,16 @@
+{
+  "variant": "conv_abl_l",
+  "display_name": "ConvAE-L",
+  "category": "conv_ablation",
+  "model_type": "conv",
+  "arch": "n_layers=5, channels=64, kernel=9",
+  "timestamp": "2026-05-01 11:23:40",
+  "n_params": 190977,
+  "best_val_loss": 52.38155,
+  "best_val_epoch": 4,
+  "n_epochs": 5,
+  "final_train_loss": 48.41394,
+  "benchmark_score": null,
+  "ckpt_path": null,
+  "error": null
+}

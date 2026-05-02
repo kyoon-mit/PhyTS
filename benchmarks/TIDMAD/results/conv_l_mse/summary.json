@@ -1,0 +1,16 @@
+{
+  "variant": "conv_l_mse",
+  "display_name": "ConvAE-L (MSE)",
+  "category": "full_training",
+  "model_type": "conv",
+  "arch": "n_layers=5, channels=64, kernel=9, loss=MSE",
+  "timestamp": "2026-05-01 11:23:40",
+  "n_params": 190977,
+  "best_val_loss": 52.35584,
+  "best_val_epoch": 6,
+  "n_epochs": 17,
+  "final_train_loss": 48.26474,
+  "benchmark_score": -5.526178,
+  "ckpt_path": "/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/checkpoints/tidmad_conv_l/best.ckpt",
+  "error": null
+}
