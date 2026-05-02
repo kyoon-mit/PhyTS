@@ -8,12 +8,12 @@
 program: benchmarks/TESS/sweep_classification.py
 command:
   - ${env}
-  - python
+  - benchmarks/TESS/repo_python.sh
   - ${program}
   - --model_type=transformer
   - ${args}
 
-name: transformer
+name: cls_transformer
 method: bayes
 run_cap: 150
 metric:

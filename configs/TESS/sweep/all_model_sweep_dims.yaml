@@ -35,3 +35,16 @@ linoss:
   sm: 64
   md: 112
   lg: 170
+
+# dim_feedforward = 2 * d_model, nhead = 4. xs uses fewer layers for ~10K params (cls d_output≈8).
+transformer:
+  d_model:
+    xs: 24
+    sm: 56
+    md: 96
+    lg: 144
+  num_layers:
+    xs: 2
+    sm: 4
+    md: 4
+    lg: 4

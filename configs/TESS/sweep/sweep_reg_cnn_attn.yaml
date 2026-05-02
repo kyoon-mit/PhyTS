@@ -8,12 +8,12 @@
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
-  - python
+  - benchmarks/TESS/repo_python.sh
   - ${program}
   - --model_type=cnn_attn
   - ${args}
 
-name: cnn_attn
+name: reg_cnn_attn
 method: bayes
 run_cap: 150
 metric:

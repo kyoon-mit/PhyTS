@@ -45,6 +45,11 @@ class JAXModelCheckpoint(L.Callback):
     Analogous to ``lightning.pytorch.callbacks.ModelCheckpoint`` but for
     Equinox models, which cannot be saved via PyTorch's ``torch.save``.
 
+    Uses ``on_validation_end`` (not ``on_validation_epoch_end``): in Lightning
+    2.x, epoch-reduced validation metrics are committed after
+    ``on_validation_epoch_end``, so the built-in checkpoint and early-stop
+    callbacks read ``trainer.callback_metrics`` from ``on_validation_end``.
+
     If the environment variable ``TESS_LINOSS_CKPT_DIR`` is set, it overrides
     ``dirpath``. LightningCLI (jsonargparse) does not accept nested list
     callbacks on the command line (e.g. ``--trainer.callbacks[1]...``), so
@@ -69,11 +74,15 @@ class JAXModelCheckpoint(L.Callback):
         self.mode = mode
         self.best = float("inf") if mode == "min" else float("-inf")
 
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        current = trainer.logged_metrics.get(self.monitor)
+    def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        if trainer.sanity_checking:
+            return
+        current = trainer.callback_metrics.get(self.monitor)
+        if current is None:
+            current = trainer.logged_metrics.get(self.monitor)
         if current is None:
             return
-        current = float(current)
+        current = float(current.squeeze().item() if hasattr(current, "squeeze") else current)
         improved = current < self.best if self.mode == "min" else current > self.best
         if improved:
             self.best = current
@@ -160,16 +169,20 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         y_jax = super().forward(x)              # JAX array (B, 1)
         return jax_to_tensor(y_jax).squeeze(-1)  # PyTorch (B,)
 
+    def on_train_epoch_start(self):
+        self._train_preds: list = []
+        self._train_labels: list = []
+
     def _training_step_extra_logs(self, model_output: Array, y: Array) -> None:
-        """Log batch RMSE during training (matches ``TESSRegressionMSE`` train/rmse)."""
-        rmse = float(jnp.sqrt(jnp.mean((model_output.squeeze(-1) - y) ** 2)))
-        self.log(
-            "train/rmse",
-            rmse,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
-        )
+        import numpy as np
+        self._train_preds.append(np.asarray(model_output.squeeze(-1)))
+        self._train_labels.append(np.asarray(y))
+
+    def on_train_epoch_end(self):
+        import numpy as np
+        y_hat = np.concatenate(self._train_preds)
+        y = np.concatenate(self._train_labels)
+        self.log("train/rmse", float(np.sqrt(np.mean((y_hat - y) ** 2))))
 
     def on_validation_epoch_start(self):
         self._val_preds: list = []
@@ -181,7 +194,7 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         x, y = self._prepare_batch(batch)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
-        loss = jax.jit(self.loss_fn)(outputs, y)
+        loss = self._loss_fn_jit(outputs, y)
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self._val_preds.append(np.asarray(outputs.squeeze(-1)))
         self._val_labels.append(np.asarray(y))
@@ -211,7 +224,7 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         x, y = self._prepare_batch(batch_jax)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
-        loss = jax.jit(self.loss_fn)(outputs, y)
+        loss = self._loss_fn_jit(outputs, y)
         self.log("test/loss", loss.item(), on_step=False, on_epoch=True, sync_dist=True)
         self._test_preds.append(jax_to_tensor(outputs.squeeze(-1)).cpu().numpy())
         self._test_labels.append(jax_to_tensor(y).cpu().numpy())
@@ -295,17 +308,20 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         y_jax = super().forward(x)   # JAX (B, num_classes)
         return jax_to_tensor(y_jax)  # PyTorch (B, num_classes)
 
+    def on_train_epoch_start(self):
+        self._train_preds: list = []
+        self._train_labels: list = []
+
     def _training_step_extra_logs(self, model_output: Array, y: Array) -> None:
-        """Log batch accuracy during training (matches ``TESSClassificationCE`` train/acc)."""
-        preds = jnp.argmax(model_output, axis=-1)
-        acc = float(jnp.mean(preds == y))
-        self.log(
-            "train/acc",
-            acc,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
-        )
+        import numpy as np
+        self._train_preds.append(np.asarray(jnp.argmax(model_output, axis=-1)))
+        self._train_labels.append(np.asarray(y))
+
+    def on_train_epoch_end(self):
+        import numpy as np
+        preds = np.concatenate(self._train_preds)
+        labels = np.concatenate(self._train_labels)
+        self.log("train/acc", float(np.mean(preds == labels)))
 
     def on_validation_epoch_start(self):
         self._val_preds: list = []
@@ -317,7 +333,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         x, y = self._prepare_batch(batch)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
-        loss = jax.jit(self.loss_fn)(outputs, y)
+        loss = self._loss_fn_jit(outputs, y)
         preds = jnp.argmax(outputs, axis=-1)
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         self._val_preds.append(np.asarray(preds))
@@ -350,7 +366,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         x, y = self._prepare_batch(batch_jax)
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
-        loss = jax.jit(self.loss_fn)(outputs, y)
+        loss = self._loss_fn_jit(outputs, y)
         preds = jnp.argmax(outputs, axis=-1)
         self.log("test/loss", loss.item(), on_step=False, on_epoch=True, sync_dist=True)
         self._test_preds.append(jax_to_tensor(preds).cpu().numpy())

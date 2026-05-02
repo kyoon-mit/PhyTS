@@ -148,9 +148,10 @@ def main():
     )
     cfg = wandb.config
 
-    L.seed_everything(cfg.seed, workers=True)
-
     is_jax = cfg.model_type in JAX_MODELS
+
+    # JAX uses native threads; fork-based DataLoader workers + JAX risks deadlocks.
+    L.seed_everything(cfg.seed, workers=not is_jax)
 
     # ── Build model & task ────────────────────────────────────────────────────
     if cfg.model_type == "mlp":
@@ -204,7 +205,7 @@ def main():
     dm = TESSClassificationDataModule(
         data_dir=args.data_dir,
         batch_size=cfg.batch_size,
-        num_workers=args.num_workers,
+        num_workers=0 if is_jax else args.num_workers,
         seq_len=args.seq_len,
     )
 

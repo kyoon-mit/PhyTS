@@ -40,8 +40,8 @@ POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhys
 DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
 CKPT_DIR=$POOL/checkpoints
 RESULTS_DIR=$POOL/results
-WANDB_ROOT=$POOL/wandb
-LOGS=$WORKDIR/benchmarks/TESS/logs
+WANDB_ROOT=$POOL
+LOGS=$WORKDIR/logs/engaging_logs/train
 mkdir -p "$LOGS" "$CKPT_DIR" "$RESULTS_DIR" "$WANDB_ROOT"
 
 # Abort early if data hasn't been downloaded yet

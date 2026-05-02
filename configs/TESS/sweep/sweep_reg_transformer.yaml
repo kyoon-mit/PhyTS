@@ -8,12 +8,12 @@
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
-  - python
+  - benchmarks/TESS/repo_python.sh
   - ${program}
   - --model_type=transformer
   - ${args}
 
-name: transformer
+name: reg_transformer
 method: bayes
 run_cap: 150
 metric:
@@ -41,6 +41,6 @@ parameters:
     min: 0.000001
     max: 0.01
   batch_size:
-    values: [128, 256, 512]
+    values: [32, 64, 128]
   seed:
     values: [0, 1, 2]

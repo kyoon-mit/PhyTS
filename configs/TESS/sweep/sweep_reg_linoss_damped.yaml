@@ -11,12 +11,12 @@
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
-  - python
+  - benchmarks/TESS/repo_python.sh
   - ${program}
   - --model_type=linoss_damped
   - ${args}
 
-name: linoss_damped
+name: reg_linoss_damped
 method: bayes
 run_cap: 150
 metric:

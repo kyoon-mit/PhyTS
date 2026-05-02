@@ -11,12 +11,12 @@
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
-  - python
+  - benchmarks/TESS/repo_python.sh
   - ${program}
   - --model_type=linoss_imex
   - ${args}
 
-name: linoss_imex
+name: reg_linoss_imex
 method: bayes
 run_cap: 150
 metric:

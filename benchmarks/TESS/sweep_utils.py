@@ -4,8 +4,8 @@ Imported by sweep_classification.py and sweep_regression.py.  Both scripts
 support the same Torch + JAX model families at the same four size tiers; only the output
 dimension (num_classes vs 1), task class, and dataloader differ.
 
-Width per tier (xs/sm/md/lg) for most architectures comes from configs/TESS/sweep/all_model_sweep_dims.yaml.
-The transformer uses fixed ``(d_model, num_layers)`` tiers inline in ``build_transformer`` (see ``_TRANSFORMER_DIMS_AND_LAYERS``).
+Width per tier (xs/sm/md/lg), including transformer ``(d_model, num_layers)``, comes from
+configs/TESS/sweep/all_model_sweep_dims.yaml.
 """
 from __future__ import annotations
 
@@ -103,25 +103,40 @@ class ThrottledTQDMProgressBar(TQDMProgressBar):
         return False
 
 
-def _load_model_dim_tiers() -> tuple[dict[str, int], ...]:
-    """Load per-architecture hidden widths from configs/TESS/sweep/all_model_sweep_dims.yaml."""
+_TIERS_FROZEN = frozenset({"xs", "sm", "md", "lg"})
+
+
+def _tier_int_map(path: Path, mapping: dict, label: str) -> dict[str, int]:
+    """Require exactly xs/sm/md/lg keys and coerce values to ``int``."""
+    if set(mapping.keys()) != _TIERS_FROZEN:
+        raise ValueError(
+            f"{path}: section {label!r} must define exactly tiers {sorted(_TIERS_FROZEN)}, "
+            f"got {sorted(mapping)}"
+        )
+    return {t: int(mapping[t]) for t in mapping}
+
+
+def _load_model_dim_tiers() -> tuple[tuple[dict[str, int], ...], dict[str, tuple[int, int]]]:
+    """Load per-architecture tiers from configs/TESS/sweep/all_model_sweep_dims.yaml."""
     path = _SWEEP_DIMS
-    tiers = {"xs", "sm", "md", "lg"}
     with path.open(encoding="utf-8") as f:
         raw = yaml.safe_load(f)
     keys = ("mlp", "s4d", "cnn", "cnn_attn", "linoss")
-    out = []
-    for k in keys:
-        d = raw[k]
-        if set(d.keys()) != tiers:
-            raise ValueError(
-                f"{path}: section {k!r} must define exactly tiers {sorted(tiers)}, got {sorted(d)}"
-            )
-        out.append({t: int(d[t]) for t in tiers})
-    return tuple(out)
+    out = [_tier_int_map(path, raw[k], k) for k in keys]
+
+    xf = raw.get("transformer")
+    if xf is None:
+        raise ValueError(f"{path}: missing required section 'transformer'")
+    d_model = _tier_int_map(path, xf["d_model"], "transformer.d_model")
+    n_layers = _tier_int_map(path, xf["num_layers"], "transformer.num_layers")
+    xf_pairs = {t: (d_model[t], n_layers[t]) for t in _TIERS_FROZEN}
+    return tuple(out), xf_pairs
 
 
-_MLP_DIMS, _S4D_DIMS, _CNN_DIMS, _CATTN_DIMS, _LIN_DIMS = _load_model_dim_tiers()
+(
+    (_MLP_DIMS, _S4D_DIMS, _CNN_DIMS, _CATTN_DIMS, _LIN_DIMS),
+    _TRANSFORMER_DIMS_AND_LAYERS,
+) = _load_model_dim_tiers()
 
 
 # ── Model builders ────────────────────────────────────────────────────────────
@@ -223,17 +238,6 @@ def build_cnn_attn(
         attn_dropout=dropout,
         num_classes=d_output,
     )
-
-
-_TRANSFORMER_DIMS_AND_LAYERS: dict[str, tuple[int, int]] = {
-    # (d_model, num_layers); dim_feedforward=2*d_model, nhead=4. Targets ~10K / ~100K / ~300K / ~700K
-    # trainable params (cls d_output≈8); xs uses fewer layers so small width is attainable.
-    "xs": (24, 2),
-    "sm": (56, 4),
-    "md": (96, 4),
-    "lg": (144, 4),
-}
-
 
 def build_transformer(
     size: str,
