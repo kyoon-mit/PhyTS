@@ -1,10 +1,11 @@
 """TESS regression hyperparameter sweep script.
 
-Supports all six model types end-to-end predicting stellar rotation frequency (frot):
+Supports all Torch + JAX model types end-to-end predicting stellar rotation frequency (frot):
   mlp          — MLPRegressor (flattened seq → MLP)
   s4d          — S4Model (S4D stack + mean pool)
   cnn          — ConvAE (encoder + global avg pool + Linear(C, 1))
   cnn_attn     — ConvAttnAE (encoder + bottleneck MHA + pool + Linear(C, 1))
+  transformer  — TransformerClassifier (encoder + masked mean pool + head)
   linoss_imex  — LinOSS with IMEX discretization (JAX/Equinox)
   linoss_damped — LinOSS with damped_IMEX discretization (JAX/Equinox)
 
@@ -58,6 +59,7 @@ from sweep_utils import (
     build_linoss,
     build_mlp,
     build_s4d,
+    build_transformer,
     collect_benchmark_param_counters,
     dump_sweep_run_config,
     tess_sweep_artifact_dir,
@@ -154,6 +156,10 @@ def main():
 
     elif cfg.model_type == "cnn_attn":
         model = build_cnn_attn(cfg.size, d_output=1, dropout=cfg.dropout)
+        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "transformer":
+        model = build_transformer(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
         task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "linoss_imex":

@@ -25,9 +25,9 @@ mirrored into `data/TESS/.cache/TESS/`) instead of performing a random
 |------|---------|
 | `benchmarks/TESS/sweep_classification.py` | Unified sweep training script (classification) |
 | `benchmarks/TESS/sweep_regression.py` | Unified sweep training script (regression) |
-| `configs/TESS/sweep/sweep_cls_*.yaml` | wandb sweep configs for classification (one per architecture) |
+| `configs/TESS/sweep/sweep_cls_*.yaml` | wandb sweep configs for classification (one file per architecture) |
 | `configs/TESS/sweep/sweep_reg_*.yaml` | wandb sweep configs for regression |
-| `configs/TESS/sweep/all_model_sweep_dims.yaml` | Hidden widths per size tier (xs/sm/md/lg), read by `sweep_utils.py` |
+| `configs/TESS/sweep/all_model_sweep_dims.yaml` | Hidden widths per tier (xs/sm/md/lg) for MLP/S4D/CNN/ConvAttn/LinOSS; transformers use inlined tiers in `sweep_utils.build_transformer` |
 | `benchmarks/TESS/sweep_aggregate_utils.py` | Helpers for aggregated sweep summaries |
 | `benchmarks/TESS/analyze_classification_sweep.py` | Merge N classification sweeps → heatmaps + CSV/JSON/HTML |
 | `benchmarks/TESS/analyze_regression_sweep.py` | Merge N regression sweeps → heatmaps + CSV/JSON/HTML |
@@ -64,14 +64,14 @@ wandb sweep configs/TESS/sweep/sweep_cls_mlp.yaml --project TimeSeriesPhysics
 # → prints: sweep ID, e.g. abc123def
 ```
 
-Each sweep YAML sets **`run_cap: 150`**, so a **single** sweep stops after wandb schedules 200 trials (Hyperband may still prune many of those runs early).
+Each sweep YAML sets **`run_cap: 150`**, so a **single** sweep schedules at most **150** trials (Hyperband may still prune many of those runs early).
 
-**Important:** wandb budgets are **per sweep**, not pooled across architectures. Running all twelve classifier `sweep_cls_*` and regressors `sweep_reg_*` to completion yields **up to 12 × 200** trials unless you pause sweeps sooner. To approximate **200 trials shared across \(N\) sweeps**, divide manually (for example **`run_cap: 16`** on every file when \(N = 12\) gives 192; bump a subset to **17** to hit 200 exactly) **before** calling `wandb sweep`, or shorten the list of architectures you tune.
+**Important:** wandb budgets are **per sweep**, not pooled across architectures. Running every classifier **`sweep_cls_*`** plus every **`sweep_reg_*`** (seven architectures each × two tasks → **fourteen** YAMLs) would allow **up to 14 × 150** trials unless you pause sweeps sooner. To approximate **N** trials shared evenly across **`M`** sweep files, divide manually (**`run_cap: floor(N/M)`**) **before** calling `wandb sweep`, or shorten the list of architectures you tune.
 
 ### Step 2 — Launch agents on Engaging
 
 ```bash
-# PyTorch models (mlp, s4d, cnn, cnn_attn):
+# PyTorch models (mlp, s4d, cnn, cnn_attn, transformer):
 bash benchmarks/TESS/run_sweep.sh \
     --model_type mlp \
     --sweep_id abc123def \
@@ -97,7 +97,7 @@ squeue -u $USER
 
 ### Step 4 — Merge all sweep IDs (classification or regression)
 
-After every architecture sweep you care about reports **Finished** with test metrics logged, pull them in one shot (from a machine that can reach the wandb API). Pass **every** sweep id printed by ``wandb sweep`` for that task (classification vs regression separately):
+After every architecture sweep you care about reports **Finished** with test metrics logged, pull them in one shot (from a machine that can reach the wandb API). Pass **every** sweep id printed by ``wandb sweep`` for that task (classification vs regression separately)—there are seven classification and seven regression sweep YAMLs (``mlp``, ``s4d``, ``cnn``, ``cnn_attn``, ``transformer``, ``linoss_imex``, ``linoss_damped``):
 
 ```bash
 # Classification — repeat --sweep_id or use --from_file sweep_ids_cls.txt:
@@ -194,6 +194,23 @@ inverse: C = round((-31 + sqrt(961 + 76*(target − 8))) / 38) → nearest multi
 | md   | 124 | 295,996 |
 | lg   | 192 | 706,376 |
 
+### Transformer (`TransformerClassifier`, `benchmarks/TESS/sweep_utils.build_transformer`)
+
+Sweep tiers bundle `(d_model, num_layers)`; `nhead=4`; `dim_feedforward=2*d_model`; dropout is tuned on encoder layers and the classifier/regressor head (`dropout` in configs).
+
+Sinusoidal positional encodings register non-persistent buffers, so they are omitted from `.parameters()`; `param_count_torch_nn` logged by sweep scripts matches the table below.
+
+| size | `d_model` | `num_layers` | params (cls ``d_output=8``) |
+|------|-----------|--------------|----------------------------|
+| xs   |        24 |            2 | **10,640** |
+| sm   |        56 |            4 | **106,688** |
+| md   |        96 |            4 | **309,608** |
+| lg   |       144 |            4 | **692,504** |
+
+Regression (``d_output=1``) at the same architecture: **10,465 · 106,289 · 308,929 · 691,489**.
+
+The **xs** tier uses two encoder layers; with **`num_layers=4`**, widths small enough for the usual ~10K budget would skew much larger (often near ~79K PyTorch-only parameters alone), so depth is shortened for that tier.
+
 ### LinOSS-IMEX (`LinOSS`, `num_blocks=4`, `ssm_size=H`)
 ```
 params = 24*H² + 30*H + H*d_output + d_output    (ssm_size = H; sweeps use tied H)
@@ -223,26 +240,25 @@ Same H column as IMEX; damped adds ``+4H`` (e.g. cls: 10,448 · 101,000 · 305,7
 | Parameter | Type | Range |
 |-----------|------|-------|
 | `size` | categorical | xs, sm, md, lg |
-| `lr` | log-uniform | 5×10⁻⁵ – 2×10⁻² (MLP, S4D, CNN, CNN+Attn); 5×10⁻⁵ – 10⁻² (LinOSS) |
-| `dropout` | uniform | 0.0 – 0.5 (MLP/S4D); fixed 0.0 (CNN); fixed 0.05 (LinOSS) |
+| `lr` | log-uniform | 5×10⁻⁵ – 2×10⁻² (MLP, S4D, CNN, CNN+Attn, Transformer); 5×10⁻⁵ – 10⁻² (LinOSS) |
+| `dropout` | uniform | 0 – 0.5 (`sweep_cls_*.yaml` / `sweep_reg_*.yaml` for PyTorch architectures and LinOSS) |
 | `weight_decay` | log-uniform | 10⁻⁶ – 10⁻² |
 | `batch_size` | categorical | 128, 256, 512 |
 | `seed` | categorical | 0, 1, 2 |
 
 Search method: **Bayesian optimization** (`method: bayes`), optimising `val/balanced_acc` (classification) or `val/r2` (regression).
-Early termination: **Hyperband** (`min_iter=15`, `eta=3`) — underperforming runs
-are stopped after epoch 15, 45, or 135 so compute is focused on promising trials.
+Early termination: **Hyperband** with **`min_iter: 20`** and **`eta: 3`** (`early_terminate` blocks in each `configs/TESS/sweep/sweep_*_*.yaml`).
 
 ---
 
 ## Checkpoints
 
-Each trial saves its best checkpoint to:
+Each trial saves its best checkpoint under the task subdirectory (matches `benchmarks/TESS/sweep_{classification|regression}.py`):
 ```
-$TESS_CKPT_DIR/<model_type>/<wandb_run_id>/
+<$TESS_CKPT_DIR-or-default>/<classification|regression>/<model_type>/<wandb_run_id>/
   best.ckpt   (PyTorch models)
   best.eqx    (LinOSS)
 ```
 
-`TESS_CKPT_DIR` defaults to `checkpoints/sweeps/classification` relative to the
-repo root, but is overridden on Engaging by `run_sweep.sh`.
+CLI default for the base directory is `checkpoints/sweeps` (when `TESS_CKPT_DIR` is unset): e.g.
+`checkpoints/sweeps/classification/mlp/<run_id>/best.ckpt`. On Engaging, `benchmarks/TESS/run_sweep.sh` sets `TESS_CKPT_DIR` under the shared pool (`$TESS_POOL_ROOT/checkpoints/sweeps` by convention).

@@ -17,6 +17,7 @@ MODEL_ORDER: tuple[str, ...] = (
     "s4d",
     "cnn",
     "cnn_attn",
+    "transformer",
     "linoss_imex",
     "linoss_damped",
 )

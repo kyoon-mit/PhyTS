@@ -1,10 +1,11 @@
 """Shared model builders and argument helpers for TESS sweep scripts.
 
 Imported by sweep_classification.py and sweep_regression.py.  Both scripts
-support the same six model types at the same four size tiers; only the output
+support the same Torch + JAX model families at the same four size tiers; only the output
 dimension (num_classes vs 1), task class, and dataloader differ.
 
-Width per tier (xs/sm/md/lg) is loaded from configs/TESS/sweep/all_model_sweep_dims.yaml.
+Width per tier (xs/sm/md/lg) for most architectures comes from configs/TESS/sweep/all_model_sweep_dims.yaml.
+The transformer uses fixed ``(d_model, num_layers)`` tiers inline in ``build_transformer`` (see ``_TRANSFORMER_DIMS_AND_LAYERS``).
 """
 from __future__ import annotations
 
@@ -28,8 +29,9 @@ if str(_REPO_ROOT / "src") not in sys.path:
 from models.mlp import MLPRegressor
 from models.conv_ae import ConvAE
 from models.conv_attn_ae import ConvAttnAE
+from models.transformer import TransformerClassifier
 
-TORCH_MODELS = {"mlp", "s4d", "cnn", "cnn_attn"}
+TORCH_MODELS = {"mlp", "s4d", "cnn", "cnn_attn", "transformer"}
 JAX_MODELS   = {"linoss_imex", "linoss_damped"}
 ALL_MODELS   = TORCH_MODELS | JAX_MODELS
 
@@ -220,6 +222,55 @@ def build_cnn_attn(
         dropout=dropout,
         attn_dropout=dropout,
         num_classes=d_output,
+    )
+
+
+_TRANSFORMER_DIMS_AND_LAYERS: dict[str, tuple[int, int]] = {
+    # (d_model, num_layers); dim_feedforward=2*d_model, nhead=4. Targets ~10K / ~100K / ~300K / ~700K
+    # trainable params (cls d_output≈8); xs uses fewer layers so small width is attainable.
+    "xs": (24, 2),
+    "sm": (56, 4),
+    "md": (96, 4),
+    "lg": (144, 4),
+}
+
+
+def build_transformer(
+    size: str,
+    d_output: int,
+    seq_len: int,
+    dropout: float,
+) -> nn.Module:
+    """Transformer encoder + masked mean pool + head; ``TransformerClassifier``.
+
+    Tiers bundle ``(d_model, num_layers)``.  We fix ``nhead=4`` and ``dim_feedforward = 2 * d_model``
+    (matching ``configs/TESS/other/train_tess_transformer_classification.yaml`` defaults
+    scaled per tier).
+
+    Approximate ``nn.Parameter`` totals (positional encodings use buffers excluded from counts),
+    classification ``d_output=8``: xs ~10.6k, sm ~107k, md ~310k, lg ~693k.
+
+    Parameters
+    ----------
+    size : str
+        Tier key ``xs`` / ``sm`` / ``md`` / ``lg``.
+    d_output : int
+        Number of classes or 1 for regression.
+    seq_len : int
+        Maximum sequence length (positional table size).
+    dropout : float
+        Dropout on encoder layers and classifier head submodules.
+    """
+    d_model, num_layers = _TRANSFORMER_DIMS_AND_LAYERS[size]
+    ff = 2 * d_model
+    return TransformerClassifier(
+        seq_len=seq_len,
+        d_output=d_output,
+        d_model=d_model,
+        nhead=4,
+        num_layers=num_layers,
+        dim_feedforward=ff,
+        dropout=dropout,
     )
 
 

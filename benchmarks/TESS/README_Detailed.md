@@ -1,6 +1,6 @@
 # TESS Benchmarking Pipeline
 
-This pipeline benchmarks MLP and S4D models on two supervised learning tasks derived from TESS variable star lightcurves: predicting stellar rotation frequency (regression) and predicting variability class (classification). It also includes a self-supervised reconstruction pretraining stage that allows frozen-backbone transfer learning.
+This pipeline benchmarks several sequence architectures—see `README.md` for the config table—and includes a self-supervised reconstruction pretraining stage that allows frozen **S4D** backbone + MLP-head transfer learning. Hyperparameter wandb sweeps over **all** Torch/JAX runners are documented separately in **`README_Sweep.md`**.
 
 ---
 

@@ -1,10 +1,11 @@
 """TESS classification hyperparameter sweep script.
 
-Supports all six model types end-to-end (no pretraining):
+Supports all Torch + JAX model types end-to-end (no pretraining):
   mlp          — MLPRegressor (flattened seq → MLP)
   s4d          — S4Model (S4D stack + mean pool)
   cnn          — ConvAE with num_classes (encoder + global avg pool + Linear head)
   cnn_attn     — ConvAttnAE with num_classes (encoder + bottleneck MHA + pool + Linear head)
+  transformer  — TransformerClassifier (encoder + masked mean pool + head)
   linoss_imex  — LinOSS with IMEX discretization (JAX/Equinox)
   linoss_damped — LinOSS with damped_IMEX discretization (JAX/Equinox)
 
@@ -59,6 +60,7 @@ from sweep_utils import (
     build_linoss,
     build_mlp,
     build_s4d,
+    build_transformer,
     collect_benchmark_param_counters,
     dump_sweep_run_config,
     tess_sweep_artifact_dir,
@@ -165,6 +167,12 @@ def main():
 
     elif cfg.model_type == "cnn_attn":
         model = build_cnn_attn(cfg.size, args.num_classes, dropout=cfg.dropout)
+        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "transformer":
+        model = build_transformer(
+            cfg.size, args.num_classes, args.seq_len, cfg.dropout,
+        )
         task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "linoss_imex":

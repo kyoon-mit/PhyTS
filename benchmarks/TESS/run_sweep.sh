@@ -52,7 +52,7 @@ done
 
 if [ -z "$MODEL_TYPE" ] || [ -z "$SWEEP_ID" ]; then
     echo "Usage: $0 --model_type <type> --sweep_id <id> [--n_agents N] [--jax]"
-    echo "  model_type: mlp | s4d | cnn | cnn_attn | linoss_imex | linoss_damped"
+    echo "  model_type: mlp | s4d | cnn | cnn_attn | transformer | linoss_imex | linoss_damped"
     echo "  --jax: required for linoss_imex / linoss_damped (set automatically)"
     echo ""
     echo "Sweep config paths (pass to 'wandb sweep' once to create the sweep):"

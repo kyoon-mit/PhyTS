@@ -1,6 +1,8 @@
 # TESS Benchmarking Pipeline
 
-Benchmarks MLP and S4D models on two TESS variable-star tasks:
+Benchmarks sequence models end-to-end on two TESS variable-star tasks (MLP, S4D,
+CNN, Conv+Attention, Transformer, and JAX LinOSS; see configs and
+`benchmarks/TESS/README_Sweep.md` for multi-architecture wandb sweeps):
 - **Regression**: predict stellar rotation frequency (`frot`) from flux
 - **Classification**: predict variability class (8 labels) from flux
 
@@ -30,10 +32,15 @@ All files below are under `configs/TESS/other/`.
 | `train_tess_s4d_reconstruction.yaml` | S4ModelSeq2Seq | Denoising pretraining (run first) |
 | `train_tess_mlp_regression.yaml` | MLP | End-to-end regression |
 | `train_tess_s4d_regression.yaml` | S4D | End-to-end regression |
+| `train_tess_linoss_regression.yaml` | LinOSS (JAX) | End-to-end regression (`uv sync --extra jax`) |
+| `train_tess_transformer_classification.yaml` | Transformer | End-to-end classification |
 | `train_tess_s4d_head_regression.yaml` | Frozen S4D + MLP head | Regression (requires reconstruction checkpoint) |
 | `train_tess_mlp_classification.yaml` | MLP | End-to-end classification |
 | `train_tess_s4d_classification.yaml` | S4D | End-to-end classification |
+| `train_tess_linoss_classification.yaml` | LinOSS (JAX) | End-to-end classification (`uv sync --extra jax`) |
 | `train_tess_s4d_head_classification.yaml` | Frozen S4D + MLP head | Classification (requires reconstruction checkpoint) |
+
+CNN/ConvAttn and additional LinOSS/transformer widths are exercised via **`configs/TESS/sweep/sweep_{cls|reg}_*.yaml`** and **`benchmarks/TESS/sweep_{classification|regression}.py`** (wandb sweep), not standalone `train_*` YAMLs here.
 
 ### Data preprocessing
 
@@ -148,6 +155,6 @@ Both scripts derive the repo root from their own location (`dirname "$0"/../..`)
 
 ## Notes
 
-- **LinOSS** (JAX) is not included here — it requires the separate JAX training infrastructure and has no seq2seq mode, so it cannot use the frozen-backbone approach.
+- **LinOSS** uses the JAX/Equinox path (`train_tess_linoss_*.yaml` or sweeps): it does not share the Lightning S4 seq2seq object, so it cannot use the **frozen S4 backbone + head** setup based on reconstruction pretraining (`train_tess_s4d_*_head_*`).
 - The reconstruction pretraining adds synthetic Gaussian noise (`noise_std=0.3`) to the clean flux — the original flux serves as the reconstruction target.
 - Frozen backbone: the S4D backbone is loaded and its weights are locked; only the MLP head is trained. Lightning's `model.train()` call is overridden to keep the backbone in eval mode (preserving dropout-off behavior) throughout head training.
