@@ -13,6 +13,7 @@ command:
   - --model_type=transformer
   - ${args}
 
+name: transformer
 method: bayes
 run_cap: 150
 metric:

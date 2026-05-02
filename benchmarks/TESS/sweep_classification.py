@@ -236,6 +236,21 @@ def main():
     )
 
     trainer.fit(task, datamodule=dm)
+
+    if is_jax:
+        # Restore the best JAX checkpoint before testing so test metrics match
+        # the best-val-loss model, not the final training epoch.
+        from models.utils.jax.load_model import load_model as jax_load_model
+        best_path = ckpt_dir / "best.eqx"
+        if best_path.exists():
+            task.jax_model, task.jax_model_state = jax_load_model(
+                path=str(best_path),
+                model=task.jax_model,
+                model_state=task.jax_model_state,
+            )
+        else:
+            print(f"WARNING: best JAX checkpoint not found at {best_path}; testing on final epoch weights.")
+
     trainer.test(task, datamodule=dm, ckpt_path="best" if not is_jax else None)
 
     wandb.finish()

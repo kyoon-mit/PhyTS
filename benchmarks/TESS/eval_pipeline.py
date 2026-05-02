@@ -152,10 +152,16 @@ def evaluate_linoss_regression(task, dataloader) -> dict:
     JAX manages its own device allocation, so the tensor returned by
     task.forward() may live on GPU.  We call .cpu() before .numpy() just
     as the PyTorch evaluate_regression helper does.
+
+    The mask is appended as a second channel so the LinOSS model uses
+    masked mean pooling (excluding zero-padded positions).
     """
+    import torch
     y_true_list, y_hat_list = [], []
     for flux, mask, frot in dataloader:
-        y_hat = task(flux.unsqueeze(-1))       # PyTorch (B,) — possibly GPU
+        # (B, L, 1) signal + (B, L, 1) mask → (B, L, 2)
+        x = torch.cat([flux.unsqueeze(-1), mask.float().unsqueeze(-1)], dim=-1)
+        y_hat = task(x)                        # PyTorch (B,) — possibly GPU
         y_true_list.append(frot)
         y_hat_list.append(y_hat.detach().cpu())
     y_true = torch.cat(y_true_list).numpy()
@@ -172,9 +178,11 @@ def evaluate_linoss_regression(task, dataloader) -> dict:
 
 def evaluate_linoss_classification(task, dataloader, label_names: list[str]) -> dict:
     """Evaluate a TESSLinOSSClassificationCE task."""
+    import torch
     y_true_list, y_hat_list, probs_list = [], [], []
     for flux, mask, label in dataloader:
-        logits = task(flux.unsqueeze(-1))      # PyTorch (B, num_classes)
+        x = torch.cat([flux.unsqueeze(-1), mask.float().unsqueeze(-1)], dim=-1)
+        logits = task(x)                       # PyTorch (B, num_classes)
         probs = torch.softmax(logits, dim=-1)
         y_hat = logits.argmax(dim=-1)
         y_true_list.append(label)
@@ -217,9 +225,10 @@ def evaluate_regression(
     y_true_list, y_hat_list = [], []
     for flux, mask, frot in dataloader:
         flux = flux.to(device)
+        mask_dev = mask.to(device)
         if add_ch:
             flux = flux.unsqueeze(-1)
-        y_hat = task(flux).squeeze(-1).cpu()
+        y_hat = task(flux, mask=mask_dev).squeeze(-1).cpu()
         y_true_list.append(frot)
         y_hat_list.append(y_hat)
     y_true = torch.cat(y_true_list).numpy()
@@ -260,9 +269,10 @@ def evaluate_classification(
     y_true_list, y_hat_list, probs_list = [], [], []
     for flux, mask, label in dataloader:
         flux = flux.to(device)
+        mask_dev = mask.to(device)
         if add_ch:
             flux = flux.unsqueeze(-1)
-        logits = task(flux).cpu()
+        logits = task(flux, mask=mask_dev).cpu()
         probs = torch.softmax(logits, dim=-1)
         y_hat = logits.argmax(dim=-1)
         y_true_list.append(label)

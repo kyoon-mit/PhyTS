@@ -17,6 +17,9 @@ import numpy as np
 if TYPE_CHECKING:
     import lightning as L
 
+# Log validation figures to wandb only when (epoch index) % N == 0 — i.e. after epochs 0, 10, 20, …
+VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS = 10
+
 
 def regression_results_dict(y_true: np.ndarray, y_hat: np.ndarray) -> dict:
     """Build the results dict used by :func:`make_regression_figure` (matches eval pipeline)."""
@@ -146,7 +149,11 @@ def log_validation_plots_to_wandb(
     label_names: list[str] | None = None,
     model_name: str | None = None,
 ) -> None:
-    """If a wandb run is active, log validation figures aligned with Lightning's W&B charts."""
+    """If a wandb run is active, log validation figures aligned with Lightning's W&B charts.
+
+    Figures are uploaded only every :attr:`VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS` validation
+    (after epochs 0, 10, 20, … when that constant is 10).
+    """
     try:
         import wandb
     except ImportError:
@@ -155,6 +162,10 @@ def log_validation_plots_to_wandb(
         return
     tr = getattr(pl_module, "trainer", None)
     if tr is None or getattr(tr, "sanity_checking", False):
+        return
+
+    ep = int(getattr(pl_module, "current_epoch", getattr(tr, "current_epoch", 0)))
+    if ep % VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS != 0:
         return
 
     name = model_name or pl_module.__class__.__name__

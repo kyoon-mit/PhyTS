@@ -8,20 +8,20 @@ Batch convention (from TESSClassificationDataset.__getitem__):
     mask   (B, L)   — True where cadence is valid
     label  (B,)     — int64 class index
 
-Any model with signature forward(x: (B, L, 1)) -> (B, num_classes) works as drop-in.
+Any model with signature forward(x: (B, L, 1), mask: (B, L)) -> (B, num_classes) works as drop-in.
 
 Usage (LightningCLI YAML):
     model:
       class_path: tasks.TESS.tess_classification.TESSClassificationCE
       init_args:
-        num_classes: 7          # update from label_map.json
+        num_classes: 8
         lr: 1.0e-3
         lr_decay: 0.99
         model:
           class_path: models.mlp.MLPRegressor
           init_args:
             seq_len: 1100
-            d_output: 7         # must equal num_classes
+            d_output: 8         # must equal num_classes
 """
 
 import importlib
@@ -79,22 +79,31 @@ class TESSClassificationCE(L.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         attach_scalar_hyperparams(self, torch_model_parameter_hyper_dict(model))
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
         # x: (B, L) → (B, L, 1) → model → (B, num_classes)
-        return self.model(x.unsqueeze(-1))
+        return self.model(x.unsqueeze(-1), mask=mask)
 
     def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
         flux, mask, label = batch
-        logits = self(flux)
+        logits = self(flux, mask)
         loss = self.criterion(logits, label)
         return loss, logits.argmax(dim=-1), label
 
+    def on_train_epoch_start(self):
+        self._train_preds: list[Tensor] = []
+        self._train_labels: list[Tensor] = []
+
     def training_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", acc, on_step=False, on_epoch=True)
+        self._train_preds.append(preds.cpu())
+        self._train_labels.append(labels.cpu())
         return loss
+
+    def on_train_epoch_end(self):
+        preds = torch.cat(self._train_preds)
+        labels = torch.cat(self._train_labels)
+        self.log("train/acc", (preds == labels).float().mean())
 
     def on_validation_epoch_start(self):
         self._val_preds: list[Tensor] = []
@@ -102,15 +111,14 @@ class TESSClassificationCE(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", acc, on_step=False, on_epoch=True)
         self._val_preds.append(preds.cpu())
         self._val_labels.append(labels.cpu())
 
     def on_validation_epoch_end(self):
         preds  = torch.cat(self._val_preds)
         labels = torch.cat(self._val_labels)
+        self.log("val/acc", (preds == labels).float().mean())
         per_class = [
             (preds[labels == c] == c).float().mean().item()
             for c in range(self.num_classes) if (labels == c).any()
@@ -130,19 +138,24 @@ class TESSClassificationCE(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/acc", acc, on_step=False, on_epoch=True)
         self._test_preds.append(preds.cpu())
         self._test_labels.append(labels.cpu())
 
     def on_test_epoch_end(self):
         preds = torch.cat(self._test_preds)
         labels = torch.cat(self._test_labels)
+        self.log("test/acc", (preds == labels).float().mean())
+        per_class = [
+            (preds[labels == c] == c).float().mean().item()
+            for c in range(self.num_classes) if (labels == c).any()
+        ]
+        if per_class:
+            self.log("test/balanced_acc", sum(per_class) / len(per_class))
         for c in range(self.num_classes):
-            mask = labels == c
-            if mask.sum() > 0:
-                self.log(f"test/acc_class_{c}", (preds[mask] == c).float().mean())
+            mask_c = labels == c
+            if mask_c.sum() > 0:
+                self.log(f"test/acc_class_{c}", (preds[mask_c] == c).float().mean())
 
     def configure_optimizers(self):
         opt = optim.AdamW(self.parameters(), lr=self.lr)
@@ -166,14 +179,14 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
           init_args:
             backbone_ckpt: checkpoints/tess_s4d_reconstruction/best.ckpt
             backbone_cfg: configs/TESS/other/train_tess_s4d_reconstruction.yaml
-            num_classes: 7
+            num_classes: 8
             lr: 1.0e-3
             lr_decay: 0.99
             head:
               class_path: models.mlp.MLPRegressor
               init_args:
                 seq_len: 1100
-                d_output: 7
+                d_output: 8
     """
 
     def __init__(
@@ -211,24 +224,35 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
         self.backbone.eval()
         return self
 
-    def forward(self, x: Tensor) -> Tensor:
-        # x: (B, L) → backbone → (B, L, 1) → head → (B, num_classes)
+    def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
+        # x: (B, L) → backbone → (B, L, 1) → (optionally mask) → head → (B, num_classes)
         with torch.no_grad():
             reconstructed = self.backbone(x.unsqueeze(-1))  # (B, L, 1)
-        return self.head(reconstructed)
+        if mask is not None:
+            reconstructed = reconstructed * mask.unsqueeze(-1).float()
+        return self.head(reconstructed, mask=mask)
 
     def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
         flux, mask, label = batch
-        logits = self(flux)
+        logits = self(flux, mask)
         loss = self.criterion(logits, label)
         return loss, logits.argmax(dim=-1), label
 
+    def on_train_epoch_start(self):
+        self._train_preds: list[Tensor] = []
+        self._train_labels: list[Tensor] = []
+
     def training_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", acc, on_step=False, on_epoch=True)
+        self._train_preds.append(preds.cpu())
+        self._train_labels.append(labels.cpu())
         return loss
+
+    def on_train_epoch_end(self):
+        preds = torch.cat(self._train_preds)
+        labels = torch.cat(self._train_labels)
+        self.log("train/acc", (preds == labels).float().mean())
 
     def on_validation_epoch_start(self):
         self._val_preds: list[Tensor] = []
@@ -236,15 +260,14 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", acc, on_step=False, on_epoch=True)
         self._val_preds.append(preds.cpu())
         self._val_labels.append(labels.cpu())
 
     def on_validation_epoch_end(self):
         preds  = torch.cat(self._val_preds)
         labels = torch.cat(self._val_labels)
+        self.log("val/acc", (preds == labels).float().mean())
         per_class = [
             (preds[labels == c] == c).float().mean().item()
             for c in range(self.num_classes) if (labels == c).any()
@@ -264,19 +287,24 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
-        acc = (preds == labels).float().mean()
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/acc", acc, on_step=False, on_epoch=True)
         self._test_preds.append(preds.cpu())
         self._test_labels.append(labels.cpu())
 
     def on_test_epoch_end(self):
         preds = torch.cat(self._test_preds)
         labels = torch.cat(self._test_labels)
+        self.log("test/acc", (preds == labels).float().mean())
+        per_class = [
+            (preds[labels == c] == c).float().mean().item()
+            for c in range(self.num_classes) if (labels == c).any()
+        ]
+        if per_class:
+            self.log("test/balanced_acc", sum(per_class) / len(per_class))
         for c in range(self.num_classes):
-            mask = labels == c
-            if mask.sum() > 0:
-                self.log(f"test/acc_class_{c}", (preds[mask] == c).float().mean())
+            mask_c = labels == c
+            if mask_c.sum() > 0:
+                self.log(f"test/acc_class_{c}", (preds[mask_c] == c).float().mean())
 
     def configure_optimizers(self):
         # Only head parameters are trainable

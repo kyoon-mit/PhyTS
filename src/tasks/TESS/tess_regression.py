@@ -8,7 +8,7 @@ Batch convention (from TESSRegressionDataset.__getitem__):
     mask  (B, L)   — True where cadence is valid
     frot  (B,)     — rotation frequency target
 
-Any model with signature forward(x: (B, L, 1)) -> (B, 1) works as drop-in.
+Any model with signature forward(x: (B, L, 1), mask: (B, L)) -> (B, 1) works as drop-in.
 
 Usage (LightningCLI YAML):
     model:
@@ -77,21 +77,30 @@ class TESSRegressionMSE(L.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         attach_scalar_hyperparams(self, torch_model_parameter_hyper_dict(model))
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
         # x: (B, L) → (B, L, 1) → model → (B, 1) → (B,)
-        return self.model(x.unsqueeze(-1)).squeeze(-1)
+        return self.model(x.unsqueeze(-1), mask=mask).squeeze(-1)
 
     def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
         flux, mask, frot = batch
-        y_hat = self(flux)
+        y_hat = self(flux, mask)
         return self.criterion(y_hat, frot), y_hat, frot
+
+    def on_train_epoch_start(self):
+        self._train_preds: list[Tensor] = []
+        self._train_labels: list[Tensor] = []
 
     def training_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
+        self._train_preds.append(y_hat.detach().cpu())
+        self._train_labels.append(y.detach().cpu())
         return loss
+
+    def on_train_epoch_end(self):
+        y_hat = torch.cat(self._train_preds)
+        y = torch.cat(self._train_labels)
+        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt())
 
     def on_validation_epoch_start(self):
         self._val_preds: list[Tensor] = []
@@ -100,8 +109,6 @@ class TESSRegressionMSE(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
         self._val_preds.append(y_hat.detach().cpu())
         self._val_labels.append(y.detach().cpu())
 
@@ -111,6 +118,7 @@ class TESSRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
+        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
         log_validation_plots_to_wandb(
             self,
             kind="regression",
@@ -125,9 +133,6 @@ class TESSRegressionMSE(L.LightningModule):
     def test_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
-        self.log("test/mae", (y_hat - y).abs().mean(), on_step=False, on_epoch=True)
         self._test_preds.append(y_hat.detach().cpu())
         self._test_labels.append(y.detach().cpu())
 
@@ -137,6 +142,8 @@ class TESSRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("test/r2", 1.0 - ss_res / ss_tot)
+        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt())
+        self.log("test/mae", (y_hat - y).abs().mean())
 
     def configure_optimizers(self):
         opt = optim.AdamW(self.parameters(), lr=self.lr)
@@ -202,23 +209,34 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         self.backbone.eval()
         return self
 
-    def forward(self, x: Tensor) -> Tensor:
-        # x: (B, L) → backbone → (B, L, 1) → head → (B, 1) → (B,)
+    def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
+        # x: (B, L) → backbone → (B, L, 1) → (optionally mask) → head → (B, 1) → (B,)
         with torch.no_grad():
             reconstructed = self.backbone(x.unsqueeze(-1))  # (B, L, 1)
-        return self.head(reconstructed).squeeze(-1)
+        if mask is not None:
+            reconstructed = reconstructed * mask.unsqueeze(-1).float()
+        return self.head(reconstructed, mask=mask).squeeze(-1)
 
     def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
         flux, mask, frot = batch
-        y_hat = self(flux)
+        y_hat = self(flux, mask)
         return self.criterion(y_hat, frot), y_hat, frot
+
+    def on_train_epoch_start(self):
+        self._train_preds: list[Tensor] = []
+        self._train_labels: list[Tensor] = []
 
     def training_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
+        self._train_preds.append(y_hat.detach().cpu())
+        self._train_labels.append(y.detach().cpu())
         return loss
+
+    def on_train_epoch_end(self):
+        y_hat = torch.cat(self._train_preds)
+        y = torch.cat(self._train_labels)
+        self.log("train/rmse", (y_hat - y).pow(2).mean().sqrt())
 
     def on_validation_epoch_start(self):
         self._val_preds: list[Tensor] = []
@@ -227,8 +245,6 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
         self._val_preds.append(y_hat.detach().cpu())
         self._val_labels.append(y.detach().cpu())
 
@@ -238,6 +254,7 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
+        self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
         log_validation_plots_to_wandb(
             self,
             kind="regression",
@@ -252,9 +269,6 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
     def test_step(self, batch, batch_idx):
         loss, y_hat, y = self._step(batch)
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt(),
-                 on_step=False, on_epoch=True)
-        self.log("test/mae", (y_hat - y).abs().mean(), on_step=False, on_epoch=True)
         self._test_preds.append(y_hat.detach().cpu())
         self._test_labels.append(y.detach().cpu())
 
@@ -264,6 +278,8 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         ss_res = (y_hat - y).pow(2).sum()
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("test/r2", 1.0 - ss_res / ss_tot)
+        self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt())
+        self.log("test/mae", (y_hat - y).abs().mean())
 
     def configure_optimizers(self):
         # Only head parameters are trainable

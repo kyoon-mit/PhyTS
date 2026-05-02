@@ -12,7 +12,9 @@ Batch convention (from TESSRegressionDataset / TESSClassificationDataset):
     mask   (B, L)   — True where cadence is valid (unused directly by LinOSS)
     target (B,)     — frot (float32) or label (int64)
 
-LinOSS expects (B, L, N) input; _prepare_batch adds the feature dim.
+LinOSS expects (B, L, N) input; _prepare_batch adds the feature dim and
+appends the validity mask as an extra channel so LinOSS can do masked mean
+pooling (see LinOSS.__call__ in models/linoss.py).
 
 Usage (LightningCLI YAML):
     python main.py fit --config configs/TESS/other/train_tess_linoss_regression.yaml
@@ -143,12 +145,18 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         attach_scalar_hyperparams(self, jax_equinox_model_hyper_dict(self.jax_model, self.jax_model_state))
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
-        """Extract (flux, frot) from the TESS batch; add feature dim to flux."""
-        flux, _mask, frot = batch
-        return flux[..., None], frot  # (B, L, 1), (B,)
+        """Extract (flux, frot) from the TESS batch; add feature dim and append mask channel."""
+        flux, mask, frot = batch
+        mask_f = mask.astype(jnp.float32)                                     # (B, L)
+        x = jnp.concatenate([flux[..., None], mask_f[..., None]], axis=-1)   # (B, L, 2)
+        return x, frot  # (B, L, 2), (B,)
 
     def forward(self, x):
-        """Run inference and return a PyTorch tensor (B,) for the eval pipeline."""
+        """Run inference and return a PyTorch tensor (B,) for the eval pipeline.
+
+        x may be (B, L, 1) for mask-unaware callers or (B, L, 2) when the
+        mask has been appended by the evaluation loop.
+        """
         y_jax = super().forward(x)              # JAX array (B, 1)
         return jax_to_tensor(y_jax).squeeze(-1)  # PyTorch (B,)
 
@@ -174,9 +182,7 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         keys = self._batched_keys(self.key, jax.tree.leaves(x)[0].shape[0])
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
         loss = jax.jit(self.loss_fn)(outputs, y)
-        rmse = float(jnp.sqrt(jnp.mean((outputs.squeeze(-1) - y) ** 2)))
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("val/rmse", rmse, on_step=False, on_epoch=True, sync_dist=True)
         self._val_preds.append(np.asarray(outputs.squeeze(-1)))
         self._val_labels.append(np.asarray(y))
 
@@ -186,6 +192,8 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         y = np.concatenate(self._val_labels)
         ss_res = float(np.sum((y_hat - y) ** 2))
         ss_tot = float(max(np.sum((y - y.mean()) ** 2), 1e-8))
+        rmse = float(np.sqrt(np.mean((y_hat - y) ** 2)))
+        self.log("val/rmse", rmse)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         log_validation_plots_to_wandb(
             self,
@@ -213,9 +221,11 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         y_hat = np.concatenate(self._test_preds)
         y = np.concatenate(self._test_labels)
         rmse = float(np.sqrt(np.mean((y_hat - y) ** 2)))
+        mae = float(np.mean(np.abs(y_hat - y)))
         ss_res = float(np.sum((y_hat - y) ** 2))
         ss_tot = float(max(np.sum((y - y.mean()) ** 2), 1e-8))
         self.log("test/rmse", rmse)
+        self.log("test/mae", mae)
         self.log("test/r2", 1.0 - ss_res / ss_tot)
 
 
@@ -270,12 +280,18 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         attach_scalar_hyperparams(self, jax_equinox_model_hyper_dict(self.jax_model, self.jax_model_state))
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
-        """Extract (flux, label) from the TESS batch; add feature dim to flux."""
-        flux, _mask, label = batch
-        return flux[..., None], label  # (B, L, 1), (B,) int64
+        """Extract (flux, label) from the TESS batch; add feature dim and append mask channel."""
+        flux, mask, label = batch
+        mask_f = mask.astype(jnp.float32)                                     # (B, L)
+        x = jnp.concatenate([flux[..., None], mask_f[..., None]], axis=-1)   # (B, L, 2)
+        return x, label  # (B, L, 2), (B,) int64
 
     def forward(self, x):
-        """Run inference and return PyTorch logits (B, num_classes) for eval pipeline."""
+        """Run inference and return PyTorch logits (B, num_classes) for eval pipeline.
+
+        x may be (B, L, 1) for mask-unaware callers or (B, L, 2) when the
+        mask has been appended by the evaluation loop.
+        """
         y_jax = super().forward(x)   # JAX (B, num_classes)
         return jax_to_tensor(y_jax)  # PyTorch (B, num_classes)
 
@@ -303,9 +319,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
         loss = jax.jit(self.loss_fn)(outputs, y)
         preds = jnp.argmax(outputs, axis=-1)
-        acc = float(jnp.mean(preds == y))
         self.log("val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("val/acc", acc, on_step=False, on_epoch=True, sync_dist=True)
         self._val_preds.append(np.asarray(preds))
         self._val_labels.append(np.asarray(y))
 
@@ -313,6 +327,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         import numpy as np
         preds  = np.concatenate(self._val_preds)
         labels = np.concatenate(self._val_labels)
+        self.log("val/acc", float(np.mean(preds == labels)))
         per_class = [
             float(np.mean(preds[labels == c] == c))
             for c in range(self.num_classes) if np.any(labels == c)
@@ -337,9 +352,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         outputs = jax_inference(self.jax_model, x, self.jax_model_state, keys)
         loss = jax.jit(self.loss_fn)(outputs, y)
         preds = jnp.argmax(outputs, axis=-1)
-        acc = float(jnp.mean(preds == y))
         self.log("test/loss", loss.item(), on_step=False, on_epoch=True, sync_dist=True)
-        self.log("test/acc", acc, on_step=False, on_epoch=True, sync_dist=True)
         self._test_preds.append(jax_to_tensor(preds).cpu().numpy())
         self._test_labels.append(jax_to_tensor(y).cpu().numpy())
 
@@ -347,7 +360,14 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         import numpy as np
         preds = np.concatenate(self._test_preds)
         labels = np.concatenate(self._test_labels)
+        self.log("test/acc", float(np.mean(preds == labels)))
+        per_class = [
+            float(np.mean(preds[labels == c] == c))
+            for c in range(self.num_classes) if np.any(labels == c)
+        ]
+        if per_class:
+            self.log("test/balanced_acc", sum(per_class) / len(per_class))
         for c in range(self.num_classes):
-            mask = labels == c
-            if mask.sum() > 0:
-                self.log(f"test/acc_class_{c}", float(np.mean(preds[mask] == c)))
+            mask_c = labels == c
+            if mask_c.sum() > 0:
+                self.log(f"test/acc_class_{c}", float(np.mean(preds[mask_c] == c)))

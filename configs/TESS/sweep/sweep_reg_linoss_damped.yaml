@@ -16,6 +16,7 @@ command:
   - --model_type=linoss_damped
   - ${args}
 
+name: linoss_damped
 method: bayes
 run_cap: 150
 metric:

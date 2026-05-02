@@ -13,6 +13,7 @@ command:
   - --model_type=mlp
   - ${args}
 
+name: mlp
 method: bayes
 run_cap: 150
 metric:

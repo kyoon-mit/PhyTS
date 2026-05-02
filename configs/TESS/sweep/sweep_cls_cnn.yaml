@@ -13,6 +13,7 @@ command:
   - --model_type=cnn
   - ${args}
 
+name: cnn
 method: bayes
 run_cap: 150
 metric:
