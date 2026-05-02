@@ -230,9 +230,9 @@ class S4Model(nn.Module):
         # Linear decoder
         self.decoder = nn.Linear(d_model, d_output)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         """
-        Input x is shape (B, L, d_input)
+        Input x is shape (B, L, d_input); mask is (B, L) bool, True = valid cadence.
         """
         x = self.encoder(x)  # (B, L, d_input) -> (B, L, d_model)
         x = x.transpose(-1, -2)  # (B, L, d_model) -> (B, d_model, L)
@@ -258,10 +258,14 @@ class S4Model(nn.Module):
                 # Postnorm
                 x = norm(x.transpose(-1, -2)).transpose(-1, -2)
 
-        x = x.transpose(-1, -2)
+        x = x.transpose(-1, -2)  # (B, L, d_model)
 
-        # Pooling: average pooling over the sequence length
-        x = x.mean(dim=1)
+        # Masked mean pooling: exclude zero-padded positions from the average.
+        if mask is not None:
+            valid = mask.float().unsqueeze(-1)           # (B, L, 1)
+            x = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1.0)  # (B, d_model)
+        else:
+            x = x.mean(dim=1)
 
         # Decode the outputs
         x = self.decoder(x)  # (B, d_model) -> (B, d_output)

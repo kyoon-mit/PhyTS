@@ -344,6 +344,13 @@ class LinOSS(eqx.Module):
       * ``"classification"``: mean-pool over time, linear, softmax.
       * ``"regression"``:    mean-pool over time, linear (no activation).
       * ``"forecasting"``:   per-step subsample + linear + tanh.
+
+    Masked pooling: if the input passed to ``__call__`` has one more channel than
+    ``input_dim`` (i.e. shape ``(L, N+1)``), the last channel is treated as a
+    float validity mask (1 = valid, 0 = padding) and used for masked mean pooling
+    instead of plain mean pooling.  The signal channels ``x[..., :N]`` are fed
+    to the encoder as usual.  This convention lets callers pass the mask without
+    changing the JAX training infrastructure.
     """
 
     linear_encoder: eqx.nn.Linear
@@ -351,6 +358,7 @@ class LinOSS(eqx.Module):
     linear_layer: eqx.nn.Linear
     task: str
     output_step: int
+    input_dim: int
     stateful: bool = True
     nondeterministic: bool = True
     lip2: bool = False
@@ -396,19 +404,37 @@ class LinOSS(eqx.Module):
             )
         self.task = task
         self.output_step = output_step
+        self.input_dim = N
 
     def __call__(self, x, state, key):
-        """Compute LinOSS."""
+        """Compute LinOSS.
+
+        x: (L, N) signal, or (L, N+1) where last channel is a float validity mask
+           (1 = valid cadence, 0 = zero-padded).  The mask is extracted before the
+           encoder and used for masked mean pooling; it does not affect encoder weights.
+        """
+        # Extract mask channel if appended by the task's _prepare_batch.
+        if x.shape[-1] > self.input_dim:
+            mask = x[..., -1]               # (L,) float: 1=valid, 0=padding
+            x = x[..., : self.input_dim]    # (L, N) signal
+        else:
+            mask = None
+
         dropkeys = jr.split(key, len(self.blocks))
         x = jax.vmap(self.linear_encoder)(x)
         for block, key in zip(self.blocks, dropkeys):
             x, state = block(x, state, key=key)
-        if self.task == "classification":
-            x = jnp.mean(x, axis=0)
-            x = jax.nn.softmax(self.linear_layer(x), axis=0)
-        elif self.task == "regression":
-            x = jnp.mean(x, axis=0)
-            x = self.linear_layer(x)
+
+        if self.task in ("classification", "regression"):
+            if mask is not None:
+                valid_sum = jnp.sum(mask)
+                x = jnp.sum(x * mask[:, None], axis=0) / jnp.maximum(valid_sum, 1.0)
+            else:
+                x = jnp.mean(x, axis=0)
+            if self.task == "classification":
+                x = jax.nn.softmax(self.linear_layer(x), axis=0)
+            else:
+                x = self.linear_layer(x)
         else:  # forecasting
             x = x[self.output_step - 1 :: self.output_step]
             x = jax.nn.tanh(jax.vmap(self.linear_layer)(x))

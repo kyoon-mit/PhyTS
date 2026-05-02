@@ -86,8 +86,8 @@ class ConvAttnAE(nn.Module):
             dec['out'] = nn.Conv1d(latent_channels, 1, kernel_size=1)
             self.decoder = nn.Sequential(dec)
 
-    def forward(self, x):
-        # x: (B, L, 1)
+    def forward(self, x, mask=None):
+        # x: (B, L, 1); mask: (B, L) bool, True = valid cadence.
         B, L, _ = x.shape
         x = x.transpose(1, 2)                    # (B, 1, L)
         z = self.encoder(x)                       # (B, C, L')
@@ -98,7 +98,15 @@ class ConvAttnAE(nn.Module):
         z = z_t.transpose(1, 2)                   # (B, C, L')
 
         if self._classify:
-            return self.head(z.mean(dim=-1))       # (B, num_classes)
+            if mask is not None:
+                L_prime = z.shape[-1]
+                mask_ds = F.adaptive_max_pool1d(
+                    mask.float().unsqueeze(1), L_prime
+                ).squeeze(1)           # (B, L')
+                pooled = (z * mask_ds.unsqueeze(1)).sum(dim=-1) / mask_ds.sum(dim=-1, keepdim=True).clamp(min=1.0)
+            else:
+                pooled = z.mean(dim=-1)
+            return self.head(pooled)               # (B, num_classes)
 
         y = self.decoder(z)                       # (B, 1, L'')
         if y.shape[-1] > L:
