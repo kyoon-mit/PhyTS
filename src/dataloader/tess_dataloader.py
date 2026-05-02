@@ -1,9 +1,11 @@
 """TESS lightcurve datasets and Lightning DataModules for PhyTS-bench.
 
-Dataset files (from HuggingFace PhyTS-team/PhyTS-bench):
-  data/TESS/.cache/TESS/tess_regression.parquet       — 4,183 rows, target: frot
-  data/TESS/.cache/TESS/tess_classification_*.parquet — Hub train/val/test shards (8 classes)
-    (``data/TESS/download_tess.py`` fetches Hub ``TESS/split/*.parquet`` and stores only ``TESS/*.parquet``)
+Dataset files (from HuggingFace PhyTS-team/PhyTS-bench) must already live directly under
+``data_dir`` (e.g. ``data/TESS/.cache/TESS/*.parquet`` after ``data/TESS/download_tess.py`` flattens
+``TESS/split``). Missing shards raise ``FileNotFoundError``.
+
+  tess_regression_{train,val,test}.parquet   — target: frot
+  tess_classification_{train,val,test}.parquet — 8 string labels → int via label_map.json
 
 Preprocessing (shared):
   - z-score normalization per sample (median centering, std scaling)
@@ -34,47 +36,6 @@ def _dl_extra_kwargs(num_workers: int) -> dict:
 
 # ── Preprocessing helpers ────────────────────────────────────────────────────
 
-def _stratified_splits(
-    strata: np.ndarray,
-    seed: int = 42,
-    ratios: tuple = (0.70, 0.15, 0.15),
-) -> dict[str, np.ndarray]:
-    """Return train/val/test index arrays, balanced across each unique stratum value.
-
-    Within each stratum the indices are shuffled; then the first ratios[0] fraction
-    goes to train, the next ratios[1] to val, and the remainder to test.
-    """
-    rng = np.random.default_rng(seed)
-    train, val, test = [], [], []
-    for u in np.unique(strata):
-        idx = np.where(strata == u)[0]
-        idx = rng.permutation(idx)
-        n = len(idx)
-        nt = int(n * ratios[0])
-        nv = int(n * ratios[1])
-        train.append(idx[:nt])
-        val.append(idx[nt : nt + nv])
-        test.append(idx[nt + nv :])
-    return {
-        "train": np.concatenate(train),
-        "val": np.concatenate(val),
-        "test": np.concatenate(test),
-    }
-
-
-def _regression_splits(
-    frot: np.ndarray,
-    seed: int = 42,
-    ratios: tuple = (0.70, 0.15, 0.15),
-    n_bins: int = 10,
-) -> dict[str, np.ndarray]:
-    """Stratified split for continuous frot: bin into n_bins quantile deciles, then stratify."""
-    edges = np.quantile(frot, np.linspace(0, 1, n_bins + 1))
-    edges[-1] += 1e-10           # include the maximum value in the last bin
-    strata = np.digitize(frot, edges[1:]).astype(np.int32)
-    return _stratified_splits(strata, seed=seed, ratios=ratios)
-
-
 def _normalize_flux(arr: np.ndarray) -> np.ndarray:
     arr = arr.astype(np.float64)
     center = np.nanmedian(arr)
@@ -97,51 +58,72 @@ def _pad_and_mask(arr: np.ndarray, seq_len: int) -> tuple[np.ndarray, np.ndarray
     return out, mask
 
 
-def _load_flux_arrays(
-    parquet_path: str,
-    split_indices: np.ndarray,
-    seq_len: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Load, normalize, and pad flux arrays for the given split indices.
+def _table_to_flux_masks(table, seq_len: int) -> tuple[np.ndarray, np.ndarray]:
+    """From a PyArrow table with column ``flux`` (list<float> per row), build padded tensors.
 
-    Returns:
-        fluxes: float32 (N, seq_len)
-        masks:  bool    (N, seq_len)
+    Returns
+    -------
+    fluxes : ndarray
+        Shape ``(N, seq_len)``, dtype float32.
+    masks : ndarray
+        Shape ``(N, seq_len)``, dtype bool.
     """
-    import pyarrow.parquet as pq
-
-    table = pq.read_table(parquet_path, columns=["flux"])
     flux_col = table["flux"]
-
-    n = len(split_indices)
+    n = len(flux_col)
     fluxes = np.zeros((n, seq_len), dtype=np.float32)
     masks = np.zeros((n, seq_len), dtype=bool)
-
-    for i, row_idx in enumerate(split_indices):
-        raw = np.asarray(flux_col[int(row_idx)].as_py(), dtype=np.float64)
+    for i in range(n):
+        raw = np.asarray(flux_col[i].as_py(), dtype=np.float64)
         normed = _normalize_flux(raw)
         fluxes[i], masks[i] = _pad_and_mask(normed, seq_len)
-
     return fluxes, masks
+
+
+def _read_presplit_parquet(
+    data_dir: Path,
+    split: str,
+    columns: list[str],
+    *,
+    shard_prefix: str,
+):
+    """Read PhyTS Hub-style shard ``{shard_prefix}_{split}.parquet`` (or ``...-*.parquet`` parts)."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    prefixed = data_dir / f"{shard_prefix}_{split}.parquet"
+    if prefixed.is_file():
+        return pq.read_table(prefixed, columns=columns)
+    shard_pat = sorted(data_dir.glob(f"{shard_prefix}_{split}-*.parquet"))
+    if shard_pat:
+        return pa.concat_tables([pq.read_table(f, columns=columns) for f in shard_pat])
+
+    msg = (
+        f"No parquet for split={split!r} in {data_dir}: expected "
+        f"{shard_prefix}_{split}.parquet or {shard_prefix}_{split}-*.parquet"
+    )
+    if (data_dir / "split").is_dir():
+        msg += (
+            f". Shards must be directly under {data_dir} (not only in {data_dir / 'split'}); "
+            "run data/TESS/download_tess.py to flatten the Hub layout."
+        )
+    raise FileNotFoundError(msg)
 
 
 # ── Regression ───────────────────────────────────────────────────────────────
 
 class TESSRegressionDataset(Dataset):
-    """TESS regression: flux → frot (stellar rotation frequency)."""
+    """TESS regression: flux → frot (stellar rotation frequency).
 
-    def __init__(self, data_dir: str, split: str, seq_len: int = 1100, seed: int = 42):
-        import pyarrow.parquet as pq
+    Reads HuggingFace-style shards ``tess_regression_{split}.parquet`` under ``data_dir``.
+    """
 
-        parquet_path = str(Path(data_dir) / "tess_regression.parquet")
-        table = pq.read_table(parquet_path, columns=["frot", "flux"])
-
-        frot_all = np.array(table["frot"].to_pylist(), dtype=np.float32)
-        splits = _regression_splits(frot_all, seed=seed)
-        idx = splits[split]
-
-        self._fluxes, self._masks = _load_flux_arrays(parquet_path, idx, seq_len)
-        self._frot = frot_all[idx]
+    def __init__(self, data_dir: str, split: str, seq_len: int = 1100):
+        data_dir = Path(data_dir)
+        table = _read_presplit_parquet(
+            data_dir, split, columns=["flux", "frot"], shard_prefix="tess_regression"
+        )
+        self._frot = np.array(table["frot"].to_pylist(), dtype=np.float32)
+        self._fluxes, self._masks = _table_to_flux_masks(table, seq_len)
 
     def __len__(self) -> int:
         return len(self._frot)
@@ -161,18 +143,17 @@ class TESSRegressionDataModule(L.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 0,
         seq_len: int = 1100,
-        seed: int = 42,
     ):
         super().__init__()
         self.save_hyperparameters()
 
     def setup(self, stage: str | None = None):
         hp = self.hparams
-        if stage == "fit":
-            self.train = TESSRegressionDataset(hp.data_dir, "train", hp.seq_len, hp.seed)
-            self.val = TESSRegressionDataset(hp.data_dir, "val", hp.seq_len, hp.seed)
-        elif stage in ("test", "predict"):
-            self.test = TESSRegressionDataset(hp.data_dir, "test", hp.seq_len, hp.seed)
+        if stage in (None, "fit", "validate"):
+            self.train = TESSRegressionDataset(hp.data_dir, "train", hp.seq_len)
+            self.val = TESSRegressionDataset(hp.data_dir, "val", hp.seq_len)
+        if stage in (None, "test", "predict"):
+            self.test = TESSRegressionDataset(hp.data_dir, "test", hp.seq_len)
 
     def train_dataloader(self):
         nw = self.hparams.num_workers
@@ -218,7 +199,9 @@ class TESSReconstructionDataset(Dataset):
 
     Noise is sampled i.i.d. per element during __getitem__; noise_std is
     relative to 1.0 (flux is already z-score normalized, so std≈1).
-    Works with either parquet file since only the flux column is used.
+
+    Uses the same HuggingFace split shards as the supervised tasks:
+    ``tess_regression_{split}`` or ``tess_classification_{split}`` (flux only).
     """
 
     def __init__(
@@ -228,39 +211,17 @@ class TESSReconstructionDataset(Dataset):
         task: str = "regression",
         seq_len: int = 1100,
         noise_std: float = 0.3,
-        seed: int = 42,
     ):
-        import pyarrow.parquet as pq
-
-        parquet_file = f"tess_{task}.parquet"
-        parquet_path = str(Path(data_dir) / parquet_file)
-
-        # Use the same stratified split as the corresponding downstream dataset
-        # so reconstruction and downstream tasks see identical train/val/test rows.
+        data_dir = Path(data_dir)
         if task == "regression":
-            target_col = "frot"
-            table = pq.read_table(parquet_path, columns=["flux", target_col])
-            frot_all = np.array(table[target_col].to_pylist(), dtype=np.float32)
-            splits = _regression_splits(frot_all, seed=seed)
-        else:  # classification
-            target_col = "label"
-            table = pq.read_table(parquet_path, columns=["flux", target_col])
-            label_map_path = Path(data_dir) / "label_map.json"
-            if label_map_path.exists():
-                with open(label_map_path) as f:
-                    label_map = json.load(f)
-            else:
-                unique_labels = sorted(set(table[target_col].to_pylist()))
-                label_map = {lbl: i for i, lbl in enumerate(unique_labels)}
-                with open(label_map_path, "w") as f:
-                    json.dump(label_map, f, indent=2)
-            labels_all = np.array(
-                [label_map[l] for l in table[target_col].to_pylist()], dtype=np.int64
-            )
-            splits = _stratified_splits(labels_all, seed=seed)
+            prefix = "tess_regression"
+        elif task == "classification":
+            prefix = "tess_classification"
+        else:
+            raise ValueError(f"task must be 'regression' or 'classification'; got {task!r}")
 
-        idx = splits[split]
-        self._fluxes, self._masks = _load_flux_arrays(parquet_path, idx, seq_len)
+        table = _read_presplit_parquet(data_dir, split, columns=["flux"], shard_prefix=prefix)
+        self._fluxes, self._masks = _table_to_flux_masks(table, seq_len)
         self.noise_std = noise_std
 
     def __len__(self) -> int:
@@ -282,19 +243,22 @@ class TESSReconstructionDataModule(L.LightningDataModule):
         seq_len: int = 1100,
         noise_std: float = 0.3,
         task: str = "regression",
-        seed: int = 42,
     ):
         super().__init__()
         self.save_hyperparameters()
 
     def setup(self, stage: str | None = None):
         hp = self.hparams
-        kw = dict(data_dir=hp.data_dir, task=hp.task, seq_len=hp.seq_len,
-                  noise_std=hp.noise_std, seed=hp.seed)
-        if stage == "fit":
+        kw = dict(
+            data_dir=hp.data_dir,
+            task=hp.task,
+            seq_len=hp.seq_len,
+            noise_std=hp.noise_std,
+        )
+        if stage in (None, "fit", "validate"):
             self.train = TESSReconstructionDataset(split="train", **kw)
             self.val = TESSReconstructionDataset(split="val", **kw)
-        elif stage in ("test", "predict"):
+        if stage in (None, "test", "predict"):
             self.test = TESSReconstructionDataset(split="test", **kw)
 
     def train_dataloader(self):
@@ -334,91 +298,12 @@ class TESSReconstructionDataModule(L.LightningDataModule):
         return self.test_dataloader()
 
 
-# ── Classification (HuggingFace shard names in data_dir) ───────────────────────
-
-def _maybe_promote_split_parquets_to_data_dir(data_dir: Path) -> None:
-    """If ``data_dir/split/*.parquet`` exists, copy missing files into ``data_dir``.
-
-    HuggingFace leaves shards under ``TESS/split``; training uses a single
-    ``data_dir`` of ``TESS`` with hub-style filenames alongside regression parquets.
-    """
-    import shutil
-
-    split_sub = data_dir / "split"
-    if not split_sub.is_dir():
-        return
-    for src in split_sub.glob("*.parquet"):
-        dest = data_dir / src.name
-        if dest.is_file():
-            continue
-        shutil.copy2(src, dest)
-
-
-def _read_presplit_parquet(
-    data_dir: Path,
-    split: str,
-    columns: list[str],
-    *,
-    shard_prefix: str | None = "tess_classification",
-):
-    """Read pre-split parquet for one split name.
-
-    Tries in order (first match wins):
-
-      1. PhyTS Hub layout: ``{shard_prefix}_{split}.parquet`` or
-         ``{shard_prefix}_{split}-*.parquet`` (sharded)
-      2. Legacy flat names: ``{split}.parquet``, ``validation.parquet``, and
-         ``{split}-*.parquet`` / ``validation-*.parquet``
-
-    Parameters
-    ----------
-    shard_prefix
-        PhyTS Hub uses ``tess_classification_<split>.parquet`` (mirrored into ``data_dir``).
-        Set ``None`` to skip this layout and only use legacy names.
-    """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    if shard_prefix:
-        prefixed = data_dir / f"{shard_prefix}_{split}.parquet"
-        if prefixed.is_file():
-            return pq.read_table(prefixed, columns=columns)
-        shard_pat = sorted(data_dir.glob(f"{shard_prefix}_{split}-*.parquet"))
-        if shard_pat:
-            return pa.concat_tables(
-                [pq.read_table(f, columns=columns) for f in shard_pat]
-            )
-
-    candidates = [f"{split}.parquet"]
-    if split == "val":
-        candidates.append("validation.parquet")
-
-    for name in candidates:
-        p = data_dir / name
-        if p.is_file():
-            return pq.read_table(p, columns=columns)
-
-    globs = [f"{split}-*.parquet"]
-    if split == "val":
-        globs.append("validation-*.parquet")
-    for pattern in globs:
-        files = sorted(data_dir.glob(pattern))
-        if files:
-            return pa.concat_tables([pq.read_table(f, columns=columns) for f in files])
-
-    raise FileNotFoundError(
-        f"No parquet files for split={split!r} in {data_dir}. "
-        f"Looking for PhyTS-hub style {shard_prefix}_{split}.parquet or legacy {split}.parquet etc."
-    )
-
+# ── Classification ───────────────────────────────────────────────────────────
 
 class TESSClassificationDataset(Dataset):
-    """TESS classification from HuggingFace split shards under ``data_dir``.
+    """TESS classification from HuggingFace shards ``tess_classification_{split}.parquet``.
 
-    Prefers ``tess_classification_{split}.parquet`` (PhyTS Hub), else legacy
-    ``{split}.parquet`` / ``validation.parquet``. Columns: flux (list<float>), label (string).
-
-    z-score normalization → crop/pad to seq_len → bool mask.
+    Columns: flux (list<float>), label (string). z-score normalization → crop/pad to seq_len → bool mask.
 
     The label map is derived alphabetically from the current split's unique
     labels; when split=="train" the map is written to {data_dir}/label_map.json
@@ -427,7 +312,6 @@ class TESSClassificationDataset(Dataset):
 
     def __init__(self, data_dir: str, split: str, seq_len: int = 1100):
         data_dir = Path(data_dir)
-        _maybe_promote_split_parquets_to_data_dir(data_dir)
         table = _read_presplit_parquet(
             data_dir, split, columns=["flux", "label"], shard_prefix="tess_classification"
         )
@@ -440,7 +324,7 @@ class TESSClassificationDataset(Dataset):
         if split == "train":
             with open(label_map_path, "w") as f:
                 json.dump(label_map, f, indent=2)
-        elif label_map_path.exists():
+        elif label_map_path.is_file():
             with open(label_map_path) as f:
                 saved = json.load(f)
             if saved != label_map:
@@ -448,21 +332,16 @@ class TESSClassificationDataset(Dataset):
                     f"Label map mismatch between saved ({saved}) and {split} ({label_map}). "
                     "Load the train split first so label_map.json is written before val/test."
                 )
+        else:
+            raise FileNotFoundError(
+                f"{label_map_path} not found; load split='train' first (or run Trainer.fit) "
+                "so class indices stay consistent with the training data."
+            )
 
         self.label_map = label_map
         labels = np.array([label_map[l] for l in label_strings], dtype=np.int64)
 
-        flux_col = table["flux"]
-        n = len(labels)
-        fluxes = np.zeros((n, seq_len), dtype=np.float32)
-        masks = np.zeros((n, seq_len), dtype=bool)
-        for i in range(n):
-            raw = np.asarray(flux_col[i].as_py(), dtype=np.float64)
-            normed = _normalize_flux(raw)
-            fluxes[i], masks[i] = _pad_and_mask(normed, seq_len)
-
-        self._fluxes = fluxes
-        self._masks = masks
+        self._fluxes, self._masks = _table_to_flux_masks(table, seq_len)
         self._labels = labels
 
     @property
@@ -507,12 +386,12 @@ class TESSClassificationDataModule(L.LightningDataModule):
 
     def setup(self, stage: str | None = None):
         hp = self.hparams
-        if stage == "fit":
+        if stage in (None, "fit", "validate"):
             # Train first so label_map.json is written before val reads it.
             self.train = TESSClassificationDataset(hp.data_dir, "train", hp.seq_len)
-            self.val   = TESSClassificationDataset(hp.data_dir, "val",   hp.seq_len)
-        elif stage in ("test", "predict"):
-            self.test  = TESSClassificationDataset(hp.data_dir, "test",  hp.seq_len)
+            self.val = TESSClassificationDataset(hp.data_dir, "val", hp.seq_len)
+        if stage in (None, "test", "predict"):
+            self.test = TESSClassificationDataset(hp.data_dir, "test", hp.seq_len)
 
     def train_dataloader(self):
         nw = self.hparams.num_workers
