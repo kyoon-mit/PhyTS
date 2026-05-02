@@ -95,11 +95,21 @@ def _build_torch_task(model, num_classes: int, lr: float,
     return task
 
 
-def _build_linoss_task(model, num_classes: int, lr: float,
-                       seed: int) -> L.LightningModule:
+def _build_linoss_task(
+    model,
+    num_classes: int,
+    lr: float,
+    weight_decay: float,
+    seed: int,
+) -> L.LightningModule:
     from tasks.TESS.tess_linoss import TESSLinOSSClassificationCE
     return TESSLinOSSClassificationCE(
-        model=model, num_classes=num_classes, lr=lr, clip_grad_norm=1.0, seed=seed,
+        model=model,
+        num_classes=num_classes,
+        lr=lr,
+        weight_decay=weight_decay,
+        clip_grad_norm=1.0,
+        seed=seed,
     )
 
 
@@ -150,20 +160,28 @@ def main():
         task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "cnn":
-        model = build_cnn(cfg.size, args.num_classes)
+        model = build_cnn(cfg.size, args.num_classes, dropout=cfg.dropout)
         task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "cnn_attn":
-        model = build_cnn_attn(cfg.size, args.num_classes)
+        model = build_cnn_attn(cfg.size, args.num_classes, dropout=cfg.dropout)
         task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
 
     elif cfg.model_type == "linoss_imex":
-        model = build_linoss(cfg.size, args.num_classes, "IMEX", cfg.seed)
-        task  = _build_linoss_task(model, args.num_classes, cfg.lr, cfg.seed)
+        model = build_linoss(
+            cfg.size, args.num_classes, "IMEX", cfg.seed, dropout=cfg.dropout,
+        )
+        task  = _build_linoss_task(
+            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
+        )
 
     elif cfg.model_type == "linoss_damped":
-        model = build_linoss(cfg.size, args.num_classes, "damped_IMEX", cfg.seed)
-        task  = _build_linoss_task(model, args.num_classes, cfg.lr, cfg.seed)
+        model = build_linoss(
+            cfg.size, args.num_classes, "damped_IMEX", cfg.seed, dropout=cfg.dropout,
+        )
+        task  = _build_linoss_task(
+            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
+        )
 
     else:
         raise ValueError(f"Unknown model_type: {cfg.model_type!r}")

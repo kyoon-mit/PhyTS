@@ -42,7 +42,7 @@ LOGS=$WORKDIR/benchmarks/TESS/logs
 mkdir -p "$LOGS" "$CKPT_DIR" "$RESULTS_DIR" "$WANDB_ROOT"
 
 # Abort early if data hasn't been downloaded yet
-if [ ! -f "$DATA_DIR/tess_regression.parquet" ] || [ ! -f "$DATA_DIR/tess_classification.parquet" ]; then
+if [ ! -f "$DATA_DIR/tess_regression_train.parquet" ] || [ ! -f "$DATA_DIR/tess_classification_train.parquet" ]; then
     echo "ERROR: TESS data not found at $DATA_DIR"
     echo "Run from the login node first: bash benchmarks/TESS/setup_data.sh"
     exit 1

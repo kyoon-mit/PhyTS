@@ -8,6 +8,7 @@ Autoencoder mode (num_classes=0, default):
 Classification mode (num_classes > 0):
     Interface: (B, L, 1) → (B, num_classes)
     Encoder + bottleneck attention + global average pool + Linear MLP head.
+    Optional ``dropout`` after each conv activation; ``attn_dropout`` on MHA.
 
     Parameter count (kernel_size=k, n_layers=L, num_heads=H, num_classes=nc):
         Conv backbone (same as ConvAE classify mode): (L-1)*k*C² + [k+3+3*(L-1)]*C
@@ -37,12 +38,17 @@ class ConvAttnAE(nn.Module):
         kernel_size: int = 5,
         pool_stride: int = 2,
         num_heads: int = 4,
+        dropout: float = 0.0,
         attn_dropout: float = 0.1,
         num_classes: int = 0,
     ):
         super().__init__()
         if kernel_size % 2 == 0:
             raise ValueError('kernel_size must be odd')
+        if not 0.0 <= dropout <= 1.0:
+            raise ValueError('dropout must be in [0, 1]')
+        if not 0.0 <= attn_dropout <= 1.0:
+            raise ValueError('attn_dropout must be in [0, 1]')
         if latent_channels % num_heads != 0:
             raise ValueError(f'latent_channels ({latent_channels}) must be divisible by num_heads ({num_heads})')
         pad = kernel_size // 2
@@ -54,6 +60,7 @@ class ConvAttnAE(nn.Module):
             enc[f'conv{i}'] = nn.Conv1d(in_ch, latent_channels, kernel_size, padding=pad)
             enc[f'norm{i}'] = nn.GroupNorm(1, latent_channels)
             enc[f'act{i}']  = nn.LeakyReLU()
+            enc[f'drop{i}'] = nn.Dropout(dropout)
             enc[f'pool{i}'] = nn.MaxPool1d(pool_stride, stride=pool_stride)
         self.encoder = nn.Sequential(enc)
 
@@ -75,6 +82,7 @@ class ConvAttnAE(nn.Module):
                                                         pool_stride, stride=pool_stride)
                 dec[f'norm{i}']   = nn.GroupNorm(1, latent_channels)
                 dec[f'act{i}']    = nn.LeakyReLU()
+                dec[f'drop{i}']   = nn.Dropout(dropout)
             dec['out'] = nn.Conv1d(latent_channels, 1, kernel_size=1)
             self.decoder = nn.Sequential(dec)
 

@@ -32,7 +32,9 @@ parameters:
     min: 0.00005
     max: 0.02
   dropout:
-    value: 0.0
+    distribution: uniform
+    min: 0.0
+    max: 0.5
   weight_decay:
     distribution: log_uniform_values
     min: 0.000001

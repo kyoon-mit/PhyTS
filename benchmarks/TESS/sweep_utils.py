@@ -162,8 +162,11 @@ def build_s4d(size: str, d_output: int, dropout: float) -> nn.Module:
                    n_layers=4, dropout=dropout)
 
 
-def build_cnn(size: str, d_output: int) -> nn.Module:
+def build_cnn(size: str, d_output: int, dropout: float = 0.0) -> nn.Module:
     """ConvAE classification mode: encoder + global avg pool + Linear(C, d_output).
+
+    Dropout is applied after each encoder LeakyReLU (training only). The sweep passes
+    ``cfg.dropout`` from W&B.
 
     params ≈ 15*C² + (17 + d_output)*C + d_output   (k=5, n_layers=4)
     With d_output=8:  15*C² + 25*C + 8
@@ -176,12 +179,26 @@ def build_cnn(size: str, d_output: int) -> nn.Module:
         lg (~700K): C=216 → 705,248 (cls) / 688,625 (reg)
     """
     c = _CNN_DIMS[size]
-    return ConvAE(n_layers=4, latent_channels=c, kernel_size=5, pool_stride=2,
-                  num_classes=d_output)
+    return ConvAE(
+        n_layers=4,
+        latent_channels=c,
+        kernel_size=5,
+        pool_stride=2,
+        num_classes=d_output,
+        dropout=dropout,
+    )
 
 
-def build_cnn_attn(size: str, d_output: int) -> nn.Module:
+def build_cnn_attn(
+    size: str,
+    d_output: int,
+    dropout: float = 0.0,
+) -> nn.Module:
     """ConvAttnAE classification mode: encoder + bottleneck MHA + pool + Linear head.
+
+    ``dropout`` is applied after each conv LeakyReLU and is also used as
+    ``attn_dropout`` on :class:`torch.nn.MultiheadAttention`, so the sweep's
+    single dropout hyperparameter controls both.
 
     params ≈ 19*C² + (23 + d_output)*C + d_output   (k=5, n_layers=4, num_heads=4)
     With d_output=8:  19*C² + 31*C + 8   (C must be divisible by 4)
@@ -194,11 +211,25 @@ def build_cnn_attn(size: str, d_output: int) -> nn.Module:
         lg (~700K): C=192 → 706,376 (cls) / 690,569 (reg)
     """
     c = _CATTN_DIMS[size]
-    return ConvAttnAE(n_layers=4, latent_channels=c, kernel_size=5, pool_stride=2,
-                      num_heads=4, attn_dropout=0.1, num_classes=d_output)
+    return ConvAttnAE(
+        n_layers=4,
+        latent_channels=c,
+        kernel_size=5,
+        pool_stride=2,
+        num_heads=4,
+        dropout=dropout,
+        attn_dropout=dropout,
+        num_classes=d_output,
+    )
 
 
-def build_linoss(size: str, d_output: int, discretization: str, seed: int):
+def build_linoss(
+    size: str,
+    d_output: int,
+    discretization: str,
+    seed: int,
+    dropout: float = 0.05,
+):
     """LinOSS with num_blocks=4, ssm_size == H (tied).
 
     IMEX:   params ≈ 24*H² + 30*H + H*d_output + d_output.  The coefficient 30 on
@@ -227,6 +258,7 @@ def build_linoss(size: str, d_output: int, discretization: str, seed: int):
         task="regression",   # raw outputs; loss fn applies CE or MSE externally
         output_step=1,
         discretization=discretization,
+        drop_rate=dropout,
         seed=seed,
     )
 

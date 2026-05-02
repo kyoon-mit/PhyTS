@@ -128,13 +128,14 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         self,
         model: eqx.Module,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         clip_grad_norm: float | None = 1.0,
         seed: int = 0,
     ):
         super().__init__(
             model=model,
             loss_fn=_mse_loss,
-            optimizer=optax.adamw(lr),
+            optimizer=optax.adamw(lr, weight_decay=weight_decay),
             clip_grad_norm=clip_grad_norm,
             seed=seed,
         )
@@ -253,13 +254,14 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         model: eqx.Module,
         num_classes: int,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         clip_grad_norm: float | None = 1.0,
         seed: int = 0,
     ):
         super().__init__(
             model=model,
             loss_fn=_ce_loss,
-            optimizer=optax.adamw(lr),
+            optimizer=optax.adamw(lr, weight_decay=weight_decay),
             clip_grad_norm=clip_grad_norm,
             seed=seed,
         )
