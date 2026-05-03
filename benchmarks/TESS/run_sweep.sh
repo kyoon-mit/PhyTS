@@ -14,7 +14,11 @@
 #            --model_type mlp \
 #            --sweep_id abc123def \
 #            [--n_agents 4] \
-#            [--jax]          # add for linoss_imex / linoss_damped
+#            [--jax]          # optional; LinOSS sets automatically — enables JAX GPU mem cap
+#
+#   Each submission runs ``uv sync --extra jax --extra cu13`` (override CUDA extra
+#   with ``LINOSS_JAX_CUDA_EXTRA=cu12`` / ``cpu`` / ``none``) so a shared pool
+#   ``.venv`` keeps equinox/jaxlib even for PyTorch-only sweeps.
 #
 # Each agent is one SLURM job that runs trials from the sweep until
 # wandb stops it (sweep exhausted or time limit reached).
@@ -38,7 +42,7 @@ mkdir -p "$LOGS" "$CKPT_DIR" "$WANDB_ROOT"
 MODEL_TYPE=""
 SWEEP_ID=""
 N_AGENTS=4
-JAX_MODE=false
+JAX_MODE=true
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -53,7 +57,7 @@ done
 if [ -z "$MODEL_TYPE" ] || [ -z "$SWEEP_ID" ]; then
     echo "Usage: $0 --model_type <type> --sweep_id <id> [--n_agents N] [--jax]"
     echo "  model_type: mlp | s4d | cnn | cnn_attn | transformer | linoss_imex | linoss_damped"
-    echo "  --jax: required for linoss_imex / linoss_damped (set automatically)"
+    echo "  --jax: deprecated (JAX automatically enabled for all models to avoid environment conflicts)"
     echo ""
     echo "Sweep config paths (pass to 'wandb sweep' once to create the sweep):"
     echo "  Classification: configs/TESS/sweep/sweep_cls_<model_type>.yaml"
@@ -61,10 +65,10 @@ if [ -z "$MODEL_TYPE" ] || [ -z "$SWEEP_ID" ]; then
     exit 1
 fi
 
-# Auto-enable JAX for LinOSS models
-if [[ "$MODEL_TYPE" == linoss_* ]]; then
-    JAX_MODE=true
-fi
+# # Auto-enable JAX for LinOSS models
+# if [[ "$MODEL_TYPE" == linoss_* ]]; then
+#     JAX_MODE=true
+# fi
 
 # ── Venv setup ────────────────────────────────────────────────────────────────
 if [ ! -d "$WORKDIR/.venv" ]; then
@@ -116,8 +120,8 @@ BASE_ENV="module load cuda miniforge &&
     OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
     WANDB_DIR=$WANDB_ROOT TESS_DATA_DIR=$DATA_DIR TESS_CKPT_DIR=$CKPT_DIR"
 
-# Sweep YAMLs invoke benchmarks/TESS/repo_python.sh → repo .venv directly.
-# Still prepend .venv/bin to PATH for wandb and any subprocess using bare python.
+# wandb sweep YAMLs invoke bare ``python``; ensure PATH resolves to repo venv
+# (otherwise ``module load ...`` may expose a base conda python missing deps).
 VENV_BIN_PATH="export PATH=\"$WORKDIR/.venv/bin:\$PATH\""
 
 if [ "$JAX_MODE" = true ]; then

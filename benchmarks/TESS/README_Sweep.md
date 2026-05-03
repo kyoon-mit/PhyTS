@@ -69,7 +69,7 @@ wandb sweep configs/TESS/sweep/sweep_cls_mlp.yaml --project TimeSeriesPhysics
 # → prints: sweep ID, e.g. abc123def
 ```
 
-Sweep YAMLs call **`benchmarks/TESS/repo_python.sh`** instead of bare ``python`` so each trial runs under the repo **``.venv``** (with jax/equinox when synced). Agents started via ``run_sweep.sh`` already prepend ``.venv/bin`` to ``PATH``, but the launcher avoids conda/base Python entirely.
+Agents launched via ``run_sweep.sh`` prepend ``.venv/bin`` to ``PATH``, so the sweep YAML's bare ``python`` should resolve to the repo virtualenv.
 
 If you change the sweep ``command`` in YAML after creating a sweep, **wandb keeps the old command** until you run ``wandb sweep ...`` again and point agents at the **new** sweep id.
 
@@ -95,7 +95,9 @@ bash benchmarks/TESS/run_sweep.sh \
 
 Each SLURM job runs one wandb agent, which executes trials until the sweep
 is complete or the 6-hour time limit is reached.  Submit more agents to
-parallelize.
+parallelize. Before agents start, ``run_sweep.sh`` runs ``uv sync --extra jax --extra cu13``
+(default CUDA extra; set ``LINOSS_JAX_CUDA_EXTRA=cu12`` or ``cpu`` / ``none`` if needed)
+so the shared ``.venv`` always includes jax/equinox.
 
 ### Step 3 — Monitor
 
@@ -132,15 +134,9 @@ Each run writes `report.html`, CSVs, `best_hyperparameters.json`, and heatmap PN
 
 | Symptom | Likely cause | What to do |
 | ------- | ------------ | ---------- |
-| ``ModuleNotFoundError: No module named 'equinox'`` | Trial subprocess used the wrong interpreter (conda/base ``python``). | Ensure agents run YAMLs that invoke ``benchmarks/TESS/repo_python.sh``; **recreate the sweep** after updating YAMLs. Confirm ``.venv`` has jax: ``uv sync --extra jax --extra cu12`` or ``cu13``. |
+| ``ModuleNotFoundError: No module named 'equinox'`` | Wrong ``python`` on ``PATH``, or the env was never synced with jax extras. | Use ``run_sweep.sh`` (it runs ``uv sync --extra jax --extra cu13`` by default). Override CUDA variant with ``LINOSS_JAX_CUDA_EXTRA=cu12`` if needed. |
 | ``ImportError: cannot import name 'multihost_utils' from 'jax.experimental'`` | Incomplete or mismatched JAX install while loading ``.eqx`` checkpoints (often after partial ``pip``/conda mixing). | From repo root: ``uv sync --extra jax --extra cu12`` (or ``cu13``). Verify ``python -c "from jax.experimental import multihost_utils"``. |
 | ``RuntimeWarning: os.fork() was called... JAX is multithreaded`` | Forking worker processes after JAX has started threads. | Sweep scripts force ``num_workers=0`` for LinOSS and disable Lightning worker RNG seeding; upgrade to current sweep scripts if you still see this on old checkouts. |
-
-Override the launcher explicitly if needed:
-
-```bash
-export TIMESERIES_PHYSICS_PYTHON=/path/to/your/.venv/bin/python
-```
 
 ---
 

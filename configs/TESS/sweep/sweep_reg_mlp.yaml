@@ -8,7 +8,7 @@
 program: benchmarks/TESS/sweep_regression.py
 command:
   - ${env}
-  - benchmarks/TESS/repo_python.sh
+  - python
   - ${program}
   - --model_type=mlp
   - ${args}
