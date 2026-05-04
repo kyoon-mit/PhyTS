@@ -1,39 +1,31 @@
 """
 Evaluate Project 8 energy regressors on the test set: RMSE [eV] and R^2.
 
-Supports the three architectures with configs under ``configs/Project8/``:
-
-  * CNN     -> ``models.conv_regressor.Conv1DRegressor``  (PyTorch)
-  * S4D     -> ``models.s4d.S4Model``                     (PyTorch)
-  * LinOSS  -> ``models.linoss.LinOSS``                   (JAX/equinox)
-
-PyTorch checkpoints are Lightning ``.ckpt`` files; LinOSS checkpoints are
-equinox ``.eqx`` files written by :class:`models.utils.jax.save_model.JAXCheckpointManager`.
-
-For each model we run ``test_dataloader`` once, undo the z-score on the
-``energy_eV`` target using the DataModule's ``mu``/``stds`` and report:
-
-  * RMSE in eV
-  * coefficient of determination R^2 = 1 - SS_res / SS_tot
-
-Usage:
+Architecture and backend (PyTorch vs JAX) are auto-detected from the YAML
+training config — pass any number of ``(cfg, ckpt)`` pairs:
 
     python benchmarks/Project8/eval_pipeline.py \\
-        --cnn_cfg     configs/Project8/train_project8_conv_regression_energy_gaussiannll.yaml \\
-        --cnn_ckpt    checkpoints/project8_conv_regression_energy_gaussiannll/best.ckpt \\
-        --s4d_cfg     configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml \\
-        --s4d_ckpt    checkpoints/project8_s4d_regression_energy_gaussiannll/best.ckpt \\
-        --linoss_cfg  configs/Project8/train_project8_linoss_regression_energy_gaussiannll.yaml \\
-        --linoss_ckpt checkpoints/project8_linoss_regression_energy_gaussiannll/best.eqx \\
-        --out_dir     benchmarks/Project8
+        configs/Project8/train_project8_conv_regression_energy_gaussiannll.yaml \\
+        checkpoints/project8_conv_regression_energy_gaussiannll/best.ckpt \\
+        configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml \\
+        checkpoints/project8_s4d_regression_energy_gaussiannll/best.ckpt \\
+        configs/Project8/train_project8_linoss_regression_energy_gaussiannll.yaml \\
+        checkpoints/project8_linoss_regression_energy_gaussiannll/best.eqx
 
-Any of the three (cfg, ckpt) pairs may be omitted to skip that architecture.
+Detection rules:
+
+  * task with ``init_args.encoder``     -> PyTorch (Lightning ``.ckpt``)
+  * task with ``init_args.model``       -> JAX/equinox  (``.eqx``)
+
+The display name (CNN / S4D / LinOSS / ...) is taken from the encoder /
+inner-model ``class_path``.  For each model we run ``test_dataloader``,
+undo the ``energy_eV`` z-score using the DataModule's ``mu``/``stds``,
+and report RMSE in eV and R^2 = 1 - SS_res / SS_tot.
 """
 
 import argparse
 import csv
 import importlib
-import os
 import sys
 from pathlib import Path
 
@@ -50,54 +42,78 @@ if str(_SRC) not in sys.path:
 from dataloader.project8_dataloader import Project8DataModule  # noqa: E402
 
 
+# Friendly architecture names for known model classes; falls back to class name.
+_ARCH_NAMES = {
+    "models.s4d.S4Model":                 "S4D",
+    "models.conv_regressor.Conv1DRegressor": "CNN",
+    "models.linoss.LinOSS":               "LinOSS",
+}
+
+
 # ─── helpers ────────────────────────────────────────────────────────────────
-
-def _instantiate(spec: dict):
-    """Instantiate ``{class_path, init_args}`` from a YAML config block."""
-    class_path = spec["class_path"]
-    init_args = spec.get("init_args", {}) or {}
-    module_name, class_name = class_path.rsplit(".", 1)
-    cls = getattr(importlib.import_module(module_name), class_name)
-    return cls(**init_args)
-
 
 def _load_cfg(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
 
+def _import_class(class_path: str):
+    module_name, class_name = class_path.rsplit(".", 1)
+    return getattr(importlib.import_module(module_name), class_name)
+
+
+def _instantiate(spec: dict):
+    """Instantiate ``{class_path, init_args}`` from a YAML config block."""
+    return _import_class(spec["class_path"])(**(spec.get("init_args") or {}))
+
+
+def detect_kind(cfg: dict) -> tuple[str, str, str]:
+    """Return (kind, arch_name, encoder_class_path).
+
+    ``kind`` is ``'pt'`` or ``'jax'``; the inner model lives at
+    ``init_args.encoder`` for PyTorch tasks and ``init_args.model`` for the
+    JAX wrapper task.
+    """
+    init_args = cfg["model"].get("init_args") or {}
+    if "encoder" in init_args:
+        kind = "pt"
+        inner = init_args["encoder"]
+    elif "model" in init_args:
+        kind = "jax"
+        inner = init_args["model"]
+    else:
+        raise ValueError(
+            "Could not detect architecture: model.init_args has neither "
+            "'encoder' (PyTorch) nor 'model' (JAX)."
+        )
+    inner_path = inner["class_path"]
+    arch_name = _ARCH_NAMES.get(inner_path, inner_path.rsplit(".", 1)[1])
+    return kind, arch_name, inner_path
+
+
 def build_datamodule(cfg: dict) -> Project8DataModule:
     """Build the Project 8 DataModule from a training config and run setup('test')."""
-    data_cfg = cfg["data"]["init_args"]
-    dm = Project8DataModule(**data_cfg)
+    dm = Project8DataModule(**cfg["data"]["init_args"])
     dm.setup("test")
     return dm
 
 
-# ─── PyTorch (CNN, S4D) ─────────────────────────────────────────────────────
+# ─── PyTorch tasks (e.g. CNN, S4D) ──────────────────────────────────────────
 
 def load_pt_task(cfg: dict, ckpt_path: str, device: torch.device):
-    """Load a PyTorch ``Project8Regression`` task from a Lightning checkpoint."""
-    model_cfg = cfg["model"]
-    init_args = model_cfg.get("init_args", {})
+    init_args = cfg["model"]["init_args"]
     encoder = _instantiate(init_args["encoder"])
-
-    task_class_path = model_cfg["class_path"]
-    module_name, class_name = task_class_path.rsplit(".", 1)
-    task_cls = getattr(importlib.import_module(module_name), class_name)
-
+    task_cls = _import_class(cfg["model"]["class_path"])
     task = task_cls.load_from_checkpoint(
         ckpt_path,
         encoder=encoder,
         map_location=device,
     )
-    task = task.to(device).eval()
-    return task
+    return task.to(device).eval()
 
 
 @torch.no_grad()
 def predict_pt(task, dm: Project8DataModule, device: torch.device) -> np.ndarray:
-    """Run inference and return the predicted z-scored mean (N,)."""
     preds = []
     for x, _var in dm.test_dataloader():
         out = task(x.to(device)).cpu().numpy()  # (B, 2) = [mean, raw_var]
@@ -105,27 +121,17 @@ def predict_pt(task, dm: Project8DataModule, device: torch.device) -> np.ndarray
     return np.concatenate(preds)
 
 
-# ─── JAX (LinOSS) ───────────────────────────────────────────────────────────
+# ─── JAX/equinox tasks (e.g. LinOSS) ────────────────────────────────────────
 
 def load_jax_task(cfg: dict, ckpt_path: str):
-    """Instantiate the JAX task and deserialise its weights from ``ckpt_path``."""
-    model_cfg = cfg["model"]
-    init_args = dict(model_cfg.get("init_args", {}))
-
-    inner_model = _instantiate(init_args["model"])
-    init_args["model"] = inner_model
-
-    task_class_path = model_cfg["class_path"]
-    module_name, class_name = task_class_path.rsplit(".", 1)
-    task_cls = getattr(importlib.import_module(module_name), class_name)
-
-    # Load weights via the wrapper's built-in deserialiser.
+    init_args = dict(cfg["model"]["init_args"])
+    init_args["model"] = _instantiate(init_args["model"])
     init_args["load_from_checkpoint"] = ckpt_path
+    task_cls = _import_class(cfg["model"]["class_path"])
     return task_cls(**init_args)
 
 
 def predict_jax(task, dm: Project8DataModule) -> np.ndarray:
-    """Run JAX inference and return the predicted z-scored mean (N,)."""
     import jax
     import jax.numpy as jnp
     from models.utils.jax.training import jax_inference
@@ -150,7 +156,6 @@ def predict_jax(task, dm: Project8DataModule) -> np.ndarray:
 # ─── ground-truth + metrics ─────────────────────────────────────────────────
 
 def collect_true_z(dm: Project8DataModule) -> np.ndarray:
-    """Concatenate the z-scored ground-truth target across the test loader."""
     ys = []
     for _x, var in dm.test_dataloader():
         v = var.numpy()
@@ -161,7 +166,6 @@ def collect_true_z(dm: Project8DataModule) -> np.ndarray:
 
 
 def rmse_r2(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
-    """RMSE and coefficient of determination (R^2) in the units of the inputs."""
     diff = y_true - y_pred
     rmse = float(np.sqrt(np.mean(diff ** 2)))
     ss_res = float(np.sum(diff ** 2))
@@ -172,81 +176,81 @@ def rmse_r2(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
 
 # ─── driver ─────────────────────────────────────────────────────────────────
 
+def _evaluate_one(cfg_path: str, ckpt_path: str, dm: Project8DataModule,
+                  y_true_eV: np.ndarray, mu: float, std: float,
+                  device: torch.device) -> dict:
+    cfg = _load_cfg(cfg_path)
+    kind, arch_name, inner_path = detect_kind(cfg)
+    print(f"\n=== {arch_name} [{kind}]  ({inner_path}) ===")
+    print(f"  cfg : {cfg_path}")
+    print(f"  ckpt: {ckpt_path}")
+
+    if kind == "pt":
+        task = load_pt_task(cfg, ckpt_path, device)
+        y_pred_z = predict_pt(task, dm, device)
+    else:
+        task = load_jax_task(cfg, ckpt_path)
+        y_pred_z = predict_jax(task, dm)
+
+    y_pred_eV = y_pred_z * std + mu
+    rmse_eV, r2 = rmse_r2(y_true_eV, y_pred_eV)
+    print(f"  RMSE = {rmse_eV:.4f} eV")
+    print(f"  R^2  = {r2:.6f}")
+    return {
+        "model": arch_name,
+        "backend": kind,
+        "n_test": int(y_pred_eV.shape[0]),
+        "rmse_eV": rmse_eV,
+        "r2": r2,
+    }
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cnn_cfg")
-    parser.add_argument("--cnn_ckpt")
-    parser.add_argument("--s4d_cfg")
-    parser.add_argument("--s4d_ckpt")
-    parser.add_argument("--linoss_cfg")
-    parser.add_argument("--linoss_ckpt")
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "pairs", nargs="+", metavar="CFG CKPT",
+        help="One or more (config.yaml, checkpoint) pairs. Architecture is auto-detected.",
+    )
     parser.add_argument("--out_dir", default="benchmarks/Project8")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
-    jobs = [
-        ("CNN",    args.cnn_cfg,    args.cnn_ckpt,    "pt"),
-        ("S4D",    args.s4d_cfg,    args.s4d_ckpt,    "pt"),
-        ("LinOSS", args.linoss_cfg, args.linoss_ckpt, "jax"),
-    ]
-    jobs = [j for j in jobs if j[1] and j[2]]
-    if not jobs:
-        parser.error("Provide at least one of --{cnn,s4d,linoss}_{cfg,ckpt}.")
+    if len(args.pairs) % 2 != 0:
+        parser.error("Positional arguments must come in (cfg, ckpt) pairs.")
+    jobs = list(zip(args.pairs[0::2], args.pairs[1::2]))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
 
-    # Use the first available config to build the shared DataModule. All
-    # Project 8 configs use the same data block, so any choice is fine.
-    dm = build_datamodule(_load_cfg(jobs[0][1]))
+    # All Project 8 training configs share the same data block, so the first
+    # one suffices to build the shared test loader and norm stats.
+    dm = build_datamodule(_load_cfg(jobs[0][0]))
     target_name = dm.hparams.variables[0]
-    mu = float(dm.mu[0])
-    std = float(dm.stds[0])
+    mu, std = float(dm.mu[0]), float(dm.stds[0])
     print(f"Target: {target_name}  (mu={mu:.4f}, std={std:.4f})")
 
-    y_true_z = collect_true_z(dm)
-    y_true_eV = y_true_z * std + mu
+    y_true_eV = collect_true_z(dm) * std + mu
 
-    results: list[dict] = []
-    for name, cfg_path, ckpt_path, kind in jobs:
-        print(f"\n=== {name} ===")
-        print(f"  cfg : {cfg_path}")
-        print(f"  ckpt: {ckpt_path}")
-        cfg = _load_cfg(cfg_path)
-
-        if kind == "pt":
-            task = load_pt_task(cfg, ckpt_path, device)
-            y_pred_z = predict_pt(task, dm, device)
-        else:
-            task = load_jax_task(cfg, ckpt_path)
-            y_pred_z = predict_jax(task, dm)
-
-        y_pred_eV = y_pred_z * std + mu
-        rmse_eV, r2 = rmse_r2(y_true_eV, y_pred_eV)
-
-        print(f"  RMSE = {rmse_eV:.4f} eV")
-        print(f"  R^2  = {r2:.6f}")
-
-        results.append({
-            "model": name,
-            "n_test": int(y_pred_eV.shape[0]),
-            "rmse_eV": rmse_eV,
-            "r2": r2,
-        })
+    results = [
+        _evaluate_one(cfg, ckpt, dm, y_true_eV, mu, std, device)
+        for cfg, ckpt in jobs
+    ]
 
     csv_path = out_dir / "energy_metrics.csv"
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["model", "n_test", "rmse_eV", "r2"])
+        writer = csv.DictWriter(f, fieldnames=["model", "backend", "n_test", "rmse_eV", "r2"])
         writer.writeheader()
-        for row in results:
-            writer.writerow(row)
+        writer.writerows(results)
 
     print(f"\nSummary ({target_name}):")
-    print(f"{'model':<8} {'N':>7} {'RMSE [eV]':>14} {'R^2':>10}")
+    print(f"{'model':<10} {'backend':<8} {'N':>7} {'RMSE [eV]':>14} {'R^2':>10}")
     for r in results:
-        print(f"{r['model']:<8} {r['n_test']:>7d} {r['rmse_eV']:>14.4f} {r['r2']:>10.6f}")
+        print(f"{r['model']:<10} {r['backend']:<8} {r['n_test']:>7d} "
+              f"{r['rmse_eV']:>14.4f} {r['r2']:>10.6f}")
     print(f"\nWrote {csv_path}")
 
 
