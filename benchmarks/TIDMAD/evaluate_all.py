@@ -340,7 +340,8 @@ def resolve_ckpt(variant_cfg: dict, repo_root: Path) -> str | None:
 def run_inference(variant_cfg: dict, ckpt_path: str | None, repo_root: Path,
                   data_dir: str, scale_path: str,
                   batch_size: int, device: torch.device,
-                  max_windows: int | None = None):
+                  max_windows: int | None = None,
+                  stride: int = 1):
     """Load model and score all 8 test H5 files. Returns (score, snr_ch2, snr_ch1)."""
     model_type = variant_cfg["model_type"]
 
@@ -364,7 +365,7 @@ def run_inference(variant_cfg: dict, ckpt_path: str | None, repo_root: Path,
             print(f"  WARNING: {fname} not found, skipping")
             continue
         print(f"  Scoring {fname} ...")
-        ch2, ch1 = score_file(fpath, denoise_fn, scaling, batch_size, max_windows)
+        ch2, ch1 = score_file(fpath, denoise_fn, scaling, batch_size, max_windows, stride)
         all_ch2.extend(ch2)
         all_ch1.extend(ch1)
         print(f"    -> {len(ch2)} windows")
@@ -441,6 +442,7 @@ def evaluate_variant(name: str, variant_cfg: dict, args, repo_root: Path):
         max_windows = args.chronos_max_windows if is_chronos else None
         if max_windows:
             print(f"  Chronos: capping at {max_windows} windows/file")
+        stride = args.stride
 
         if is_chronos:
             ckpt_path = None   # no checkpoint for zero-shot
@@ -461,6 +463,7 @@ def evaluate_variant(name: str, variant_cfg: dict, args, repo_root: Path):
                 args.data_dir, args.scale_path,
                 args.batch_size, device,
                 max_windows=max_windows,
+                stride=stride,
             )
             result["benchmark_score"] = round(score, 6)
             print(f"  Benchmark score: {score:.4f}")
@@ -537,6 +540,8 @@ def main():
     parser.add_argument("--device",     default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--chronos_max_windows", type=int, default=None,
                         help="Max windows per file for Chronos (slow). Default: all.")
+    parser.add_argument("--stride", type=int, default=1,
+                        help="Process every Nth window (default: 1=all). stride=10 matches original --coarse mode.")
     args = parser.parse_args()
 
     repo_root = _REPO

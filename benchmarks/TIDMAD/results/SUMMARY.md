@@ -109,20 +109,25 @@ L = jnp.mean((psd_pred - psd_true) ** 2)
 
 ## Full Training Results
 
-| Variant         | Model    | Loss | Params  | Best Val   | Epochs | Benchmark Score |
-|-----------------|----------|------|---------|------------|--------|-----------------|
-| conv_l_mse      | ConvAE-L | MSE  | 190,977 | 52.36      | 17     | **-5.526**      |
-| conv_l_full     | ConvAE-L | PSD  | 190,977 | ~5.3e18    | 16     | **-3.685**      |
-| linoss_190k_mse | LinOSS   | MSE  | ~200K   | 52.43      | 9      | _(pending)_     |
-| linoss_190k_full| LinOSS   | PSD  | ~200K   | (epoch 3)  | 9*     | _(pending)_     |
+Evaluated on 8 held-out H5 files with stride=10 (~16,000 windows total, covering the full
+injection-frequency sweep per file). Injection frequency detected **per window** from ch2.
 
-*LinOSS PSD run hit 12h wall time limit at epoch 9; best checkpoint saved at epoch 3.
+| Variant          | Model    | Loss | Params  | Best Val | Epochs | Benchmark Score |
+|------------------|----------|------|---------|----------|--------|-----------------|
+| conv_l_mse       | ConvAE-L | MSE  | 190,977 | 52.36    | 17     | **-2.6456**     |
+| conv_l_full      | ConvAE-L | PSD  | 190,977 | ~5.3e18  | 16     | **-2.4408**     |
+| linoss_190k_mse  | LinOSS   | MSE  | 199,937 | 52.43    | 9      | **-2.2487**     |
+| linoss_190k_full | LinOSS   | PSD  | 199,937 | ~5.4e18  | 10*    | **-1.2909**     |
+
+*LinOSS PSD run hit 12h wall time limit at epoch 9; best checkpoint saved at epoch 3 (step 213248).
 
 ### Chronos Zero-Shot Baseline
 
-| Variant       | Model          | Params | Benchmark Score |
-|---------------|----------------|--------|-----------------|
-| chronos_tiny  | Chronos (tiny) | 8M     | **-3.071**      |
+Evaluated with stride=50 (~3,200 windows total, covering full injection-frequency sweep).
+
+| Variant      | Model          | Params | Benchmark Score |
+|--------------|----------------|--------|-----------------|
+| chronos_tiny | Chronos (tiny) | 8M     | **-2.9132**     |
 
 ---
 
@@ -130,21 +135,25 @@ L = jnp.mean((psd_pred - psd_true) ** 2)
 
 ### 1. MSE Loss is Wrong for TIDMAD
 
-Time-domain MSE training (conv_l_mse) produced a score of **-5.526**, significantly worse than the
-Chronos zero-shot baseline (**-3.071**). The model learns to suppress all signal components equally,
-destroying the narrow-band injection that the benchmark measures.
+Time-domain MSE training produces worse scores than PSD loss for both architectures. MSE
+learns to suppress all signal components equally, destroying the narrow-band injection that the
+benchmark measures. ConvAE MSE scores **-2.6456** vs PSD **-2.4408**; LinOSS MSE scores
+**-2.2487** vs PSD **-1.2909** — a gap of nearly 1 full log unit for LinOSS.
 
 ### 2. PSD Loss Substantially Improves Performance
 
-Switching to PSD loss (conv_l_full) raised the score from -5.526 to **-3.685** — a large improvement,
-though still below the Chronos zero-shot baseline (-3.071). This confirms that the training objective
-must be aligned with the frequency-domain evaluation metric.
+Switching to PSD loss aligns the training objective with the frequency-domain evaluation metric.
+Both models improve, and all four trained models now **beat the Chronos zero-shot baseline (-2.913)**.
 
-### 3. Chronos Zero-Shot is a Strong Baseline
+### 3. LinOSS (PSD) is the Best Model
 
-Chronos tiny (8M params, no fine-tuning) scores -3.071. This is better than MSE-trained models
-and competitive with PSD-trained ConvAE-L (-3.685). The difference is small; LinOSS PSD results
-may shed more light on whether a purpose-trained model can clearly outperform zero-shot forecasters.
+LinOSS-190K with PSD loss scores **-1.2909** — the best result overall, beating ConvAE-L (PSD)
+by ~1.15 log units and Chronos by ~1.6 log units, with a similar parameter count (~200K).
+
+### 4. Chronos Zero-Shot is Competitive but Beaten by PSD Models
+
+Chronos tiny (8M params, no fine-tuning) scores **-2.913**. All four trained models (MSE and PSD)
+now outperform it once the per-window injection frequency detection bug was fixed.
 
 ### 4. LinOSS Stability Required damped_IMEX
 
@@ -158,25 +167,20 @@ from 1e-3 to 1e-4.
 
 Higher (less negative) = better. Score = 0 means perfect denoising.
 
-| Score  | Model              | Notes                                      |
-|--------|--------------------|--------------------------------------------|
-| 0.0    | —                  | Perfect denoising (theoretical ceiling)    |
-| -3.07  | Chronos zero-shot  | Best result so far (no fine-tuning)        |
-| -3.68  | ConvAE-L PSD       | Worse than Chronos; better than MSE        |
-| -5.53  | ConvAE-L MSE       | Worst; time-domain loss misaligned with metric |
+| Score   | Model              | Notes                                           |
+|---------|--------------------|-------------------------------------------------|
+| 0.0     | —                  | Perfect denoising (theoretical ceiling)         |
+| -1.2909 | LinOSS-190K PSD    | Best result — beats all baselines               |
+| -2.2487 | LinOSS-190K MSE    |                                                 |
+| -2.4408 | ConvAE-L PSD       |                                                 |
+| -2.6456 | ConvAE-L MSE       |                                                 |
+| -2.9132 | Chronos zero-shot  | 8M params, no fine-tuning                       |
 
-All scores are negative because no model yet enhances the injection SNR — they all suppress some
-signal along with the noise. Chronos zero-shot currently leads despite having no task-specific
-training, which suggests the trained models are not yet learning to preserve the narrow-band
-injection frequency.
-
----
-
-## Pending Results
-
-- LinOSS-190K MSE benchmark score
-- LinOSS-190K PSD benchmark score
-- Chronos medium/large zero-shot scores (optional)
+All scores are negative because no model yet perfectly recovers the injection SNR.
+All four trained models beat the Chronos zero-shot baseline.
+Previous scores (conv_l_mse: -5.526, conv_l_full: -3.685) were computed with a bug where the
+injection frequency was detected once per file instead of per window. Since the injection frequency
+sweeps across each 200-second file, per-file detection was systematically wrong.
 
 ---
 

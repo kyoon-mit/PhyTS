@@ -4,7 +4,7 @@
   "category": "conv_ablation",
   "model_type": "conv",
   "arch": "n_layers=3, channels=64, kernel=5",
-  "timestamp": "2026-05-01 11:23:40",
+  "timestamp": "2026-05-04 09:12:23",
   "n_params": 67073,
   "best_val_loss": 52.40678,
   "best_val_epoch": 4,

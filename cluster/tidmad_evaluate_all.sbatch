@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=l40s-shared
-#SBATCH --qos=24h_4g
-#SBATCH -t 12:00:00
+#SBATCH --qos=72h_8g
+#SBATCH -t 24:00:00
 
 # Evaluate all trained TIDMAD denoising variants (conv + linoss).
 # Chronos zero-shot baselines are handled separately by tidmad_evaluate_chronos.sbatch.
@@ -40,6 +40,8 @@ if [[ "${PLOT_ONLY:-0}" == "1" ]]; then
     PLOT_ONLY_ARG="--plot_only"
 fi
 
+STRIDE_ARG="--stride ${STRIDE:-1}"
+
 srun --ntasks=1 \
   --output="${LOGDIR}/%x_%j_%N_%t.out" \
   --error="${LOGDIR}/%x_%j_%N_%t.err" \
@@ -48,10 +50,10 @@ srun --ntasks=1 \
     pip install -q jsonargparse[signatures] torchmetrics h5py pandas matplotlib &&
     pip install -q -r ${REPO}/cluster/requirements_jax.txt &&
     cd ${REPO} &&
-    PYTHONPATH=src python3 benchmarks/TIDMAD/evaluate_all.py \
+    PYTHONPATH=src python3 -u benchmarks/TIDMAD/evaluate_all.py \
       --data_dir   data/TIDMAD/original \
       --scale_path data/TIDMAD/preprocessed/scale.npy \
       --out_dir    benchmarks/TIDMAD/results \
       --batch_size ${BATCH_SIZE:-64} \
-      ${VARIANTS_ARG} ${PLOT_ONLY_ARG}
+      ${VARIANTS_ARG} ${PLOT_ONLY_ARG} ${STRIDE_ARG}
   "

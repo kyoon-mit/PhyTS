@@ -15,13 +15,13 @@
 #   - results/chronos_{tiny,base}/summary.json
 #   - updates results/master_results.csv
 #
-# Chronos is very slow (~10-20 min/file for tiny). Set CHRONOS_MAX_WINDOWS to
-# cap windows per file for a quick sanity check (e.g. CHRONOS_MAX_WINDOWS=50).
-# Leave unset for the full evaluation (all windows, may take the full 24h).
+# Uses stride=50 (every 50th window) → 400 windows/file, ~3200 total.
+# Covers all injection frequencies in the sweep without the full 2h+ per-file cost.
 #
 # Optional env vars:
-#   CHRONOS_SIZES        — space-separated, default "tiny base"
+#   CHRONOS_SIZES        — space-separated, default "tiny"
 #   CHRONOS_MAX_WINDOWS  — integer cap on windows per file (default: all)
+#   STRIDE               — window stride (default: 50)
 
 set -euo pipefail
 
@@ -32,7 +32,7 @@ LOGDIR=/home/ilay.kamai/athena/logs
 
 mkdir -p "${LOGDIR}"
 
-SIZES="${CHRONOS_SIZES:-tiny base}"
+SIZES="${CHRONOS_SIZES:-tiny}"
 VARIANTS_ARG=$(echo $SIZES | tr ' ' '\n' | sed 's/^/chronos_/' | tr '\n' ' ')
 
 MAX_WIN_ARG=""
@@ -40,19 +40,21 @@ if [[ -n "${CHRONOS_MAX_WINDOWS:-}" ]]; then
     MAX_WIN_ARG="--chronos_max_windows ${CHRONOS_MAX_WINDOWS}"
 fi
 
+STRIDE_ARG="--stride ${STRIDE:-50}"
+
 srun --ntasks=1 \
   --output="${LOGDIR}/%x_%j_%N_%t.out" \
   --error="${LOGDIR}/%x_%j_%N_%t.err" \
   --container=/apps/apptainer/images/pytorch/latest/torch-tf-cu130.sif \
   bash -lc "
-    pip install -q transformers accelerate optimum &&
+    pip install -q transformers accelerate optimum chronos-forecasting &&
     pip install -q jsonargparse[signatures] torchmetrics h5py pandas matplotlib &&
     cd ${REPO} &&
-    PYTHONPATH=src python3 benchmarks/TIDMAD/evaluate_all.py \
+    PYTHONPATH=src python3 -u benchmarks/TIDMAD/evaluate_all.py \
       --variants ${VARIANTS_ARG} \
       --data_dir   data/TIDMAD/original \
       --scale_path data/TIDMAD/preprocessed/scale.npy \
       --out_dir    benchmarks/TIDMAD/results \
       --batch_size 8 \
-      ${MAX_WIN_ARG}
+      ${MAX_WIN_ARG} ${STRIDE_ARG}
   "

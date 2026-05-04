@@ -4,13 +4,13 @@
   "category": "full_training",
   "model_type": "conv",
   "arch": "n_layers=5, channels=64, kernel=9, loss=PSD",
-  "timestamp": "2026-05-01 11:59:39",
+  "timestamp": "2026-05-04 00:57:53",
   "n_params": 190977,
   "best_val_loss": 5.344855764991214e+18,
   "best_val_epoch": 5,
   "n_epochs": 16,
   "final_train_loss": 5.625751848829846e+18,
-  "benchmark_score": -3.685016,
+  "benchmark_score": -2.440809,
   "ckpt_path": "/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/checkpoints/tidmad_conv_l_psd/best.ckpt",
   "error": null
 }

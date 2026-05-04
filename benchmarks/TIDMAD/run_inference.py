@@ -252,8 +252,13 @@ def score_file(
     scaling: float,
     batch_size: int,
     max_windows: int | None = None,
+    stride: int = 1,
 ) -> tuple[list[float], list[float]]:
-    """Return (snr_ch2_list, snr_ch1_denoised_list) for all (or up to max_windows) windows."""
+    """Return (snr_ch2_list, snr_ch1_denoised_list) for sampled windows.
+
+    stride: process every Nth window (1 = all, 10 = ~10x faster, matches original --coarse).
+    Windows are sampled evenly across the full file so all injection frequencies are covered.
+    """
     snr_ch2, snr_ch1 = [], []
 
     with h5py.File(h5_path, 'r') as f:
@@ -261,28 +266,40 @@ def score_file(
         ch2_ds = f['timeseries/channel0002/timeseries']
         n_samples = min(len(ch1_ds), len(ch2_ds))
 
-        label_len = min(LABEL_WINDOW, n_samples)
-        target_freq = get_injection_freq(ch2_ds[:label_len], scaling)
-        print(f'  injection freq: {target_freq:.0f} Hz')
-
-        n_windows = n_samples // WINDOW_SIZE
+        total_windows = n_samples // WINDOW_SIZE
+        window_indices = list(range(0, total_windows, stride))
         if max_windows is not None:
-            n_windows = min(n_windows, max_windows)
-        print(f'  processing {n_windows} windows')
+            window_indices = window_indices[:max_windows]
 
-        for batch_start in range(0, n_windows, batch_size):
-            batch_end = min(batch_start + batch_size, n_windows)
-            B = batch_end - batch_start
+        if stride > 1:
+            print(f'  processing {len(window_indices)} windows (stride={stride}, out of {total_windows})')
+        else:
+            print(f'  processing {len(window_indices)} windows')
 
-            s = batch_start * WINDOW_SIZE
-            e = batch_end   * WINDOW_SIZE
+        for batch_start in range(0, len(window_indices), batch_size):
+            batch_idx = window_indices[batch_start:batch_start + batch_size]
+            B = len(batch_idx)
 
-            ch1_raw = ch1_ds[s:e].reshape(B, WINDOW_SIZE).astype(np.float32) * scaling
-            ch2_raw = ch2_ds[s:e].reshape(B, WINDOW_SIZE).astype(np.float32) * scaling
+            if stride == 1:
+                # contiguous read — fast path
+                s = batch_idx[0] * WINDOW_SIZE
+                e = (batch_idx[-1] + 1) * WINDOW_SIZE
+                ch1_raw = ch1_ds[s:e].reshape(B, WINDOW_SIZE).astype(np.float32) * scaling
+                ch2_raw = ch2_ds[s:e].reshape(B, WINDOW_SIZE).astype(np.float32) * scaling
+            else:
+                ch1_raw = np.stack([
+                    ch1_ds[idx * WINDOW_SIZE:(idx + 1) * WINDOW_SIZE].astype(np.float32) * scaling
+                    for idx in batch_idx
+                ])
+                ch2_raw = np.stack([
+                    ch2_ds[idx * WINDOW_SIZE:(idx + 1) * WINDOW_SIZE].astype(np.float32) * scaling
+                    for idx in batch_idx
+                ])
 
             ch1_den = denoise_fn(ch1_raw)  # (B, L)
 
             for i in range(B):
+                target_freq = get_injection_freq(ch2_raw[i], 1.0)  # per-window, already scaled
                 snr_ch2.append(compute_snr(ch2_raw[i], target_freq))
                 snr_ch1.append(compute_snr(ch1_den[i], target_freq))
 
@@ -330,6 +347,8 @@ def main():
                         help='Chunk size for Chronos (prediction_length=chunk_size//2, default 128 -> pred_len=64)')
     parser.add_argument('--max_windows', type=int, default=None,
                         help='Max windows per file (default: all). Use e.g. 100 for fast Chronos runs.')
+    parser.add_argument('--stride', type=int, default=1,
+                        help='Process every Nth window (default: 1=all). stride=10 matches original --coarse mode.')
     parser.add_argument('--data_dir',   default='data/TIDMAD/original')
     parser.add_argument('--scale_path', default='data/TIDMAD/preprocessed/scale.npy')
     parser.add_argument('--out_dir',    default='benchmarks/TIDMAD/results')
@@ -364,7 +383,7 @@ def main():
             print(f'WARNING: {fname} not found, skipping')
             continue
         print(f'Processing {fname} ...')
-        ch2_snrs, ch1_snrs = score_file(fpath, denoise_fn, scaling, args.batch_size, args.max_windows)
+        ch2_snrs, ch1_snrs = score_file(fpath, denoise_fn, scaling, args.batch_size, args.max_windows, args.stride)
         all_ch2_snr.extend(ch2_snrs)
         all_ch1_snr.extend(ch1_snrs)
         print(f'  windows processed: {len(ch2_snrs)}')
