@@ -1,7 +1,7 @@
-"""Transformer encoder classifier for 1D time series.
+"""Transformer encoder for 1D time series (classification or regression).
 
 Interface:
-    forward(x: (B, L, 1), mask: (B, L)) -> (B, d_output)
+    forward(x: (B, L, d_input), mask: (B, L)) -> (B, d_output)
 
 The mask uses True for valid cadence positions and False for padding. It is
 passed as a key-padding mask to the Transformer encoder and also used for
@@ -35,6 +35,7 @@ class TransformerClassifier(nn.Module):
         self,
         seq_len: int,
         d_output: int,
+        d_input: int = 1,
         d_model: int = 128,
         nhead: int = 4,
         num_layers: int = 4,
@@ -46,7 +47,8 @@ class TransformerClassifier(nn.Module):
             raise ValueError(f"d_model ({d_model}) must be divisible by nhead ({nhead})")
 
         self.seq_len = seq_len
-        self.input_proj = nn.Linear(1, d_model)
+        self.d_input = d_input
+        self.input_proj = nn.Linear(d_input, d_model)
         self.positional_encoding = SinusoidalPositionalEncoding(d_model, seq_len)
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -68,9 +70,9 @@ class TransformerClassifier(nn.Module):
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         if x.dim() != 3:
-            raise ValueError(f"Expected x with shape (B, L, 1); got {tuple(x.shape)}")
-        if x.size(-1) != 1:
-            raise ValueError(f"Expected last dimension 1; got {x.size(-1)}")
+            raise ValueError(f"Expected x with shape (B, L, d_input); got {tuple(x.shape)}")
+        if x.size(-1) != self.d_input:
+            raise ValueError(f"Expected last dimension {self.d_input}; got {x.size(-1)}")
         if x.size(1) > self.seq_len:
             raise ValueError(f"Input length {x.size(1)} exceeds configured seq_len={self.seq_len}")
 

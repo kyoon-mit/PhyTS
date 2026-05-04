@@ -40,9 +40,10 @@ from dataloader.project8_dataloader import Project8DataModule  # noqa: E402
 
 # Friendly architecture names for known model classes; falls back to class name.
 _ARCH_NAMES = {
-    "models.s4d.S4Model":                    "S4D",
-    "models.conv_regressor.Conv1DRegressor": "CNN",
-    "models.linoss.LinOSS":                  "LinOSS",
+    "models.s4d.S4Model":                          "S4D",
+    "models.conv_regressor.Conv1DRegressor":       "CNN",
+    "models.linoss.LinOSS":                        "LinOSS",
+    "models.transformer.TransformerClassifier":    "Transformer",
 }
 
 
