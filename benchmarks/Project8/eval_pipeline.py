@@ -1,16 +1,12 @@
 """
-Evaluate Project 8 energy regressors on the test set: RMSE [eV] and R^2.
+Evaluate one Project 8 energy regressor on the test set: RMSE [eV] and R^2.
 
 Architecture and backend (PyTorch vs JAX) are auto-detected from the YAML
-training config — pass any number of ``(cfg, ckpt)`` pairs:
+training config:
 
     python benchmarks/Project8/eval_pipeline.py \\
-        configs/Project8/train_project8_conv_regression_energy_gaussiannll.yaml \\
-        checkpoints/project8_conv_regression_energy_gaussiannll/best.ckpt \\
-        configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml \\
-        checkpoints/project8_s4d_regression_energy_gaussiannll/best.ckpt \\
-        configs/Project8/train_project8_linoss_regression_energy_gaussiannll.yaml \\
-        checkpoints/project8_linoss_regression_energy_gaussiannll/best.eqx
+        --config     configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml \\
+        --checkpoint checkpoints/project8_s4d_regression_energy_gaussiannll/best.ckpt
 
 Detection rules:
 
@@ -18,9 +14,9 @@ Detection rules:
   * task with ``init_args.model``       -> JAX/equinox  (``.eqx``)
 
 The display name (CNN / S4D / LinOSS / ...) is taken from the encoder /
-inner-model ``class_path``.  For each model we run ``test_dataloader``,
-undo the ``energy_eV`` z-score using the DataModule's ``mu``/``stds``,
-and report RMSE in eV and R^2 = 1 - SS_res / SS_tot.
+inner-model ``class_path``.  We run ``test_dataloader``, undo the
+``energy_eV`` z-score using the DataModule's ``mu``/``stds``, and report
+RMSE in eV and R^2 = 1 - SS_res / SS_tot.
 """
 
 import argparse
@@ -44,9 +40,9 @@ from dataloader.project8_dataloader import Project8DataModule  # noqa: E402
 
 # Friendly architecture names for known model classes; falls back to class name.
 _ARCH_NAMES = {
-    "models.s4d.S4Model":                 "S4D",
+    "models.s4d.S4Model":                    "S4D",
     "models.conv_regressor.Conv1DRegressor": "CNN",
-    "models.linoss.LinOSS":               "LinOSS",
+    "models.linoss.LinOSS":                  "LinOSS",
 }
 
 
@@ -176,82 +172,59 @@ def rmse_r2(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
 
 # ─── driver ─────────────────────────────────────────────────────────────────
 
-def _evaluate_one(cfg_path: str, ckpt_path: str, dm: Project8DataModule,
-                  y_true_eV: np.ndarray, mu: float, std: float,
-                  device: torch.device) -> dict:
-    cfg = _load_cfg(cfg_path)
-    kind, arch_name, inner_path = detect_kind(cfg)
-    print(f"\n=== {arch_name} [{kind}]  ({inner_path}) ===")
-    print(f"  cfg : {cfg_path}")
-    print(f"  ckpt: {ckpt_path}")
-
-    if kind == "pt":
-        task = load_pt_task(cfg, ckpt_path, device)
-        y_pred_z = predict_pt(task, dm, device)
-    else:
-        task = load_jax_task(cfg, ckpt_path)
-        y_pred_z = predict_jax(task, dm)
-
-    y_pred_eV = y_pred_z * std + mu
-    rmse_eV, r2 = rmse_r2(y_true_eV, y_pred_eV)
-    print(f"  RMSE = {rmse_eV:.4f} eV")
-    print(f"  R^2  = {r2:.6f}")
-    return {
-        "model": arch_name,
-        "backend": kind,
-        "n_test": int(y_pred_eV.shape[0]),
-        "rmse_eV": rmse_eV,
-        "r2": r2,
-    }
-
-
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "pairs", nargs="+", metavar="CFG CKPT",
-        help="One or more (config.yaml, checkpoint) pairs. Architecture is auto-detected.",
-    )
-    parser.add_argument("--out_dir", default="benchmarks/Project8")
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--config",     required=True, help="Training YAML config.")
+    parser.add_argument("--checkpoint", required=True, help="Checkpoint file (.ckpt or .eqx).")
+    parser.add_argument("--out_dir",    default="benchmarks/Project8")
+    parser.add_argument("--device",     default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-
-    if len(args.pairs) % 2 != 0:
-        parser.error("Positional arguments must come in (cfg, ckpt) pairs.")
-    jobs = list(zip(args.pairs[0::2], args.pairs[1::2]))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
 
-    # All Project 8 training configs share the same data block, so the first
-    # one suffices to build the shared test loader and norm stats.
-    dm = build_datamodule(_load_cfg(jobs[0][0]))
+    cfg = _load_cfg(args.config)
+    kind, arch_name, inner_path = detect_kind(cfg)
+    print(f"=== {arch_name} [{kind}]  ({inner_path}) ===")
+    print(f"  cfg : {args.config}")
+    print(f"  ckpt: {args.checkpoint}")
+
+    dm = build_datamodule(cfg)
     target_name = dm.hparams.variables[0]
     mu, std = float(dm.mu[0]), float(dm.stds[0])
-    print(f"Target: {target_name}  (mu={mu:.4f}, std={std:.4f})")
+    print(f"  target: {target_name}  (mu={mu:.4f}, std={std:.4f})")
 
     y_true_eV = collect_true_z(dm) * std + mu
 
-    results = [
-        _evaluate_one(cfg, ckpt, dm, y_true_eV, mu, std, device)
-        for cfg, ckpt in jobs
-    ]
+    if kind == "pt":
+        task = load_pt_task(cfg, args.checkpoint, device)
+        y_pred_z = predict_pt(task, dm, device)
+    else:
+        task = load_jax_task(cfg, args.checkpoint)
+        y_pred_z = predict_jax(task, dm)
 
-    csv_path = out_dir / "energy_metrics.csv"
+    y_pred_eV = y_pred_z * std + mu
+    rmse_eV, r2 = rmse_r2(y_true_eV, y_pred_eV)
+    n_test = int(y_pred_eV.shape[0])
+
+    print(f"\n{arch_name}: RMSE = {rmse_eV:.4f} eV   R^2 = {r2:.6f}   (N={n_test})")
+
+    csv_path = out_dir / f"energy_metrics_{arch_name.lower()}.csv"
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["model", "backend", "n_test", "rmse_eV", "r2"])
         writer.writeheader()
-        writer.writerows(results)
-
-    print(f"\nSummary ({target_name}):")
-    print(f"{'model':<10} {'backend':<8} {'N':>7} {'RMSE [eV]':>14} {'R^2':>10}")
-    for r in results:
-        print(f"{r['model']:<10} {r['backend']:<8} {r['n_test']:>7d} "
-              f"{r['rmse_eV']:>14.4f} {r['r2']:>10.6f}")
-    print(f"\nWrote {csv_path}")
+        writer.writerow({
+            "model": arch_name,
+            "backend": kind,
+            "n_test": n_test,
+            "rmse_eV": rmse_eV,
+            "r2": r2,
+        })
+    print(f"Wrote {csv_path}")
 
 
 if __name__ == "__main__":
