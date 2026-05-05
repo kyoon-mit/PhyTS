@@ -171,10 +171,23 @@ def _load_jax_weights_from_ckpt(
         from models.utils.jax.load_model import load_model
         return load_model(path=p, model=fresh_model, model_state=fresh_state)
 
-    # 2. Lightning torch-pickle format. Try to dig out the eqx pieces.
+    # 2. Lightning torch-pickle format. Two storage layouts supported:
+    #    (a) JAXLightningModule.on_save_checkpoint -> bytes under JAX_CKPT_KEY
+    #    (b) legacy: an eqx.Module pickled somewhere in the dict (e.g. via
+    #        save_hyperparameters)
     import torch
     payload = torch.load(p, map_location="cpu", weights_only=False)
 
+    # (a) JAXLightningModule on_save_checkpoint format.
+    if isinstance(payload, dict):
+        from models.utils.jax.wrapper import JAXLightningModule
+        blob = payload.get(JAXLightningModule.JAX_CKPT_KEY)
+        if blob is not None:
+            import io
+            buf = io.BytesIO(blob)
+            return eqx.tree_deserialise_leaves(buf, (fresh_model, fresh_state))
+
+    # (b) Walk the pickle for a stray eqx.Module / eqx.nn.State.
     found_model = _find_in_pickle(payload, type(fresh_model))
     if found_model is None:
         # Fall back to any eqx.Module — there should be exactly one.
@@ -184,15 +197,15 @@ def _load_jax_weights_from_ckpt(
     if found_model is None:
         keys = list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__
         raise ValueError(
-            f"Could not find an eqx.Module inside the torch checkpoint at {p}.\n"
+            f"Could not find any JAX weights inside the torch checkpoint at {p}.\n"
             f"Top-level keys: {keys}\n"
-            f"This usually means the JAX model was never persisted: Lightning's "
-            f"ModelCheckpoint only saves state_dict() (which is empty for the "
-            f"JAX wrapper) and hyperparameters (only saved if the task calls "
-            f"save_hyperparameters()).\n"
-            f"Fixes: (a) point --checkpoint at a .eqx file produced by "
-            f"JAXCheckpointManager, or (b) ensure the JAX task pickles the "
-            f"model into the Lightning checkpoint (e.g. via save_hyperparameters)."
+            f"This means the JAX model was never persisted to disk for this run: "
+            f"Lightning's ModelCheckpoint only writes state_dict() (which is "
+            f"empty for JAXLightningModule) and Python hyperparameters.\n"
+            f"Fix: re-run training with the updated JAXLightningModule that "
+            f"defines on_save_checkpoint, or use a .eqx written by "
+            f"JAXCheckpointManager. Existing .ckpt files from before that fix "
+            f"do not contain trained weights and cannot be evaluated."
         )
 
     if found_state is None:
