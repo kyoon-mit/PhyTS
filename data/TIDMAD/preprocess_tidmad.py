@@ -88,13 +88,15 @@ def _compute_labels(ch2_1s: np.ndarray, scaling: float) -> np.ndarray:
 
 def _process_files(files, n_per_file, rng, out_ch1, out_ch2, out_params, offset, scaling):
     """Extract n_per_file random windows from each file, writing into pre-allocated arrays."""
-    n_windows_total = 2_010_000_000 // WINDOW_SIZE  # 20,100 non-overlapping windows per file
-
     for i, path in enumerate(files):
         print(f'  [{i+1}/{len(files)}] {os.path.basename(path)}', flush=True)
         with h5py.File(path, 'r') as f:
             ch1_ds = f['timeseries/channel0001/timeseries']
             ch2_ds = f['timeseries/channel0002/timeseries']
+
+            # Use actual min length to handle files where channels differ in size
+            n_samples = min(len(ch1_ds), len(ch2_ds))
+            n_windows_total = n_samples // WINDOW_SIZE
 
             # Labels from the first full 1-second window at 10 MHz
             ch2_1s = ch2_ds[:LABEL_WINDOW]

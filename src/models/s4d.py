@@ -167,9 +167,11 @@ class S4Model(nn.Module):
         # Linear decoder
         self.decoder = nn.Linear(d_model, d_output)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         """
         Input x is shape (B, L, d_input)
+        mask: optional (B, L) bool — True for real positions, False for padding.
+              When provided, pooling averages only over real positions.
         """
         x = self.encoder(x)  # (B, L, d_input) -> (B, L, d_model)
         x = x.transpose(-1, -2)  # (B, L, d_model) -> (B, d_model, L)
@@ -195,10 +197,14 @@ class S4Model(nn.Module):
                 # Postnorm
                 x = norm(x.transpose(-1, -2)).transpose(-1, -2)
 
-        x = x.transpose(-1, -2)
+        x = x.transpose(-1, -2)  # (B, d_model, L) -> (B, L, d_model)
 
-        # Pooling: average pooling over the sequence length
-        x = x.mean(dim=1)
+        # Pooling: masked or full mean over the sequence length
+        if mask is not None:
+            mask_f = mask.unsqueeze(-1).float()  # (B, L, 1)
+            x = (x * mask_f).sum(dim=1) / mask_f.sum(dim=1).clamp(min=1)
+        else:
+            x = x.mean(dim=1)
 
         # Decode the outputs
         x = self.decoder(x)  # (B, d_model) -> (B, d_output)

@@ -1,0 +1,45 @@
+# Usage: python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
+# Trains LinOSS seq2seq denoiser: channel0001 (noisy) -> channel0002 (clean).
+# Input: 100,000 samples at 10 MHz (0.01 s).
+# JAX model — checkpoints saved as .eqx via JAXCheckpointManager.
+# Note: first epoch is slow (JAX JIT compilation). Subsequent epochs are fast.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: models.utils.jax.save_model.JAXCheckpointManager
+      init_args:
+        monitor: val/loss
+        mode: min
+        save_top_k: 3
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: logs
+      name: tidmad_linoss_denoising
+
+model:
+  class_path: tasks.TIDMAD.linoss_denoising.TIDMADLinOSSDenoising
+  init_args:
+    num_blocks: 2
+    ssm_size: 32
+    H: 64
+    discretization: damped_IMEX
+    lr: 1.0e-3
+    clip_grad_norm: 1.0
+    seed: 0
+
+data:
+  class_path: dataloader.tidmad_dataloader.TIDMADDataModule
+  init_args:
+    data_dir: data/TIDMAD/preprocessed
+    batch_size: 2
+    num_workers: 4

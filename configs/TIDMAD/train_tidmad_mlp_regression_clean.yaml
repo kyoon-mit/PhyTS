@@ -22,9 +22,9 @@ trainer:
         mode: min
         save_top_k: 1
   logger:
-    class_path: lightning.pytorch.loggers.WandbLogger
+    class_path: lightning.pytorch.loggers.CSVLogger
     init_args:
-      project: TimeSeriesPhysics
+      save_dir: logs
       name: tidmad_mlp_regression_clean
 
 model:
