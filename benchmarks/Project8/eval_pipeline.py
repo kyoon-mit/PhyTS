@@ -121,12 +121,112 @@ def predict_pt(task, dm: Project8DataModule, device: torch.device) -> np.ndarray
 
 # ─── JAX/equinox tasks (e.g. LinOSS) ────────────────────────────────────────
 
+def _walk(obj, depth: int = 0, max_depth: int = 6):
+    """Recursively yield all values inside dicts/lists/tuples."""
+    if depth > max_depth:
+        return
+    yield obj
+    if isinstance(obj, dict):
+        for v in obj.values():
+            yield from _walk(v, depth + 1, max_depth)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            yield from _walk(v, depth + 1, max_depth)
+
+
+def _find_in_pickle(payload, want_cls):
+    """First object in the torch-pickle payload that is an instance of ``want_cls``."""
+    for value in _walk(payload):
+        if isinstance(value, want_cls):
+            return value
+    return None
+
+
+def _load_jax_weights_from_ckpt(
+    ckpt_path: str,
+    fresh_model,
+    fresh_state,
+):
+    """Restore (model, state) for a JAX task from either a .eqx or a .ckpt file.
+
+    Saving paths supported:
+
+      * ``.eqx`` written by :class:`models.utils.jax.save_model.JAXCheckpointManager`
+        — uses equinox's tree deserialisation (single model or
+        ``(model, state, opt_state)`` tuple).
+      * ``.ckpt`` torch pickle written by Lightning ``ModelCheckpoint`` —
+        provided the LightningModule actually pickled the eqx model
+        somewhere reachable (e.g. via ``save_hyperparameters`` or by
+        attribute on the module). Walks the pickle dict for an
+        ``eqx.Module`` and an ``eqx.nn.State``.
+    """
+    import equinox as eqx
+
+    p = Path(ckpt_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {p}")
+
+    # 1. Equinox-native format.
+    if p.suffix == ".eqx":
+        from models.utils.jax.load_model import load_model
+        return load_model(path=p, model=fresh_model, model_state=fresh_state)
+
+    # 2. Lightning torch-pickle format. Try to dig out the eqx pieces.
+    import torch
+    payload = torch.load(p, map_location="cpu", weights_only=False)
+
+    found_model = _find_in_pickle(payload, type(fresh_model))
+    if found_model is None:
+        # Fall back to any eqx.Module — there should be exactly one.
+        found_model = _find_in_pickle(payload, eqx.Module)
+    found_state = _find_in_pickle(payload, eqx.nn.State)
+
+    if found_model is None:
+        keys = list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__
+        raise ValueError(
+            f"Could not find an eqx.Module inside the torch checkpoint at {p}.\n"
+            f"Top-level keys: {keys}\n"
+            f"This usually means the JAX model was never persisted: Lightning's "
+            f"ModelCheckpoint only saves state_dict() (which is empty for the "
+            f"JAX wrapper) and hyperparameters (only saved if the task calls "
+            f"save_hyperparameters()).\n"
+            f"Fixes: (a) point --checkpoint at a .eqx file produced by "
+            f"JAXCheckpointManager, or (b) ensure the JAX task pickles the "
+            f"model into the Lightning checkpoint (e.g. via save_hyperparameters)."
+        )
+
+    if found_state is None:
+        print(
+            "  WARN: no eqx.nn.State found in checkpoint; using fresh state. "
+            "Stateful layers (e.g. BatchNorm) may use uninitialised running stats."
+        )
+        found_state = fresh_state
+
+    return found_model, found_state
+
+
 def load_jax_task(cfg: dict, ckpt_path: str):
+    """Instantiate the JAX task and restore weights from ``ckpt_path``.
+
+    Supports both equinox ``.eqx`` and Lightning torch-pickle ``.ckpt``
+    formats — see :func:`_load_jax_weights_from_ckpt` for details.
+    """
     init_args = dict(cfg["model"]["init_args"])
     init_args["model"] = _instantiate(init_args["model"])
-    init_args["load_from_checkpoint"] = ckpt_path
+    # Defer weight loading: build the task with fresh weights, then overwrite
+    # jax_model/jax_model_state from whatever format the checkpoint is in.
+    init_args.pop("load_from_checkpoint", None)
     task_cls = _import_class(cfg["model"]["class_path"])
-    return task_cls(**init_args)
+    task = task_cls(**init_args)
+
+    model, state = _load_jax_weights_from_ckpt(
+        ckpt_path,
+        fresh_model=task.jax_model,
+        fresh_state=task.jax_model_state,
+    )
+    task.jax_model = model
+    task.jax_model_state = state
+    return task
 
 
 def predict_jax(task, dm: Project8DataModule) -> np.ndarray:
