@@ -120,10 +120,50 @@ def predict_pt(task, dm: Project8DataModule, device: torch.device) -> np.ndarray
 
 # ─── JAX/equinox tasks (e.g. LinOSS) ────────────────────────────────────────
 
+def _resolve_jax_checkpoint(ckpt_path: str) -> str:
+    """Return a usable .eqx path or raise with a clear message.
+
+    LinOSS / JAXLightningModule weights are saved as equinox ``.eqx`` files
+    by ``models.utils.jax.save_model.JAXCheckpointManager``.  A Lightning
+    ``ModelCheckpoint`` callback would instead write a ``.ckpt`` torch pickle
+    that does *not* contain the JAX arrays — passing that file here yields a
+    confusing equinox deserialisation error.
+
+    If the user passed a non-``.eqx`` file, look for a sibling ``.eqx`` in
+    the same directory; otherwise raise a helpful error.
+    """
+    p = Path(ckpt_path)
+    if p.suffix == ".eqx":
+        if not p.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {p}")
+        return str(p)
+
+    # Try sibling .eqx files in the same directory.
+    if p.parent.is_dir():
+        candidates = sorted(p.parent.glob("*.eqx"))
+        if candidates:
+            chosen = candidates[0]
+            print(
+                f"  WARN: '{p.name}' is not a .eqx file; using sibling "
+                f"'{chosen.name}' instead.\n"
+                f"        (Lightning .ckpt files do not contain JAX weights — "
+                f"use the .eqx written by JAXCheckpointManager.)"
+            )
+            return str(chosen)
+
+    raise ValueError(
+        f"JAX task expects an equinox '.eqx' checkpoint, got '{p}'.\n"
+        f"Lightning .ckpt files saved by ModelCheckpoint do not contain "
+        f"JAX weights — only the JAXCheckpointManager callback writes "
+        f"weight-bearing .eqx files. Point --checkpoint at the .eqx "
+        f"produced during training."
+    )
+
+
 def load_jax_task(cfg: dict, ckpt_path: str):
     init_args = dict(cfg["model"]["init_args"])
     init_args["model"] = _instantiate(init_args["model"])
-    init_args["load_from_checkpoint"] = ckpt_path
+    init_args["load_from_checkpoint"] = _resolve_jax_checkpoint(ckpt_path)
     task_cls = _import_class(cfg["model"]["class_path"])
     return task_cls(**init_args)
 
