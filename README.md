@@ -5,7 +5,7 @@ Deep learning for physics time series across four experimental domains. Built wi
 ## Domains
 
 ### TIDMAD — Dark Matter Direct Detection
-Time series from dark matter axion detection experiments (ABRACADABRA, [arXiv:2406.04378](https://arxiv.org/abs/2406.04378)).
+Time series from dark matter axion detection experiment (ABRACADABRA, [arXiv:2406.04378](https://arxiv.org/abs/2406.04378)).
 
 ### Project 8 — Neutrino Mass Spectroscopy
 Cyclotron Radiation Emission Spectroscopy (CRES) signals for tritium beta-decay spectroscopy.
@@ -45,6 +45,7 @@ src/
       toy_regression.py     # RegressionMSE (PyTorch)
       toy_regression_jax.py # LinOSSToyRegression (JAX via JAXLightningModule)
     TIDMAD/
+      tidmad_denoising.py   # Denoising task: Main task for TIDMAD
       tidmad_regression.py  # RegressionMSE for TIDMAD
     LIGO/
       denoising.py          # DenoisingMSE for LIGO
@@ -61,8 +62,7 @@ data/
   LIGO/sample_dataset/
   toy/sinusoidal_signal_white_noise/
   TIDMAD/
-    original/       # raw H5 files — not tracked by git
-    preprocessed/   # .npy arrays — not tracked by git
+    tidmad_dataset.py      # Dataset reader for TIDMAD (PyTorch)
 tools/
   save_checkpoint.py
 main.py          # LightningCLI entry point
@@ -270,22 +270,18 @@ Results saved to `benchmarks/toy/regression_benchmark.png`.
 
 ## TIDMAD benchmark
 
-**One-time setup** — preprocess raw H5 files into memory-mappable `.npy` arrays
-(see [`data/TIDMAD/README.md`](data/TIDMAD/README.md) for how to obtain the H5 files):
+To obtain a denoising score for TIDMAD data, run inference over the validation data to produce denoised time series. 
+The denoised time series should be saved in the equivalent .h5 file format as the validation data.
+Run `tidmad_denoising.py` over denoised data files. 
+### Denoising Score — Usage
+This script evaluates denoised time-series data stored in denoised HDF5 (`.h5`) files. 
+For formulation of the denoising score, please see [TIDAMD NeurIPS Paper](https://neurips.cc/virtual/2025/loc/san-diego/poster/121748).
+Input files must contain one-second, chunked time series (`time_series_ch1`, `time_series_ch2`) and a corresponding `signal_frequency` dataset with precomputed peak frequencies, along with attributes such as `sample_rate_hz` and `n_chunks` all contained in the original validation file.
+To run the benchmark on denoised data, place the `.h5` files in a directory and execute the script via the command line: `python script.py --data_dir <path_to_h5_files> --output_dir <path_to_save_results>`. 
+Optionally, specify particular files using `--files file1.h5 file2.h5`, enable multiprocessing with `--parallel --num_workers <N>`, or run a coarse approximation using `--coarse` (processes every 10th chunk). 
+The script computes the power spectral density (PSD) per chunk, evaluates signal-to-noise ratios (SNR) at the provided peak frequencies for both channels, and aggregates these into a normalized, log-scaled denoising score. 
+Results are written to `benchmark_results.csv` in the output directory, including the final score and per-chunk SNR values.
 
-```bash
-python data/TIDMAD/preprocess_tidmad.py \
-    --data_dir data/TIDMAD/original \
-    --out_dir  data/TIDMAD/preprocessed
-```
-
-Then run the benchmark:
-
-```bash
-bash benchmarks/TIDMAD/run.sh
-```
-
----
 
 ## Task architecture
 
