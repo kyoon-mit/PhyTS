@@ -22,6 +22,7 @@ RMSE in eV and R^2 = 1 - SS_res / SS_tot.
 import argparse
 import csv
 import importlib
+import os
 import sys
 from pathlib import Path
 
@@ -182,7 +183,20 @@ def main():
     parser.add_argument("--checkpoint", required=True, help="Checkpoint file (.ckpt or .eqx).")
     parser.add_argument("--out_dir",    default="benchmarks/Project8")
     parser.add_argument("--device",     default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--jax_platforms",
+        default=None,
+        help="Override JAX_PLATFORMS (e.g. 'cpu', 'cuda'). "
+             "Defaults to follow --device; useful when JAX's CUDA plugin "
+             "fails to initialise on a misconfigured node.",
+    )
     args = parser.parse_args()
+
+    # JAX must be told the platform before its first import. Otherwise the
+    # CUDA plugin will try to initialise even when we only want CPU. Set the
+    # env var here, before we import any JAX module (lazily, via load_jax_task).
+    jax_plat = args.jax_platforms or ("cuda" if args.device.startswith("cuda") else "cpu")
+    os.environ.setdefault("JAX_PLATFORMS", jax_plat)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
