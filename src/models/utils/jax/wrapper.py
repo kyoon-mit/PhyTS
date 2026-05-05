@@ -3,6 +3,7 @@
 Convert tensors to JAX arrays using DLpack and handle JAX optimizer.
 """
 
+import io
 import logging
 from pathlib import Path
 
@@ -215,3 +216,30 @@ class JAXLightningModule(L.LightningModule):
         # seperate trainable and non-trainable parameters for optimizer state initialization
         diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
         self.opt_state = self.jax_optimizer.init(diff_model)
+
+    # ─── checkpoint round-trip via Lightning's ModelCheckpoint ──────────────
+    # JAX arrays are not torch parameters, so state_dict() is empty for this
+    # module — the default Lightning checkpoint would not contain any model
+    # weights. Serialise (jax_model, jax_model_state) into the checkpoint
+    # dict so a stock ``ModelCheckpoint`` callback round-trips correctly.
+    JAX_CKPT_KEY = "jax_state"
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        buf = io.BytesIO()
+        eqx.tree_serialise_leaves(buf, (self.jax_model, self.jax_model_state))
+        checkpoint[self.JAX_CKPT_KEY] = buf.getvalue()
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        blob = checkpoint.get(self.JAX_CKPT_KEY)
+        if blob is None:
+            logger.warning(
+                "JAXLightningModule.on_load_checkpoint: no '%s' entry found "
+                "in checkpoint; jax_model is left at its initial random "
+                "weights.",
+                self.JAX_CKPT_KEY,
+            )
+            return
+        buf = io.BytesIO(blob)
+        self.jax_model, self.jax_model_state = eqx.tree_deserialise_leaves(
+            buf, (self.jax_model, self.jax_model_state)
+        )
