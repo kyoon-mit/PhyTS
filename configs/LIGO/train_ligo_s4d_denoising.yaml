@@ -1,0 +1,69 @@
+# Usage: python main.py fit --config configs/LIGO/train_ligo_s4d_denoising.yaml
+# Trains S4D seq2seq denoiser: noisy strain (H1+L1) -> clean waveform (H1+L1).
+# Window: 4 s at 512 Hz = 2048 timesteps per sample.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 25
+  enable_progress_bar: false
+  callbacks:
+    - class_path: models.utils.callbacks.LogProgressCallback
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/ligo_s4d_denoising
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 5
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: ligo_s4d_denoising
+
+model:
+  class_path: tasks.LIGO.denoising.DenoisingMSE
+  init_args:
+    lr: 1e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+      init_args:
+        d_input: 2   # H1 + L1 interferometer channels
+        d_output: 2  # denoised H1 + L1
+        d_model: 128
+        d_state: 64
+        n_layers: 4
+        dropout: 0.1
+        dt_min: 0.001
+        dt_max: 0.1
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: /fast/barmstrong/LIGO/merged/train.h5
+    val_file: /fast/barmstrong/LIGO/merged/val.h5
+    test_file: /fast/barmstrong/LIGO/merged/test.h5
+    target_variables: []
+    observed_variables:
+      - snr
+    injected_data_key: whitened_injected
+    clean_data_key: whitened_signal
+    strain_frequency: 512
+    downsample_factor: 1
+    strain_duration: 32.0
+    window_begin: 28.0
+    window_end: 32.0
+    train_batch_size: 64
+    val_batch_size: 64
+    test_batch_size: 64
+    num_workers: 4
+    shuffle: true
+    persistent_workers: true

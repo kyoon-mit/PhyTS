@@ -1,9 +1,9 @@
 """1D Convolutional Autoencoder for seq2seq denoising, with optional classification mode.
 
 Autoencoder mode (num_classes=0, default):
-    Interface: (B, L, 1) → (B, L, 1)
+    Interface: (B, L, d_input) → (B, L, d_output)
     Encoder: Conv1d + GroupNorm + LeakyReLU + MaxPool1d  (× n_layers)
-    Decoder: ConvTranspose1d + GroupNorm + LeakyReLU     (× n_layers) + Conv1d(→1)
+    Decoder: ConvTranspose1d + GroupNorm + LeakyReLU     (× n_layers) + Conv1d(→d_output)
 
 Classification mode (num_classes > 0):
     Interface: (B, L, 1) → (B, num_classes)
@@ -39,6 +39,8 @@ class ConvAE(nn.Module):
         pool_stride: int = 2,
         num_classes: int = 0,
         dropout: float = 0.0,
+        d_input: int = 1,
+        d_output: int = 1,
     ):
         super().__init__()
         if kernel_size % 2 == 0:
@@ -50,7 +52,7 @@ class ConvAE(nn.Module):
 
         enc = OrderedDict()
         for i in range(n_layers):
-            in_ch = 1 if i == 0 else latent_channels
+            in_ch = d_input if i == 0 else latent_channels
             enc[f'conv{i}'] = nn.Conv1d(in_ch, latent_channels, kernel_size, padding=pad)
             enc[f'norm{i}'] = nn.GroupNorm(1, latent_channels)
             enc[f'act{i}']  = nn.LeakyReLU()
@@ -68,13 +70,13 @@ class ConvAE(nn.Module):
                 dec[f'norm{i}']   = nn.GroupNorm(1, latent_channels)
                 dec[f'act{i}']    = nn.LeakyReLU()
                 dec[f'drop{i}']   = nn.Dropout(dropout)
-            dec['out'] = nn.Conv1d(latent_channels, 1, kernel_size=1)
+            dec['out'] = nn.Conv1d(latent_channels, d_output, kernel_size=1)
             self.decoder = nn.Sequential(dec)
 
     def forward(self, x, mask=None):
-        # x: (B, L, 1); mask: (B, L) bool, True = valid cadence.
+        # x: (B, L, d_input); mask: (B, L) bool, True = valid cadence.
         L = x.shape[1]
-        x = x.transpose(1, 2)          # (B, 1, L)
+        x = x.transpose(1, 2)          # (B, d_input, L)
         z = self.encoder(x)            # (B, C, L')
 
         if self._classify:
