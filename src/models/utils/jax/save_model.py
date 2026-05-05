@@ -12,6 +12,12 @@ from lightning.pytorch.trainer import Trainer
 logger = logging.getLogger(__name__)
 
 
+def get_save_dir(trainer: Trainer) -> str:
+    if trainer.log_dir is not None:
+        return trainer.log_dir
+    return trainer.default_root_dir
+
+
 class JAXCheckpointManager(Callback):
     """PyTorch Lightning callback for saving JAX model checkpoints."""
 

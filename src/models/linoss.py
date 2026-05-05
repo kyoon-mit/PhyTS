@@ -398,9 +398,9 @@ class LinOSS(eqx.Module):
             for key in block_keys
         ]
         self.linear_layer = eqx.nn.Linear(H, output_dim, key=linear_layer_key)
-        if task not in ("classification", "regression", "forecasting"):
+        if task not in ("classification", "regression", "forecasting", "denoising"):
             raise ValueError(
-                f"task must be one of 'classification', 'regression', 'forecasting'; got {task!r}"
+                f"task must be one of 'classification', 'regression', 'forecasting', 'denoising'; got {task!r}"
             )
         self.task = task
         self.output_step = output_step
@@ -424,17 +424,14 @@ class LinOSS(eqx.Module):
         x = jax.vmap(self.linear_encoder)(x)
         for block, key in zip(self.blocks, dropkeys):
             x, state = block(x, state, key=key)
-
-        if self.task in ("classification", "regression"):
-            if mask is not None:
-                valid_sum = jnp.sum(mask)
-                x = jnp.sum(x * mask[:, None], axis=0) / jnp.maximum(valid_sum, 1.0)
-            else:
-                x = jnp.mean(x, axis=0)
-            if self.task == "classification":
-                x = jax.nn.softmax(self.linear_layer(x), axis=0)
-            else:
-                x = self.linear_layer(x)
+        if self.task == "classification":
+            x = jnp.mean(x, axis=0)
+            x = jax.nn.softmax(self.linear_layer(x), axis=0)
+        elif self.task == "regression":
+            x = jnp.mean(x, axis=0)
+            x = self.linear_layer(x)
+        elif self.task == "denoising":
+            x = jax.vmap(self.linear_layer)(x)  # (L, output_dim), no activation
         else:  # forecasting
             x = x[self.output_step - 1 :: self.output_step]
             x = jax.nn.tanh(jax.vmap(self.linear_layer)(x))

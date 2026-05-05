@@ -1,0 +1,16 @@
+{
+  "variant": "linoss_abl_s",
+  "display_name": "LinOSS-S",
+  "category": "linoss_ablation",
+  "model_type": "linoss",
+  "arch": "blocks=1, ssm_size=16, H=32, damped_IMEX",
+  "timestamp": "2026-05-04 09:12:23",
+  "n_params": -1,
+  "best_val_loss": 52.45063,
+  "best_val_epoch": 0,
+  "n_epochs": 4,
+  "final_train_loss": 48.91964,
+  "benchmark_score": null,
+  "ckpt_path": null,
+  "error": null
+}
