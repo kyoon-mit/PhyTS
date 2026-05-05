@@ -1,0 +1,14 @@
+variant,display_name,category,model_type,arch,n_params,n_epochs,best_val_loss,best_val_epoch,final_train_loss,benchmark_score,ckpt_path,timestamp,error,official_score
+linoss_190k_mse,LinOSS-190K (MSE),full_training,linoss,"blocks=4, ssm_size=32, H=128, damped_IMEX, loss=MSE",199937,9,52.43449,0,48.85689,-2.248687,/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/logs/tidmad_linoss_190k/version_0/checkpoints/checkpoint_step_53312.eqx,2026-05-04 02:08:46,,-0.098
+linoss_190k_full,LinOSS-190K (PSD),full_training,linoss,"blocks=4, ssm_size=32, H=128, damped_IMEX, loss=PSD",199937,10,5.373173686964584e+18,3,5.684635644299575e+18,-1.290926,/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/logs/tidmad_linoss_190k_psd/version_0/checkpoints/checkpoint_step_213248.eqx,2026-05-04 04:02:39,,1.3037
+conv_l_mse,ConvAE-L (MSE),full_training,conv,"n_layers=5, channels=64, kernel=9, loss=MSE",190977,17,52.35584,6,48.26474,-2.645605,/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/checkpoints/tidmad_conv_l/best.ckpt,2026-05-04 00:57:46,,-0.859
+conv_l_full,ConvAE-L (PSD),full_training,conv,"n_layers=5, channels=64, kernel=9, loss=PSD",190977,16,5.344855764991214e+18,5,5.625751848829846e+18,-2.440809,/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/checkpoints/tidmad_conv_l_psd/best.ckpt,2026-05-04 00:57:53,,-0.112
+chronos_tiny,Chronos-Tiny (zero-shot),baseline,chronos,"zero-shot, T5-tiny encoder-decoder",8000000,,,,,-2.91322,,2026-05-04 02:17:31,,-0.884
+conv_abl_s,ConvAE-S,conv_ablation,conv,"n_layers=3, channels=16, kernel=5",4481,4,52.45533,0,48.72632,,,2026-05-04 09:12:23,,
+conv_abl_m,ConvAE-M,conv_ablation,conv,"n_layers=4, channels=32, kernel=9",36929,4,52.60518,0,48.53008,,,2026-05-04 09:12:23,,
+conv_abl_l,ConvAE-L,conv_ablation,conv,"n_layers=5, channels=64, kernel=9",190977,5,52.38155,4,48.41394,,,2026-05-04 09:12:23,,
+conv_abl_w,ConvAE-W,conv_ablation,conv,"n_layers=3, channels=64, kernel=5",67073,5,52.40678,4,48.67095,,,2026-05-04 09:12:23,,
+conv_abl_xl,ConvAE-XL,conv_ablation,conv,"n_layers=5, channels=128, kernel=9",758785,2,52.41524,1,48.58854,,,2026-05-04 09:12:23,,
+linoss_abl_s,LinOSS-S,linoss_ablation,linoss,"blocks=1, ssm_size=16, H=32, damped_IMEX",-1,4,52.45063,0,48.91964,,,2026-05-04 09:12:23,,
+moment_small,MOMENT-Small (zero-shot),baseline,moment,"zero-shot, patch-based transformer, reconstruction head",40000000,,,,,-2.230978,,2026-05-05 17:18:10,,
+moment_base,MOMENT-Base (zero-shot),baseline,moment,"zero-shot, patch-based transformer, reconstruction head",125000000,,,,,-2.274962,,2026-05-05 17:44:00,,0.4634

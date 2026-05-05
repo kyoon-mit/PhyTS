@@ -1,0 +1,16 @@
+{
+  "variant": "linoss_190k_full",
+  "display_name": "LinOSS-190K (PSD)",
+  "category": "full_training",
+  "model_type": "linoss",
+  "arch": "blocks=4, ssm_size=32, H=128, damped_IMEX, loss=PSD",
+  "timestamp": "2026-05-04 04:02:39",
+  "n_params": 199937,
+  "best_val_loss": 5.373173686964584e+18,
+  "best_val_epoch": 3,
+  "n_epochs": 10,
+  "final_train_loss": 5.684635644299575e+18,
+  "benchmark_score": -1.290926,
+  "ckpt_path": "/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/logs/tidmad_linoss_190k_psd/version_0/checkpoints/checkpoint_step_213248.eqx",
+  "error": null
+}

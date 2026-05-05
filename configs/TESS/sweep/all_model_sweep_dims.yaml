@@ -1,0 +1,50 @@
+# Model width per sweep size tier (xs / sm / md / lg).
+#
+# All tiers target ~10K / ~100K / ~300K / ~700K parameters.
+# Changing d_output from 8 (classification) to 1 (regression) shifts counts by
+# less than 2% at every tier, so the same dims serve both tasks.
+#
+# Consumed by benchmarks/TESS/sweep_utils.py (repo root: configs/TESS/sweep/all_model_sweep_dims.yaml).
+
+mlp:
+  xs: 9
+  sm: 83
+  md: 224
+  lg: 448
+
+s4d:
+  xs: 16
+  sm: 80
+  md: 160
+  lg: 264
+
+cnn:
+  xs: 25
+  sm: 80
+  md: 140
+  lg: 216
+
+cnn_attn:
+  xs: 24
+  sm: 72
+  md: 124
+  lg: 192 # must divide num_heads=4 in ConvAttnAE
+
+linoss:
+  xs: 20
+  sm: 64
+  md: 112
+  lg: 170
+
+# dim_feedforward = 2 * d_model, nhead = 4. xs uses fewer layers for ~10K params (cls d_output≈8).
+transformer:
+  d_model:
+    xs: 24
+    sm: 56
+    md: 96
+    lg: 144
+  num_layers:
+    xs: 2
+    sm: 4
+    md: 4
+    lg: 4
