@@ -1,0 +1,65 @@
+# Usage:
+#   python main.py fit --config configs/Project8/train_project8_conv_regression_energy_gaussiannll_cavnoise_3bin_ts.yaml
+#
+# Regress energy_eV from cav-noised I/Q time series via TS input, with
+# GaussianNLL loss, using a 1D CNN regressor (Conv1DRegressor).  Mirrors the
+# S4D Project 8 GaussianNLL config but swaps the encoder for a stack of 1D
+# Conv blocks + global average pool.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/project8_conv_regression_energy_gaussiannll_cavnoise_3bin_ts
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: project8_conv_regression_energy_gaussiannll_cavnoise_3bin_ts
+
+model:
+  class_path: tasks.Project8.project8_regression.Project8Regression
+  init_args:
+    learning_rate: 1.0e-3
+    gamma: 0.25
+    lr_patience: 5
+    threshold: 1.0e-3
+    lr_min: 1.0e-6
+    encoder:
+      class_path: models.conv_regressor.Conv1DRegressor
+      init_args:
+        d_input:     2          # FFT real/imag channels
+        d_output:    2          # [mean, raw_var] for energy_eV
+        channels:    [32, 64, 128, 256]
+        kernel_size: 21
+        pool_stride: 2
+        dropout:     0.0
+        activation:  gelu
+
+data:
+  class_path: dataloader.project8_dataloader.Project8DataModule
+  init_args: 
+    train_dir: /n/holystore01/LABS/iaifi_lab/Lab/Project8/train
+    val_dir:   /n/holystore01/LABS/iaifi_lab/Lab/Project8/valid
+    test_dir:  /n/holystore01/LABS/iaifi_lab/Lab/Project8/test
+    inputs:    [output_ts_I, output_ts_Q]
+    variables: [energy_eV]
+    cutoff:    24576
+    norm:      true
+    noise_type: cav
+    freq_transform: 
+    batch_size: 128
+    num_workers: 4

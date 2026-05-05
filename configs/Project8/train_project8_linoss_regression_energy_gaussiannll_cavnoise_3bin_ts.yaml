@@ -1,0 +1,66 @@
+# Usage:
+#   python main.py fit --config configs/Project8/train_project8_linoss_regression_energy_gaussiannll_cavnoise_3bin_ts.yaml
+#
+# Regress energy_eV from cav-noised I/Q time series via FFT input, with
+# GaussianNLL loss, using the Damped LinOSS (JAX/equinox) encoder
+# (discretization=damped_IMEX, from PR #6 / merge 31bafaa).  Mirrors the S4D
+# Project 8 GaussianNLL config, but routed through the JAX-aware task
+# Project8RegressionJAX.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/project8_linoss_regression_energy_gaussiannll_cavnoise_3bin_ts
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: project8_linoss_regression_energy_gaussiannll_cavnoise_3bin_ts
+
+model:
+  class_path: tasks.Project8.project8_regression_jax.Project8RegressionJAX
+  init_args:
+    lr: 1.0e-3
+    clip_grad_norm: 1.0
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 6
+        N: 2            # FFT real/imag channels (matches S4D d_input)
+        ssm_size: 64
+        H: 128
+        output_dim: 2   # [mean, raw_var] for energy_eV
+        task: regression
+        output_step: 1
+        discretization: damped_IMEX
+        seed: 0
+
+data:
+  class_path: dataloader.project8_dataloader.Project8DataModule
+  init_args:
+    train_dir: /n/holystore01/LABS/iaifi_lab/Lab/Project8/train
+    val_dir:   /n/holystore01/LABS/iaifi_lab/Lab/Project8/valid
+    test_dir:  /n/holystore01/LABS/iaifi_lab/Lab/Project8/test
+    inputs:    [output_ts_I, output_ts_Q]
+    variables: [energy_eV]
+    cutoff:    24576
+    norm:      true
+    noise_type: cav
+    freq_transform: 
+    batch_size: 64
+    num_workers: 0
