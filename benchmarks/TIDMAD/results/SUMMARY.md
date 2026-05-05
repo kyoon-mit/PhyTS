@@ -146,17 +146,15 @@ with `src/tasks/TIDMAD/tidmad_denoising.py --coarse`.
 | Variant         | Official Score | Our Score (100 Hz) |
 |-----------------|----------------|--------------------|
 | linoss_190k_psd | **+1.3037**    | -1.2909            |
+| moment_base     | **+0.463**     | -2.2750            |
 | linoss_190k_mse | -0.098         | -2.2487            |
 | conv_l_psd      | -0.112         | -2.4408            |
-| conv_l_mse      | -0.859         | -2.6456            |
 | chronos_tiny    | -0.884         | -2.9132            |
+| conv_l_mse      | -0.859         | -2.6456            |
 | moment_small    | (pending H5 export) | -2.2310       |
-| moment_base     | (pending H5 export) | -2.2750       |
 
-LinOSS-190K (PSD) achieves a **positive official score (+1.3037)**, meaning it successfully
-recovers the injection signal above the noise floor at 1 Hz frequency resolution.
-
-MOMENT official scoring requires exporting denoised H5 files (not yet done).
+LinOSS-190K (PSD) achieves the best official score (+1.3037). MOMENT-Base also scores positive
+(+0.463), both outperforming all other variants at 1 Hz resolution.
 
 ---
 
@@ -209,7 +207,8 @@ Positive score means the denoised signal has higher SNR than the ch2 normalizati
 
 | Score   | Model              | Scoring     | Notes                              |
 |---------|--------------------|--------------|------------------------------------|
-| +1.3037 | LinOSS-190K PSD    | Official     | Positive — best overall            |
+| +1.3037 | LinOSS-190K PSD    | Official     | Best overall                       |
+| +0.463  | MOMENT-Base        | Official     | Zero-shot                          |
 | -0.098  | LinOSS-190K MSE    | Official     |                                    |
 | -0.112  | ConvAE-L PSD       | Official     |                                    |
 | -0.859  | ConvAE-L MSE       | Official     |                                    |

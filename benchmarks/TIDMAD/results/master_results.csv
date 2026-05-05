@@ -11,4 +11,4 @@ conv_abl_w,ConvAE-W,conv_ablation,conv,"n_layers=3, channels=64, kernel=5",67073
 conv_abl_xl,ConvAE-XL,conv_ablation,conv,"n_layers=5, channels=128, kernel=9",758785,2,52.41524,1,48.58854,,,2026-05-04 09:12:23,,
 linoss_abl_s,LinOSS-S,linoss_ablation,linoss,"blocks=1, ssm_size=16, H=32, damped_IMEX",-1,4,52.45063,0,48.91964,,,2026-05-04 09:12:23,,
 moment_small,MOMENT-Small (zero-shot),baseline,moment,"zero-shot, patch-based transformer, reconstruction head",40000000,,,,,-2.230978,,2026-05-05 17:18:10,,
-moment_base,MOMENT-Base (zero-shot),baseline,moment,"zero-shot, patch-based transformer, reconstruction head",125000000,,,,,-2.274962,,2026-05-05 17:44:00,,
+moment_base,MOMENT-Base (zero-shot),baseline,moment,"zero-shot, patch-based transformer, reconstruction head",125000000,,,,,-2.274962,,2026-05-05 17:44:00,,0.4634
