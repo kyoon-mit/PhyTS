@@ -6,16 +6,17 @@ trainer:
   accelerator: cpu
   devices: 1
   log_every_n_steps: 1
+  enable_progress_bar: false
   callbacks:
+    - class_path: models.utils.callbacks.LogProgressCallback
     - class_path: lightning.pytorch.callbacks.EarlyStopping
       init_args:
         monitor: val/loss
         mode: min
         patience: 10
-    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    - class_path: models.utils.jax.save_model.JAXCheckpointManager
       init_args:
         dirpath: checkpoints/toy_linoss_regression_raw
-        filename: best
         monitor: val/loss
         mode: min
         save_top_k: 1
@@ -45,7 +46,7 @@ model:
         output_dim: 3 # must match len(target_params)
         task: regression
         output_step: 1
-        discretization: IM
+        discretization: damped_IMEX
         seed: 0
 
 data:

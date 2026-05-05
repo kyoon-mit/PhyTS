@@ -8,7 +8,6 @@ build/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # Logs & checkpoints (Lightning)
 logs/
@@ -44,3 +43,4 @@ data/.cache/
 
 # Wandb
 wandb/
+tea_debug.log

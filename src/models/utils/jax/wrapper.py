@@ -3,6 +3,7 @@
 Convert tensors to JAX arrays using DLpack and handle JAX optimizer.
 """
 
+import io
 import logging
 from pathlib import Path
 
@@ -14,8 +15,13 @@ import torch
 from jaxtyping import PRNGKeyArray, PyTree
 
 from .load_model import load_model
+from .print_params import (
+    count_array_elements,
+    count_inexact_array_elements,
+    print_param_tree,
+)
 from .training import LossFunction, jax_apply_training_step, jax_inference
-from .utils import jax_to_tensor, tensor_to_jax
+from .utils import tensor_to_jax
 
 # Define a type for batches of PyTorch tensors
 type Batch = tuple[PyTree[torch.Tensor], ...]
@@ -79,6 +85,18 @@ class JAXLightningModule(L.LightningModule):
                 model_state=self.jax_model_state,
             )
 
+        # Parameter accounting after optional checkpoint hydration.
+        mod_elems = count_inexact_array_elements(self.jax_model)
+        state_elems = count_array_elements(self.jax_model_state)
+        summary = (
+            f"[{self.__class__.__name__}] jax_model floating leaves "
+            f"(``eqx.is_inexact_array``; includes BN slots in the module tree): {mod_elems:,} | "
+            f"jax_model_state array elements (``eqx.is_array``): {state_elems:,}"
+        )
+        print(summary, flush=True)
+        logger.info("%s", summary)
+        print_param_tree(self.jax_model, 3)
+
     def _prepare_batch(self, batch: Batch) -> tuple[PyTree[jax.Array], PyTree[jax.Array]]:
         """Return (x, y) from a JAX-converted batch. Override for dataset-specific layouts."""
         x, y, *_ = batch
@@ -87,6 +105,10 @@ class JAXLightningModule(L.LightningModule):
     def _batched_keys(self, base_key: PRNGKeyArray, batch_size: int) -> PRNGKeyArray:
         """Split a scalar PRNG key into one key per sample for vmapped dropout."""
         return jax.random.split(base_key, batch_size)
+
+    def _training_step_extra_logs(self, model_output: PyTree[jax.Array], y: PyTree[jax.Array]) -> None:
+        """Log additional ``train/*`` metrics from forward outputs; override in task modules."""
+        return
 
     def forward(self, x: ModelInput):
         """Forward pass. convert PyTorch tensor to JAX array and apply JAX model."""
@@ -137,6 +159,7 @@ class JAXLightningModule(L.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
+        self._training_step_extra_logs(model_output, y)
 
         # Needed for lightning if self.automatic_optimization = False
         optimizers = self.optimizers()
@@ -208,6 +231,33 @@ class JAXLightningModule(L.LightningModule):
             self.jax_optimizer,
         )
 
-        # seperate trainable and non-trainable parameters for optimizer state initialization
+        # separate trainable and non-trainable parameters for optimizer state initialization
         diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
         self.opt_state = self.jax_optimizer.init(diff_model)
+
+    # ─── checkpoint round-trip via Lightning's ModelCheckpoint ──────────────
+    # JAX arrays are not torch parameters, so state_dict() is empty for this
+    # module — the default Lightning checkpoint would not contain any model
+    # weights. Serialise (jax_model, jax_model_state) into the checkpoint
+    # dict so a stock ``ModelCheckpoint`` callback round-trips correctly.
+    JAX_CKPT_KEY = "jax_state"
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        buf = io.BytesIO()
+        eqx.tree_serialise_leaves(buf, (self.jax_model, self.jax_model_state))
+        checkpoint[self.JAX_CKPT_KEY] = buf.getvalue()
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        blob = checkpoint.get(self.JAX_CKPT_KEY)
+        if blob is None:
+            logger.warning(
+                "JAXLightningModule.on_load_checkpoint: no '%s' entry found "
+                "in checkpoint; jax_model is left at its initial random "
+                "weights.",
+                self.JAX_CKPT_KEY,
+            )
+            return
+        buf = io.BytesIO(blob)
+        self.jax_model, self.jax_model_state = eqx.tree_deserialise_leaves(
+            buf, (self.jax_model, self.jax_model_state)
+        )

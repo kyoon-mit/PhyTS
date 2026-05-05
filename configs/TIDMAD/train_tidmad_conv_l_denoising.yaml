@@ -1,0 +1,48 @@
+# Full ConvAE-L training for TIDMAD denoising.
+# Architecture: n_layers=5, latent_channels=64, kernel_size=9 (~190K params)
+# Selected as best conv ablation variant (val/loss=52.38 vs xl=52.42, w=52.41).
+# Loss: PSD (MSE in frequency domain) — more aligned with the PSD-based SNR benchmark.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tidmad_conv_l_psd
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: logs
+      name: tidmad_conv_l_psd
+
+model:
+  class_path: tasks.toy.toy_denoising.DenoisingPSD
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.conv_ae.ConvAE
+      init_args:
+        n_layers: 5
+        latent_channels: 64
+        kernel_size: 9
+        pool_stride: 2
+
+data:
+  class_path: dataloader.tidmad_dataloader.TIDMADDataModule
+  init_args:
+    data_dir: data/TIDMAD/preprocessed
+    batch_size: 4
+    num_workers: 4

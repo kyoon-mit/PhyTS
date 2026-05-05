@@ -1,11 +1,12 @@
 """LinOSS: Linear Operator State Space Models for Sequence Modeling.
 
-https://openreview.net/pdf?id=GRMfXcAAFh
+Original LinOSS: https://openreview.net/pdf?id=GRMfXcAAFh
+Damped Variant: https://arxiv.org/abs/2505.12171
 https://github.com/tk-rusch/linoss/tree/main
 """
 
 import math
-from typing import List
+from typing import List, Optional
 
 import equinox as eqx
 import jax
@@ -73,6 +74,77 @@ def binary_operator(q_i, q_j):
     new_b = jnp.concatenate([new_b1, new_b2])
 
     return Anew, new_b + b_j
+
+
+def _apply_damped_linoss_imex(A_diag, G_diag, B, x, step):  # noqa: N802
+    """Compute the Damped LinOSS-IMEX recurrence.
+
+    Args:
+        A_diag: Diagonal state matrix.
+        G_diag: Diagonal damping matrix.
+        B: Input matrix.
+        x: Input sequence of features.
+        step: Discretization time-step.
+
+    Returns:
+        Hidden state sequence, shape (timesteps, state_dim).
+    """
+    Bu_elements = jax.vmap(lambda u: B @ u)(x)
+
+    Identity = jnp.ones_like(A_diag)
+    S = Identity + step * G_diag
+    M_11 = 1.0 / S
+    M_12 = -step / S * A_diag
+    M_21 = step / S
+    M_22 = Identity - step**2 / S * A_diag
+
+    M = jnp.concatenate([M_11, M_12, M_21, M_22])
+    M_elements = M * jnp.ones((x.shape[0], 4 * A_diag.shape[0]))
+
+    F1 = step * (1.0 / S) * Bu_elements
+    F2 = step**2 * (1.0 / S) * Bu_elements
+    F = jnp.hstack((F1, F2))
+
+    _, xs = jax.lax.associative_scan(binary_operator, (M_elements, F))
+    ys = xs[:, A_diag.shape[0] :]
+
+    return ys
+
+
+def _map_theta_to_A(thetas, G_diag, steps):  # noqa: N802
+    """Map theta parameter to diagonal state matrix A for damped LinOSS-IMEX.
+
+    Args:
+        thetas: Theta parameter values.
+        G_diag: Diagonal damping matrix.
+        steps: Discretization time-steps.
+
+    Returns:
+        Diagonal state matrix A.
+    """
+    A_plus = (
+        4
+        * jnp.sqrt(steps**4 * jnp.cos(thetas) ** (-2) + steps**5 * G_diag * jnp.cos(thetas) ** (-2))
+        - steps**2
+        * (
+            -4
+            - 2 * steps * G_diag
+            - 4 * jnp.tan(thetas) ** 2
+            - 2 * steps * G_diag * jnp.tan(thetas) ** 2
+        )
+    ) / (2 * steps**4 * (1 + jnp.tan(thetas) ** 2))
+    A_minus = (
+        -4
+        * jnp.sqrt(steps**4 * jnp.cos(thetas) ** (-2) + steps**5 * G_diag * jnp.cos(thetas) ** (-2))
+        - steps**2
+        * (
+            -4
+            - 2 * steps * G_diag
+            - 4 * jnp.tan(thetas) ** 2
+            - 2 * steps * G_diag * jnp.tan(thetas) ** 2
+        )
+    ) / (2 * steps**4 * (1 + jnp.tan(thetas) ** 2))
+    return jnp.where(thetas > jnp.pi / 2, A_plus, A_minus)
 
 
 def apply_linoss_im(A_diag, B, C_tilde, input_sequence, step):
@@ -145,39 +217,75 @@ def apply_linoss_imex(A_diag, B, C, input_sequence, step):
 
 
 class LinOSSLayer(eqx.Module):
-    """Single LinOSS layer with either IMEX or IM discretization."""
+    """Single LinOSS layer with IMEX, IM, or damped_IMEX discretization."""
 
     A_diag: jax.Array
+    G_diag: Optional[jax.Array]
     B: jax.Array
     C: jax.Array
     D: jax.Array
     steps: jax.Array
     discretization: str
 
-    def __init__(self, ssm_size, H, discretization, *, key):
+    def __init__(
+        self,
+        ssm_size,
+        H,
+        discretization,
+        r_min=0.0,
+        theta_max=math.pi,
+        *,
+        key,
+    ):
+        B_key, C_key, D_key, A_key, step_key, G_key = jr.split(key, 6)
 
-        B_key, C_key, D_key, A_key, step_key, key = jr.split(key, 6)
-        self.A_diag = jr.uniform(A_key, shape=(ssm_size,))
+        if discretization == "damped_IMEX":
+            self.steps = jr.normal(step_key, shape=(ssm_size,)) * 0.5
+            steps = nn.sigmoid(self.steps)
+            r_max = 1.0
+            mags = jnp.sqrt(jr.uniform(G_key, shape=(ssm_size,)) * (r_max**2 - r_min**2) + r_min**2)
+            self.G_diag = (1 - mags**2) / (steps * mags**2)
+            G_diag = nn.relu(self.G_diag)
+            theta = jr.uniform(A_key, shape=(ssm_size,)) * theta_max
+            self.A_diag = _map_theta_to_A(theta, G_diag, steps)
+        else:
+            self.steps = jr.uniform(step_key, shape=(ssm_size,))
+            self.G_diag = None
+            self.A_diag = jr.uniform(A_key, shape=(ssm_size,))
+
         self.B = _simple_uniform_init(B_key, shape=(ssm_size, H, 2), std=1.0 / math.sqrt(H))
         self.C = _simple_uniform_init(C_key, shape=(H, ssm_size, 2), std=1.0 / math.sqrt(ssm_size))
         self.D = nn.initializers.normal(stddev=1.0)(D_key, (H,))
-        self.steps = jr.uniform(step_key, shape=(ssm_size,))
         self.discretization = discretization
 
     def __call__(self, input_sequence):
         """LinOSS layer forward pass."""
-        A_diag = nn.relu(self.A_diag)
-
         B_complex = self.B[..., 0] + 1j * self.B[..., 1]
         C_complex = self.C[..., 0] + 1j * self.C[..., 1]
-
         steps = nn.sigmoid(self.steps)
-        if self.discretization == "IMEX":
+
+        if self.discretization == "damped_IMEX":
+            G_diag = nn.relu(self.G_diag)
+            A_boundary_low = (2 + steps * G_diag - 2 * jnp.sqrt(1 + steps * G_diag)) / steps**2
+            A_boundary_high = (2 + steps * G_diag + 2 * jnp.sqrt(1 + steps * G_diag)) / steps**2
+            A_diag = (
+                A_boundary_low
+                + nn.relu(self.A_diag - A_boundary_low)
+                - nn.relu(self.A_diag - A_boundary_high)
+            )
+            ys = _apply_damped_linoss_imex(A_diag, G_diag, B_complex, input_sequence, steps)
+            ys = jax.vmap(lambda y: (C_complex @ y).real)(ys)
+        elif self.discretization == "IMEX":
+            A_diag = nn.relu(self.A_diag)
             ys = apply_linoss_imex(A_diag, B_complex, C_complex, input_sequence, steps)
         elif self.discretization == "IM":
+            A_diag = nn.relu(self.A_diag)
             ys = apply_linoss_im(A_diag, B_complex, C_complex, input_sequence, steps)
         else:
-            raise NotImplementedError(f"Discretization {self.discretization} not implemented.")
+            raise NotImplementedError(
+                f"Discretization {self.discretization!r} not implemented. "
+                "Choose from 'IMEX', 'IM', 'damped_IMEX'."
+            )
 
         Du = jax.vmap(lambda u: self.D * u)(input_sequence)
         return ys + Du
@@ -191,13 +299,25 @@ class LinOSSBlock(eqx.Module):
     glu: GLU
     drop: eqx.nn.Dropout
 
-    def __init__(self, ssm_size, H, discretization, drop_rate=0.05, *, key):
+    def __init__(
+        self,
+        ssm_size,
+        H,
+        discretization,
+        drop_rate=0.05,
+        r_min=0.0,
+        theta_max=math.pi,
+        *,
+        key,
+    ):
         ssmkey, glukey = jr.split(key, 2)
         self.norm = eqx.nn.BatchNorm(input_size=H, axis_name="batch", channelwise_affine=False)
         self.ssm = LinOSSLayer(
             ssm_size,
             H,
             discretization,
+            r_min=r_min,
+            theta_max=theta_max,
             key=ssmkey,
         )
         self.glu = GLU(H, H, key=glukey)
@@ -224,6 +344,13 @@ class LinOSS(eqx.Module):
       * ``"classification"``: mean-pool over time, linear, softmax.
       * ``"regression"``:    mean-pool over time, linear (no activation).
       * ``"forecasting"``:   per-step subsample + linear + tanh.
+
+    Masked pooling: if the input passed to ``__call__`` has one more channel than
+    ``input_dim`` (i.e. shape ``(L, N+1)``), the last channel is treated as a
+    float validity mask (1 = valid, 0 = padding) and used for masked mean pooling
+    instead of plain mean pooling.  The signal channels ``x[..., :N]`` are fed
+    to the encoder as usual.  This convention lets callers pass the mask without
+    changing the JAX training infrastructure.
     """
 
     linear_encoder: eqx.nn.Linear
@@ -231,6 +358,7 @@ class LinOSS(eqx.Module):
     linear_layer: eqx.nn.Linear
     task: str
     output_step: int
+    input_dim: int
     stateful: bool = True
     nondeterministic: bool = True
     lip2: bool = False
@@ -245,6 +373,9 @@ class LinOSS(eqx.Module):
         task,
         output_step,
         discretization,
+        r_min=0.0,
+        theta_max=math.pi,
+        drop_rate=0.05,
         *,
         key=None,
         seed=0,
@@ -259,20 +390,36 @@ class LinOSS(eqx.Module):
                 ssm_size,
                 H,
                 discretization,
+                drop_rate=drop_rate,
+                r_min=r_min,
+                theta_max=theta_max,
                 key=key,
             )
             for key in block_keys
         ]
         self.linear_layer = eqx.nn.Linear(H, output_dim, key=linear_layer_key)
-        if task not in ("classification", "regression", "forecasting"):
+        if task not in ("classification", "regression", "forecasting", "denoising"):
             raise ValueError(
-                f"task must be one of 'classification', 'regression', 'forecasting'; got {task!r}"
+                f"task must be one of 'classification', 'regression', 'forecasting', 'denoising'; got {task!r}"
             )
         self.task = task
         self.output_step = output_step
+        self.input_dim = N
 
     def __call__(self, x, state, key):
-        """Compute LinOSS."""
+        """Compute LinOSS.
+
+        x: (L, N) signal, or (L, N+1) where last channel is a float validity mask
+           (1 = valid cadence, 0 = zero-padded).  The mask is extracted before the
+           encoder and used for masked mean pooling; it does not affect encoder weights.
+        """
+        # Extract mask channel if appended by the task's _prepare_batch.
+        if x.shape[-1] > self.input_dim:
+            mask = x[..., -1]               # (L,) float: 1=valid, 0=padding
+            x = x[..., : self.input_dim]    # (L, N) signal
+        else:
+            mask = None
+
         dropkeys = jr.split(key, len(self.blocks))
         x = jax.vmap(self.linear_encoder)(x)
         for block, key in zip(self.blocks, dropkeys):
@@ -283,6 +430,8 @@ class LinOSS(eqx.Module):
         elif self.task == "regression":
             x = jnp.mean(x, axis=0)
             x = self.linear_layer(x)
+        elif self.task == "denoising":
+            x = jax.vmap(self.linear_layer)(x)  # (L, output_dim), no activation
         else:  # forecasting
             x = x[self.output_step - 1 :: self.output_step]
             x = jax.nn.tanh(jax.vmap(self.linear_layer)(x))
