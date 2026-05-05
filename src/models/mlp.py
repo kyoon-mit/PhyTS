@@ -25,6 +25,6 @@ class MLPRegressor(nn.Module):
         layers.append(nn.Linear(dims[-1], d_output))
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x):
-        # x: (B, L, 1) -> (B, L) -> (B, d_output)
+    def forward(self, x, mask=None):
+        # x: (B, L, 1) -> (B, L) -> (B, d_output); mask unused (MLP flattens all positions)
         return self.net(x.squeeze(-1))
