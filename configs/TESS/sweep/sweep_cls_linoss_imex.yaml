@@ -1,0 +1,49 @@
+# wandb sweep config — LinOSS-IMEX end-to-end classification (JAX/Equinox)
+#
+# Requires the jax extra:
+#   uv sync --extra jax --extra cu13
+#
+# Create sweep:
+#   wandb sweep configs/TESS/sweep/sweep_cls_linoss_imex.yaml --project TimeSeriesPhysics
+# Launch agents (--jax added automatically for linoss_* model types):
+#   bash benchmarks/TESS/run_sweep.sh --model_type linoss_imex --sweep_id <id>
+
+program: benchmarks/TESS/sweep_classification.py
+command:
+  - ${env}
+  - benchmarks/TESS/repo_python.sh
+  - ${program}
+  - --model_type=linoss_imex
+  - ${args}
+
+name: cls_linoss_imex
+method: bayes
+run_cap: 150
+metric:
+  name: val/balanced_acc
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 20
+  eta: 3
+
+parameters:
+  size:
+    values: [xs, sm, md, lg]
+  lr:
+    distribution: log_uniform_values
+    min: 0.00005
+    max: 0.01
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  weight_decay:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.01
+  batch_size:
+    values: [128, 256, 512]
+  seed:
+    values: [0, 1, 2]

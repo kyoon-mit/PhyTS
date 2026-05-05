@@ -23,7 +23,6 @@ def get_save_dir(trainer: Trainer) -> str:
 def _stderr(msg: str) -> None:
     print(f"[JAXCheckpointManager] {msg}", file=sys.stderr, flush=True)
 
-
 class JAXCheckpointManager(Callback):
     """PyTorch Lightning callback for saving JAX/equinox model checkpoints.
 

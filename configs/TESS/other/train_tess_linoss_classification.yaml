@@ -1,0 +1,63 @@
+# LinOSS end-to-end classification: flux → variability label (8 classes).
+#
+# Stage 1 of the LinOSS TESS benchmark — no pretraining required.
+# Checkpoint saved to $CKPT_DIR/tess_linoss_classification/best.eqx (Equinox format).
+#
+# The LinOSS model uses task="regression" to output raw logits (no softmax);
+# cross-entropy is applied inside TESSLinOSSClassificationCE._ce_loss.
+#
+# Usage:
+#   python main.py fit --config configs/TESS/other/train_tess_linoss_classification.yaml \
+#     --data.init_args.data_dir <path>
+# Optional checkpoint dir (see JAXModelCheckpoint in tess_linoss.py):
+#   TESS_LINOSS_CKPT_DIR=<ckpt_dir>/tess_linoss_classification
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 10
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: tasks.TESS.tess_linoss.JAXModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_linoss_classification
+        monitor: val/loss
+        mode: min
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: tess_linoss_classification
+
+model:
+  class_path: tasks.TESS.tess_linoss.TESSLinOSSClassificationCE
+  init_args:
+    num_classes: 8
+    lr: 1.0e-3
+    clip_grad_norm: 1.0
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 4
+        N: 1          # single flux channel: (B, L, 1)
+        ssm_size: 100  # ~265K params for ssm_size=64, H=128; set to 100 (with H=200) to match S4D's ~662K
+        H: 200
+        output_dim: 8  # must equal num_classes
+        task: regression  # raw logits; softmax_cross_entropy applied in loss fn
+        output_step: 1
+        discretization: IM
+        seed: 0
+
+data:
+  class_path: dataloader.tess_dataloader.TESSClassificationDataModule
+  init_args:
+    data_dir: data/TESS/.cache/TESS
+    batch_size: 64
+    num_workers: 8
+    seq_len: 1100

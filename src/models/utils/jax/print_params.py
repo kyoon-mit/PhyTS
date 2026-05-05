@@ -1,5 +1,7 @@
 """Utility functions for parameter counting and printing."""
 
+from __future__ import annotations
+
 import equinox as eqx
 import jax
 
@@ -12,6 +14,30 @@ _COLORS = {
     "cyan": "\033[96m",
 }
 _RESET = "\033[0m"
+
+
+def count_inexact_array_elements(tree) -> int:
+    """Sum element counts over leaves selected by ``eqx.is_inexact_array``.
+
+    This matches typical ``torch.nn.Parameter`` style totals for architectures
+    that store weights as floating JAX arrays inside an ``eqx.Module``.
+
+    Notes
+    -----
+    Equinox modules may also attach non-trainable float buffers (for example,
+    BatchNorm placeholder slots) that still appear here. Auxiliary arrays
+    held only in ``eqx.nn.State`` are not part of ``tree``.
+    """
+    subt = eqx.filter(tree, eqx.is_inexact_array)
+    return sum(leaf.size for leaf in jax.tree_util.tree_leaves(subt))
+
+
+def count_array_elements(tree) -> int:
+    """Sum sizes of every JAX array leaf reachable on ``tree`` (any dtype).
+
+    Intended for sizing ``eqx.nn.State`` payloads saved alongside checkpoints.
+    """
+    return sum(leaf.size for leaf in jax.tree_util.tree_leaves(eqx.filter(tree, eqx.is_array)))
 
 
 def _colorize(text: str, color: str | None) -> str:
