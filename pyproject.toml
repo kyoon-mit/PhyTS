@@ -31,6 +31,13 @@ jax = [
 cu12 = ["jax[cuda12]>=0.7.2"]
 cu13 = ["jax[cuda13]>=0.7.2"]
 
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -60,3 +67,6 @@ convention = "google"
 [tool.ruff.format]
 quote-style = "double"
 docstring-code-format = true
+
+[dependency-groups]
+dev = ["ipykernel>=7.2.0"]

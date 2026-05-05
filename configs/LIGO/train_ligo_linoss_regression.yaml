@@ -6,7 +6,6 @@ trainer:
   max_epochs: 100
   accelerator: cpu # accelerator=cpu: JAX manages GPU memory directly; setting gpu here conflicts with JAX.
   devices: 1
-  log_every_n_steps: 1
   enable_progress_bar: false
   callbacks:
     - class_path: models.utils.callbacks.LogProgressCallback
@@ -31,7 +30,6 @@ model:
   class_path: tasks.LIGO.ligo_regression_jax.LinOSSLIGORegression
   init_args:
     lr: 1e-3
-    clip_grad_norm: 1.0
     seed: 0
     model:
       class_path: models.linoss.LinOSS
@@ -58,13 +56,13 @@ data:
       - snr
     injected_data_key: whitened_injected
     strain_frequency: 512
-    downsample_factor: 2
-    strain_duration: 64.0
-    window_begin: 60.0
-    window_end: 64.0
+    downsample_factor: 1
+    strain_duration: 32.0
+    window_begin: 28.0
+    window_end: 32.0
     train_batch_size: 64
     val_batch_size: 64
     test_batch_size: 64
-    num_workers: 4
+    num_workers: 16
     shuffle: true
     persistent_workers: true

@@ -39,10 +39,19 @@ class LinOSSLIGODenoising(JAXLightningModule):
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
     ):
+        learning_rate_schedule = optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=float(lr),
+            warmup_steps=1000,
+            decay_steps=100000,
+            end_value=1e-6,
+        )
+        optimizer = optax.adamw(learning_rate_schedule)
+
         super().__init__(
             model=model,
             loss_fn=mse_loss,
-            optimizer=optax.adamw(lr),
+            optimizer=optimizer,
             clip_grad_norm=clip_grad_norm,
             load_from_checkpoint=load_from_checkpoint,
             seed=seed,
