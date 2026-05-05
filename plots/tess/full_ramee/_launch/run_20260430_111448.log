@@ -1,0 +1,2 @@
+/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/momentfm/models/moment.py:174: UserWarning: Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.
+  warnings.warn("Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.")

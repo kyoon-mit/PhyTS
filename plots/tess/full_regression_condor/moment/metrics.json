@@ -1,0 +1,109 @@
+{
+  "metrics": {
+    "mse": 0.4296514391899109,
+    "mae": 0.1476406455039978,
+    "r2": 0.3749045729637146,
+    "pearson_r": 0.6139779686927795,
+    "spearman_r": 0.8820628533276995,
+    "val_mse": 0.13100329183909765
+  },
+  "target_name": "frot",
+  "d_embed": 768,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.19561980394557466,
+      "val_mse": 0.17551986910034725
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.12631157174537244,
+      "val_mse": 0.15013951006771206
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.09366194688211847,
+      "val_mse": 0.15785635452812755
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.07240021083553422,
+      "val_mse": 0.14254896101547618
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.05481464230405799,
+      "val_mse": 0.20066101595190716
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.03898797708344353,
+      "val_mse": 0.14181112430636095
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.030155421312476314,
+      "val_mse": 0.13100329183909765
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.03283577312133593,
+      "val_mse": 0.14365012165622248
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.020132207537005984,
+      "val_mse": 0.14117790942443342
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.03272064455835829,
+      "val_mse": 0.247075190533265
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.021168329528222164,
+      "val_mse": 0.20536212576913274
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.01639298489963387,
+      "val_mse": 0.19166161902383377
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_regression_condor",
+    "models": [
+      "moment"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

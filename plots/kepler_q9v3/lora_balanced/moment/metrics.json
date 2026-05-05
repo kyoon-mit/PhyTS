@@ -1,0 +1,180 @@
+{
+  "metrics": {
+    "accuracy": 0.9059649122807018,
+    "balanced_accuracy": 0.8992800153699599,
+    "macro_f1": 0.8817717727766067,
+    "val_accuracy": 0.9214035087719298
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.859375,
+      "recall": 0.88,
+      "f1-score": 0.8695652173913043,
+      "support": 125.0
+    },
+    "CONSTANT": {
+      "precision": 0.8705882352941177,
+      "recall": 0.9866666666666667,
+      "f1-score": 0.925,
+      "support": 150.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.9276315789473685,
+      "recall": 0.831858407079646,
+      "f1-score": 0.8771384136858476,
+      "support": 339.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.923728813559322,
+      "recall": 0.9396551724137931,
+      "f1-score": 0.9316239316239316,
+      "support": 116.0
+    },
+    "ECLIPSE": {
+      "precision": 0.9724137931034482,
+      "recall": 0.9657534246575342,
+      "f1-score": 0.9690721649484536,
+      "support": 146.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.7614678899082569,
+      "recall": 0.8829787234042553,
+      "f1-score": 0.8177339901477833,
+      "support": 94.0
+    },
+    "INSTRUMENT": {
+      "precision": 0.9226190476190477,
+      "recall": 0.8806818181818182,
+      "f1-score": 0.9011627906976745,
+      "support": 176.0
+    },
+    "RRLYR_CEPHEID": {
+      "precision": 0.6363636363636364,
+      "recall": 0.7777777777777778,
+      "f1-score": 0.7,
+      "support": 9.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.9411764705882353,
+      "recall": 0.9481481481481482,
+      "f1-score": 0.9446494464944649,
+      "support": 270.0
+    },
+    "accuracy": 0.9059649122807018,
+    "macro avg": {
+      "precision": 0.8683738294870481,
+      "recall": 0.8992800153699599,
+      "f1-score": 0.8817717727766067,
+      "support": 1425.0
+    },
+    "weighted avg": {
+      "precision": 0.9090568600292528,
+      "recall": 0.9059649122807018,
+      "f1-score": 0.9060880584943535,
+      "support": 1425.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONSTANT",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT",
+    "RRLYR_CEPHEID",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.695635918671122,
+      "val_loss": 0.4405851470099555,
+      "val_acc": 0.84
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.4207170424051583,
+      "val_loss": 0.40481128609842726,
+      "val_acc": 0.8540350877192983
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.33943688036659014,
+      "val_loss": 0.3202350107745992,
+      "val_acc": 0.8778947368421053
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.26899827915118435,
+      "val_loss": 0.32680960446596147,
+      "val_acc": 0.8996491228070176
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.2383950884642008,
+      "val_loss": 0.3069312913550271,
+      "val_acc": 0.896140350877193
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.2163887416737942,
+      "val_loss": 0.29792156643751594,
+      "val_acc": 0.9214035087719298
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.20170232998834065,
+      "val_loss": 0.29196562851882646,
+      "val_acc": 0.8933333333333333
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.17612010290702948,
+      "val_loss": 0.2999696581624448,
+      "val_acc": 0.903859649122807
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.1532125629338015,
+      "val_loss": 0.3358443449561795,
+      "val_acc": 0.9136842105263158
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.15506840730197907,
+      "val_loss": 0.33298768301287457,
+      "val_acc": 0.9101754385964912
+    }
+  ],
+  "args": {
+    "zip": "data/keplerq9v3.zip",
+    "out_dir": "plots/kepler_q9v3/lora_balanced",
+    "models": [
+      "moment"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 10,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "balanced",
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

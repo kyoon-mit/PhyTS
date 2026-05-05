@@ -1,0 +1,139 @@
+{
+  "metrics": {
+    "mse": 0.43178099393844604,
+    "mae": 0.17769034206867218,
+    "r2": 0.3718063235282898,
+    "pearson_r": 0.6107741873613517,
+    "spearman_r": 0.8634720376579696,
+    "val_mse": 0.12180517891724355
+  },
+  "target_name": "frot",
+  "d_embed": 768,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.2127999064347629,
+      "val_mse": 0.1834256632407148
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.1287395725737534,
+      "val_mse": 0.2004025823115035
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.09419098754331999,
+      "val_mse": 0.15377066785084
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.0781262811343949,
+      "val_mse": 0.17502710892306
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.06309666245251123,
+      "val_mse": 0.15549858788962884
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.05217140536870466,
+      "val_mse": 0.13881216257993817
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.043410592211136544,
+      "val_mse": 0.16246217888835146
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.03188220532367685,
+      "val_mse": 0.12180517891724355
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.04096317765564732,
+      "val_mse": 0.15261977584752545
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.04981421615013231,
+      "val_mse": 0.1466905017326589
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.025479886008352118,
+      "val_mse": 0.14729346354096756
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.01985625585357759,
+      "val_mse": 0.1520808967781698
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.02734806380636864,
+      "val_mse": 0.15649718619143763
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.04549929345385798,
+      "val_mse": 0.1585276644289673
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.019535917053673458,
+      "val_mse": 0.16801435898915829
+    },
+    {
+      "epoch": 16,
+      "train_loss": 0.04189577874710212,
+      "val_mse": 0.1579820660292571
+    },
+    {
+      "epoch": 17,
+      "train_loss": 0.02117598052972341,
+      "val_mse": 0.16987903525671183
+    },
+    {
+      "epoch": 18,
+      "train_loss": 0.01245240615008649,
+      "val_mse": 0.14215534099832153
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/lora_regression_condor",
+    "models": [
+      "moirai"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 50,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 10,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

@@ -1,0 +1,152 @@
+{
+  "metrics": {
+    "accuracy": 0.7985347985347986,
+    "balanced_accuracy": 0.8015803577883664,
+    "macro_f1": 0.796336409012679,
+    "val_accuracy": 0.8150943396226416
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.5880281690140845,
+      "recall": 0.8308457711442786,
+      "f1-score": 0.688659793814433,
+      "support": 201.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.6809421841541756,
+      "recall": 0.7146067415730337,
+      "f1-score": 0.6973684210526315,
+      "support": 445.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.8694362017804155,
+      "recall": 0.8387404580152672,
+      "f1-score": 0.8538125303545411,
+      "support": 1048.0
+    },
+    "ECLIPSE": {
+      "precision": 0.972027972027972,
+      "recall": 0.8424242424242424,
+      "f1-score": 0.9025974025974026,
+      "support": 165.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8674418604651163,
+      "recall": 0.6144975288303131,
+      "f1-score": 0.7193828351012537,
+      "support": 607.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.7952840300107181,
+      "recall": 0.902676399026764,
+      "f1-score": 0.8455840455840455,
+      "support": 822.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 0.9786096256684492,
+      "recall": 0.9195979899497487,
+      "f1-score": 0.9481865284974094,
+      "support": 199.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.6839237057220708,
+      "recall": 0.7492537313432835,
+      "f1-score": 0.7150997150997151,
+      "support": 335.0
+    },
+    "accuracy": 0.7985347985347986,
+    "macro avg": {
+      "precision": 0.8044617186053753,
+      "recall": 0.8015803577883664,
+      "f1-score": 0.796336409012679,
+      "support": 3822.0
+    },
+    "weighted avg": {
+      "precision": 0.8102786833246942,
+      "recall": 0.7985347985347986,
+      "f1-score": 0.7986542802907347,
+      "support": 3822.0
+    }
+  },
+  "d_embed": 1280,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "last",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.7780598137767619,
+      "val_loss": 0.5404458376699481,
+      "val_acc": 0.8150943396226416
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.24476446104554,
+      "val_loss": 0.8358354015177935,
+      "val_acc": 0.6881401617250674
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.503257743198521,
+      "val_loss": 1.3708662342742046,
+      "val_acc": 0.45956873315363883
+    },
+    {
+      "epoch": 4,
+      "train_loss": 1.3261903072901675,
+      "val_loss": 1.109866292126015,
+      "val_acc": 0.5752021563342318
+    },
+    {
+      "epoch": 5,
+      "train_loss": 1.1220074626803611,
+      "val_loss": 1.2172765315693586,
+      "val_acc": 0.5762803234501348
+    },
+    {
+      "epoch": 6,
+      "train_loss": 1.2306780377349007,
+      "val_loss": 1.1074413367888496,
+      "val_acc": 0.5916442048517521
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_condor",
+    "models": [
+      "timesfm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 2,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "metrics": {
+    "mse": 0.4691816568374634,
+    "mae": 0.2131216675043106,
+    "r2": 0.3173924684524536,
+    "pearson_r": 0.5658596158027649,
+    "spearman_r": 0.8210302966837887,
+    "val_mse": 0.16984763213973797
+  },
+  "target_name": "frot",
+  "d_embed": 768,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.2580227941316629,
+      "val_mse": 0.2227633416899112
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.19753398231629143,
+      "val_mse": 0.20333825177161016
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.1716679552491421,
+      "val_mse": 0.2958201597943979
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.15433008466044354,
+      "val_mse": 0.18952126153428717
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.14311154344967755,
+      "val_mse": 0.19135395805927513
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.13649200884367038,
+      "val_mse": 0.17657028741836933
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.1283556248641527,
+      "val_mse": 0.17719022585783167
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.12180232805242225,
+      "val_mse": 0.2029094234717705
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.12049409255984651,
+      "val_mse": 0.17333299767956478
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.1075414066903339,
+      "val_mse": 0.16984763213973797
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.09987383522009802,
+      "val_mse": 0.17718467750919414
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.09297206740616598,
+      "val_mse": 0.19274451047333302
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.08894109931776266,
+      "val_mse": 0.17647166990907462
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.08208986343232255,
+      "val_mse": 0.17153989475632897
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.07954614932742153,
+      "val_mse": 0.1735515556242889
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_regression_condor",
+    "models": [
+      "chronos"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

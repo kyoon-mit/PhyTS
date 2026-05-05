@@ -1,0 +1,118 @@
+TESS classification: 25935 LCs (train/val/test = (18403, 3710, 3822)), unique TICs per split = (4275, 854, 856), n_classes=8, lc_len=1024
+
+======================================================================
+[timemoe] loading (size=base, adapter=lora)
+======================================================================
+  [timemoe] pool=last
+  [finetune-cls] timemoe: LoRA r=8 α=16 injected into 48 modules (whole backbone), 0.295M trainable params.
+  [finetune-cls] timemoe: d_embed=384
+  [finetune-cls] epoch 1/50  train_loss=0.6951  val_loss=0.4975  val_acc=0.8412
+  [finetune-cls] epoch 2/50  train_loss=0.4018  val_loss=0.4233  val_acc=0.8615
+  [finetune-cls] epoch 3/50  train_loss=0.3281  val_loss=0.4089  val_acc=0.8660
+  [finetune-cls] epoch 4/50  train_loss=0.2726  val_loss=0.4638  val_acc=0.8577
+  [finetune-cls] epoch 5/50  train_loss=0.2340  val_loss=0.4402  val_acc=0.8701
+  [finetune-cls] epoch 6/50  train_loss=0.1992  val_loss=0.4472  val_acc=0.8752
+  [finetune-cls] epoch 7/50  train_loss=0.1727  val_loss=0.4563  val_acc=0.8752
+  [finetune-cls] epoch 8/50  train_loss=0.1425  val_loss=0.4390  val_acc=0.8747
+  [finetune-cls] epoch 9/50  train_loss=0.1200  val_loss=0.4947  val_acc=0.8728
+  [finetune-cls] epoch 10/50  train_loss=0.1064  val_loss=0.5358  val_acc=0.8712
+  [finetune-cls] epoch 11/50  train_loss=0.0790  val_loss=0.6242  val_acc=0.8768
+  [finetune-cls] epoch 12/50  train_loss=0.0753  val_loss=0.6302  val_acc=0.8655
+  [finetune-cls] epoch 13/50  train_loss=0.0670  val_loss=0.6344  val_acc=0.8763
+  [finetune-cls] epoch 14/50  train_loss=0.0539  val_loss=0.6827  val_acc=0.8798
+  [finetune-cls] epoch 15/50  train_loss=0.0476  val_loss=0.6897  val_acc=0.8747
+  [finetune-cls] epoch 16/50  train_loss=0.0416  val_loss=0.6939  val_acc=0.8733
+  [finetune-cls] epoch 17/50  train_loss=0.0388  val_loss=0.7810  val_acc=0.8644
+  [finetune-cls] epoch 18/50  train_loss=0.0356  val_loss=0.7437  val_acc=0.8763
+  [finetune-cls] epoch 19/50  train_loss=0.0354  val_loss=0.8275  val_acc=0.8774
+  [finetune-cls] epoch 20/50  train_loss=0.0347  val_loss=0.7974  val_acc=0.8747
+  [finetune-cls] epoch 21/50  train_loss=0.0260  val_loss=0.8526  val_acc=0.8725
+  [finetune-cls] epoch 22/50  train_loss=0.0298  val_loss=0.8974  val_acc=0.8693
+  [finetune-cls] early stop at epoch 22: no val improvement for 8 epochs (best val_acc=0.8798 at epoch 14).
+
+[timemoe] test metrics (best-val checkpoint):
+  accuracy: 0.8718
+  balanced_accuracy: 0.8670
+  macro_f1: 0.8622
+  val_accuracy: 0.8798
+  d_embed: 384
+
+Per-class F1:
+  APERIODIC          f1=0.757  n=201
+  CONTACT_ROT        f1=0.798  n=445
+  DSCT_BCEP          f1=0.938  n=1048
+  ECLIPSE            f1=0.930  n=165
+  GDOR_SPB           f1=0.811  n=607
+  INSTRUMENT/JUNK    f1=0.901  n=822
+  RRLYR_CEPH         f1=0.972  n=199
+  SOLARLIKE          f1=0.792  n=335
+
+Confusion matrix (rows=true, cols=pred):
+   APER  CONT  DSCT  ECLI  GDOR  INST  RRLY  SOLA
+  APER   160    14     2     0     3    13     0     9
+  CONT    10   350    10     8    47    11     3     6
+  DSCT     4    10   979     0    25    17     1    12
+  ECLI     1     1     0   152     0     6     0     5
+  GDOR     2    38    36     0   486     3     0    42
+  INST    34    11    10     2    12   730     0    23
+  RRLY     0     4     0     0     3     0   192     0
+  SOLA    11     4     2     0    16    19     0   283
+
+======================================================================
+[moirai] loading (size=base, adapter=lora)
+======================================================================
+  [moirai] pool=mean
+  [finetune-cls] moirai: LoRA r=8 α=16 injected into 48 modules (whole backbone), 0.590M trainable params.
+  [finetune-cls] moirai: d_embed=768
+  [finetune-cls] epoch 1/50  train_loss=0.6851  val_loss=0.4873  val_acc=0.8367
+  [finetune-cls] epoch 2/50  train_loss=0.4219  val_loss=0.4295  val_acc=0.8615
+  [finetune-cls] epoch 3/50  train_loss=0.3303  val_loss=0.5060  val_acc=0.8450
+  [finetune-cls] epoch 4/50  train_loss=0.2594  val_loss=0.4557  val_acc=0.8677
+  [finetune-cls] epoch 5/50  train_loss=0.2159  val_loss=0.4455  val_acc=0.8677
+  [finetune-cls] epoch 6/50  train_loss=0.1748  val_loss=0.4535  val_acc=0.8774
+  [finetune-cls] epoch 7/50  train_loss=0.1446  val_loss=0.5152  val_acc=0.8679
+  [finetune-cls] epoch 8/50  train_loss=0.1166  val_loss=0.5771  val_acc=0.8687
+  [finetune-cls] epoch 9/50  train_loss=0.1073  val_loss=0.5142  val_acc=0.8663
+  [finetune-cls] epoch 10/50  train_loss=0.0892  val_loss=0.5472  val_acc=0.8752
+  [finetune-cls] epoch 11/50  train_loss=0.0772  val_loss=0.5484  val_acc=0.8725
+  [finetune-cls] epoch 12/50  train_loss=0.0730  val_loss=0.5979  val_acc=0.8668
+  [finetune-cls] epoch 13/50  train_loss=0.0675  val_loss=0.5816  val_acc=0.8701
+  [finetune-cls] epoch 14/50  train_loss=0.0606  val_loss=0.6082  val_acc=0.8695
+  [finetune-cls] early stop at epoch 14: no val improvement for 8 epochs (best val_acc=0.8774 at epoch 6).
+
+[moirai] test metrics (best-val checkpoint):
+  accuracy: 0.8731
+  balanced_accuracy: 0.8677
+  macro_f1: 0.8644
+  val_accuracy: 0.8774
+  d_embed: 768
+
+Per-class F1:
+  APERIODIC          f1=0.761  n=201
+  CONTACT_ROT        f1=0.811  n=445
+  DSCT_BCEP          f1=0.917  n=1048
+  ECLIPSE            f1=0.903  n=165
+  GDOR_SPB           f1=0.842  n=607
+  INSTRUMENT/JUNK    f1=0.902  n=822
+  RRLYR_CEPH         f1=0.979  n=199
+  SOLARLIKE          f1=0.799  n=335
+
+Confusion matrix (rows=true, cols=pred):
+   APER  CONT  DSCT  ECLI  GDOR  INST  RRLY  SOLA
+  APER   151    17     6     0     2    14     0    11
+  CONT    14   370     7    15    28     7     0     4
+  DSCT     2    26   950     0    38    27     0     5
+  ECLI     0     1     1   154     1     4     0     4
+  GDOR     2    30    20     0   517     3     0    35
+  INST    18    10    32     5     9   729     0    19
+  RRLY     0     5     0     0     3     0   191     0
+  SOLA     9     8     7     2    23    11     0   275
+
+======================================================================
+Summary (LoRA fine-tune, seed=42, adapter=lora)
+======================================================================
+          model     acc   bal_acc   macro_f1   val_acc
+        timemoe  0.8718  0.8670  0.8622   0.8798
+         moirai  0.8731  0.8677  0.8644   0.8774
+
+Wrote: plots/tess/lora_brigand2

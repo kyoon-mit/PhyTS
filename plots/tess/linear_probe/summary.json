@@ -1,0 +1,9 @@
+{
+  "granite_ttm": {
+    "accuracy": 0.6868131868131868,
+    "balanced_accuracy": 0.6914882225841705,
+    "macro_f1": 0.6912606651062414,
+    "val_accuracy": 0.6668463611859838,
+    "val_balanced_accuracy": 0.6839717450890577
+  }
+}

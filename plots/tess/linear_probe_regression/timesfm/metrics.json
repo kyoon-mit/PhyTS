@@ -1,0 +1,38 @@
+{
+  "metrics": {
+    "mse": 0.6364664435386658,
+    "mae": 0.39738336205482483,
+    "r2": 0.07401156425476074,
+    "pearson_r": 0.4009432380080241,
+    "spearman_r": 0.6155983697787278,
+    "val_mse": 0.2899467349052429,
+    "val_r2": 0.3640673756599426
+  },
+  "target_name": "frot",
+  "d_embed": 1280,
+  "pool": "last",
+  "y_mean": 1.1162035465240479,
+  "y_std": 0.6127495865686036,
+  "args": {
+    "out_dir": "plots/tess/linear_probe_regression",
+    "models": [
+      "moment",
+      "chronos",
+      "timesfm",
+      "timemoe",
+      "moirai",
+      "granite_ttm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 8,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "alpha": 1.0,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

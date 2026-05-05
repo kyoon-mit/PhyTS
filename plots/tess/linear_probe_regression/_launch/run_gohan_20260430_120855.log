@@ -1,0 +1,134 @@
+/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/momentfm/models/moment.py:174: UserWarning: Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.
+  warnings.warn("Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.")
+[tess-reg] dropping 26 rows with non-positive frot
+TESS regression (frot): 4157 LCs (train/val/test = (2925, 582, 650)), unique TICs per split = (434, 93, 94), target mean/std = 1.1162/0.6127, lc_len=1024
+
+======================================================================
+[moment] loading (size=base)
+======================================================================
+  [moment] pool=mean
+  [moment] extracting train embeddings...
+  [moment] extracting val embeddings...
+  [moment] extracting test embeddings...
+  [moment] train=(2925, 768) val=(582, 768) test=(650, 768)
+
+[moment] test metrics:
+  mse: 0.5065
+  mae: 0.2892
+  r2: 0.2631
+  pearson_r: 0.5168
+  spearman_r: 0.7059
+  val_mse: 0.1954
+  val_r2: 0.5714
+  d_embed: 768
+
+======================================================================
+[chronos] loading (size=base)
+======================================================================
+  [chronos] pool=mean
+  [chronos] extracting train embeddings...
+  [chronos] extracting val embeddings...
+  [chronos] extracting test embeddings...
+  [chronos] train=(2925, 768) val=(582, 768) test=(650, 768)
+
+[chronos] test metrics:
+  mse: 0.4778
+  mae: 0.2628
+  r2: 0.3049
+  pearson_r: 0.5523
+  spearman_r: 0.7439
+  val_mse: 0.2213
+  val_r2: 0.5147
+  d_embed: 768
+
+======================================================================
+[timesfm] loading (size=base)
+======================================================================
+ See https://github.com/google-research/timesfm/blob/master/README.md for updated APIs.
+Loaded PyTorch TimesFM, likely because python version is 3.10.20 (main, Mar 11 2026, 17:46:40) [GCC 14.3.0].
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 113.18it/s]
+  [timesfm] pool=last
+  [timesfm] extracting train embeddings...
+  [timesfm] extracting val embeddings...
+  [timesfm] extracting test embeddings...
+  [timesfm] train=(2925, 1280) val=(582, 1280) test=(650, 1280)
+
+[timesfm] test metrics:
+  mse: 0.6365
+  mae: 0.3974
+  r2: 0.0740
+  pearson_r: 0.4009
+  spearman_r: 0.6156
+  val_mse: 0.2899
+  val_r2: 0.3641
+  d_embed: 1280
+
+======================================================================
+[timemoe] loading (size=base)
+======================================================================
+  [timemoe] pool=last
+  [timemoe] extracting train embeddings...
+  [timemoe] extracting val embeddings...
+  [timemoe] extracting test embeddings...
+  [timemoe] train=(2925, 384) val=(582, 384) test=(650, 384)
+
+[timemoe] test metrics:
+  mse: 0.5695
+  mae: 0.3615
+  r2: 0.1715
+  pearson_r: 0.4184
+  spearman_r: 0.5533
+  val_mse: 0.2657
+  val_r2: 0.4173
+  d_embed: 384
+
+======================================================================
+[moirai] loading (size=base)
+======================================================================
+  [moirai] pool=mean
+  [moirai] extracting train embeddings...
+  [moirai] extracting val embeddings...
+  [moirai] extracting test embeddings...
+  [moirai] train=(2925, 768) val=(582, 768) test=(650, 768)
+
+[moirai] test metrics:
+  mse: 0.5247
+  mae: 0.2870
+  r2: 0.2366
+  pearson_r: 0.4870
+  spearman_r: 0.7150
+  val_mse: 0.2039
+  val_r2: 0.5528
+  d_embed: 768
+
+======================================================================
+[granite_ttm] loading (size=base)
+======================================================================
+  [granite_ttm] pool=mean
+  [granite_ttm] extracting train embeddings...
+  [granite_ttm] extracting val embeddings...
+  [granite_ttm] extracting test embeddings...
+  [granite_ttm] train=(2925, 192) val=(582, 192) test=(650, 192)
+
+[granite_ttm] test metrics:
+  mse: 0.5464
+  mae: 0.3106
+  r2: 0.2050
+  pearson_r: 0.4534
+  spearman_r: 0.6347
+  val_mse: 0.2340
+  val_r2: 0.4869
+  d_embed: 192
+
+======================================================================
+Summary (zero-shot regression, seed=42)
+======================================================================
+          model       mse       mae        r2   pearson  spearman
+         moment  0.5065  0.2892  0.2631  0.5168  0.7059
+        chronos  0.4778  0.2628  0.3049  0.5523  0.7439
+        timesfm  0.6365  0.3974  0.0740  0.4009  0.6156
+        timemoe  0.5695  0.3615  0.1715  0.4184  0.5533
+         moirai  0.5247  0.2870  0.2366  0.4870  0.7150
+    granite_ttm  0.5464  0.3106  0.2050  0.4534  0.6347
+
+Wrote: plots/tess/linear_probe_regression

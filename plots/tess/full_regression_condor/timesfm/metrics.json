@@ -1,0 +1,84 @@
+{
+  "metrics": {
+    "mse": 0.49936509132385254,
+    "mae": 0.19735682010650635,
+    "r2": 0.2734789252281189,
+    "pearson_r": 0.5262595922629492,
+    "spearman_r": 0.8249366150442236,
+    "val_mse": 0.182381197164088
+  },
+  "target_name": "frot",
+  "d_embed": 1280,
+  "pool": "last",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.21352624861221975,
+      "val_mse": 0.19571606639558226
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.1485968147873811,
+      "val_mse": 0.182381197164088
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.27705469133336824,
+      "val_mse": 0.27943351501386926
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.32268628454449094,
+      "val_mse": 0.45790233313049195
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.3229884365077329,
+      "val_mse": 0.28206225365473925
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.22692721985379752,
+      "val_mse": 0.22431716180880173
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.2461685550989471,
+      "val_mse": 0.2960861223106532
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_regression_condor",
+    "models": [
+      "timesfm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

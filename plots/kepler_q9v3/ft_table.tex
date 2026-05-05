@@ -1,0 +1,29 @@
+% Fine-tuning grid on Kepler Q9 v3 (test accuracy)
+\begin{table}[h]
+\centering
+\caption{Test accuracy on Kepler Q9 v3 across fine-tuning regimes (stratified 70/15/15 split, seed=42, batch best-val checkpoint, early stopping patience 20). Zero-shot = frozen backbone + L2-regularised logistic regression on mean/last-pooled embeddings. LoRA = adapters on attention projections only (head\,lr$=10^{-3}$, backbone\,lr$=10^{-4}$). Full SFT = all parameters trainable (head\,lr$=10^{-3}$, backbone\,lr$=10^{-5}$). `--' = run not available. Bold = best per column.}
+\label{tab:kepler_q9v3_ft_grid}
+\begin{tabular}{lcccc}
+\toprule
+Model & Zero-shot & LoRA $r{=}8$ & LoRA $r{=}16$ & Full SFT \\
+\midrule
+MOMENT-base & 0.912 & 0.915 & 0.912 & 0.924 \\
+MOMENT-large & 0.904 & -- & -- & -- \\
+\midrule
+Chronos-base & \textbf{0.933} & 0.933 & \textbf{0.941} & \textbf{0.938} \\
+Chronos-large & 0.930 & -- & -- & -- \\
+\midrule
+Time-MoE-base & 0.887 & 0.926 & 0.928 & 0.928 \\
+Time-MoE-large & 0.882 & -- & -- & -- \\
+\midrule
+Granite-TTM-base & 0.811 & -- & -- & 0.865 \\
+Granite-TTM-large & 0.754 & -- & -- & -- \\
+\midrule
+TimesFM-base & 0.919 & 0.925 & 0.930 & 0.895 \\
+TimesFM-large & 0.844 & 0.916 & 0.919 & 0.919 \\
+\midrule
+MOIRAI-base & 0.904 & \textbf{0.935} & 0.929 & 0.923 \\
+MOIRAI-large & 0.924 & 0.933 & 0.918 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}

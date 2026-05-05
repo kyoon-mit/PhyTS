@@ -1,0 +1,47 @@
+# Condor job: PhyTS-bench TESS regression fine-tuning (LoRA / full / last_n).
+# Target: rotation frequency f_rot.
+#
+# Submit a single variant by passing args as Condor macros:
+#   condor_submit \
+#     -a 'tag=lora_timemoe' \
+#     -a 'model=timemoe' \
+#     -a 'model_size=base' \
+#     -a 'extra_args=--adapter lora --epochs 50 --patience 10 --batch_size 16 --out_dir plots/tess/lora_regression_condor' \
+#     benchmarks/foundation/condor/tess_regression_finetune.job
+#
+# Regression set is small (~4k LCs) so a single LoRA run is ~30-90 min.
+# Full-FT on chronos is the worst case at ~2-3 h.
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_tess_regression_finetune_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+Arguments       = --models $(model) \
+                  --model_size $(model_size) \
+                  --batch_size 4 \
+                  --seed 42 \
+                  $(extra_args)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True LAGLLAMA_CKPT=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"
+
+Log             = reg_tess_$(tag)_$(ClusterId)_$(Process).log
+Output          = reg_tess_$(tag)_$(ClusterId)_$(Process).out
+Error           = reg_tess_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 16G
+RequestGpus     = 1
+# Regression set is 4k LCs; even chronos full FT runs in well under 4 h.
+RequestWalltime = 21600
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 10000)
+
+NiceUser        = True
+
+Queue 1

@@ -1,0 +1,36 @@
+# Condor job: Chronos alone (smaller batch size to avoid OOM).
+# Chronos T5 cross-attention cache scales poorly with batch × context × horizon.
+
+REPO = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_benchmark_moment.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+Arguments       = --data_dir $(REPO)/data/toy/sinusoidal_signal_white_noise \
+                  --out_dir   $(REPO)/plots/toy/foundation \
+                  --models    chronos \
+                  --tasks     forecasting embedding \
+                  --mode      zero_shot \
+                  --context_len 512 \
+                  --horizon   128 \
+                  --batch_size 8 \
+                  --device    cuda
+
+Environment     = "HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache PYTHONHOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
+
+Log             = chronos_$(ClusterId)_$(Process).log
+Output          = chronos_$(ClusterId)_$(Process).out
+Error           = chronos_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 32G
+RequestGpus     = 1
+RequestWalltime = 14400
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") && (GPUs_Capability >= 7.0) && (GPUs_GlobalMemoryMb >= 20000)
+
+NiceUser        = True
+
+Queue 1

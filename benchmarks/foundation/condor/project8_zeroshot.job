@@ -1,0 +1,65 @@
+# Condor job: Project 8 zero-shot linear probe — one model per submission.
+#
+# Submit a single model:
+#   condor_submit -a 'tag=granite_ttm' -a 'model=granite_ttm' \
+#     benchmarks/foundation/condor/project8_zeroshot.job
+#
+# Override settings (e.g. larger size, different output dir, gauss noise):
+#   condor_submit -a 'tag=moment_large' -a 'model=moment' \
+#     -a 'model_size=large' \
+#     -a 'noise_type=gauss' \
+#     -a 'out_dir=plots/Project8/linear_probe_gauss' \
+#     benchmarks/foundation/condor/project8_zeroshot.job
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_project8_zeroshot_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+# Defaults; override via -a 'name=value' on the condor_submit line.
+model_size      = base
+out_dir         = plots/Project8/linear_probe
+noise_type      = cav
+cutoff          = 24576
+batch_size      = 32
+num_workers     = 8
+prefetch_factor = 4
+# Extra CLI args — e.g. "--max_train_batches 100 --max_test_batches 30" for slow models.
+extra_args      =
+
+Arguments       = --data_root data/Project8 \
+                  --models $(model) \
+                  --model_size $(model_size) \
+                  --out_dir $(out_dir) \
+                  --noise_type $(noise_type) \
+                  --cutoff $(cutoff) \
+                  --batch_size $(batch_size) \
+                  --num_workers $(num_workers) \
+                  --prefetch_factor $(prefetch_factor) \
+                  --pin_memory \
+                  --persistent_workers \
+                  $(extra_args)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache LAGLLAMA_CKPT=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"
+
+Log             = p8_zs_$(tag)_$(ClusterId)_$(Process).log
+Output          = p8_zs_$(tag)_$(ClusterId)_$(Process).out
+Error           = p8_zs_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 8
+RequestMemory   = 24G
+RequestGpus     = 1
+# Project 8 zero-shot at cutoff=24576: ~3-5 h depending on backbone; give 8 h.
+RequestWalltime = 28800
+RequestDisk     = 20G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (Machine != "pythagoras.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 12000)
+
+NiceUser        = True
+
+Queue 1

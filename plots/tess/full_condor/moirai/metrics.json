@@ -1,0 +1,182 @@
+{
+  "metrics": {
+    "accuracy": 0.8814756671899528,
+    "balanced_accuracy": 0.8670798891268758,
+    "macro_f1": 0.8698099897898346,
+    "val_accuracy": 0.8878706199460916
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.8352941176470589,
+      "recall": 0.7064676616915423,
+      "f1-score": 0.7654986522911051,
+      "support": 201.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.7979591836734694,
+      "recall": 0.8786516853932584,
+      "f1-score": 0.8363636363636363,
+      "support": 445.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.9359223300970874,
+      "recall": 0.9198473282442748,
+      "f1-score": 0.9278152069297402,
+      "support": 1048.0
+    },
+    "ECLIPSE": {
+      "precision": 0.872093023255814,
+      "recall": 0.9090909090909091,
+      "f1-score": 0.8902077151335311,
+      "support": 165.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8615916955017301,
+      "recall": 0.8204283360790774,
+      "f1-score": 0.8405063291139241,
+      "support": 607.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.8892773892773893,
+      "recall": 0.9282238442822385,
+      "f1-score": 0.9083333333333333,
+      "support": 822.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 0.9948979591836735,
+      "recall": 0.9798994974874372,
+      "f1-score": 0.9873417721518988,
+      "support": 199.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.8109756097560976,
+      "recall": 0.7940298507462686,
+      "f1-score": 0.8024132730015083,
+      "support": 335.0
+    },
+    "accuracy": 0.8814756671899528,
+    "macro avg": {
+      "precision": 0.87475141354904,
+      "recall": 0.8670798891268758,
+      "f1-score": 0.8698099897898346,
+      "support": 3822.0
+    },
+    "weighted avg": {
+      "precision": 0.8820935639618308,
+      "recall": 0.8814756671899528,
+      "f1-score": 0.8810592511872359,
+      "support": 3822.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.6471232019514218,
+      "val_loss": 0.5538237219917737,
+      "val_acc": 0.821832884097035
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.3893479348484802,
+      "val_loss": 0.4481462540901828,
+      "val_acc": 0.8711590296495957
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.2899437871387097,
+      "val_loss": 0.40294367582389207,
+      "val_acc": 0.8714285714285714
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.2161435423291812,
+      "val_loss": 0.4221665271924049,
+      "val_acc": 0.8692722371967655
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.1561293797088074,
+      "val_loss": 0.4458800729968406,
+      "val_acc": 0.8851752021563343
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.153245333777502,
+      "val_loss": 0.44280254937037733,
+      "val_acc": 0.8878706199460916
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.10136816885458876,
+      "val_loss": 0.4653583023056289,
+      "val_acc": 0.8832884097035041
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.10589327376392828,
+      "val_loss": 0.4999837916147326,
+      "val_acc": 0.877088948787062
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.09737098854009912,
+      "val_loss": 0.5484748626377354,
+      "val_acc": 0.8722371967654986
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.08658470702301925,
+      "val_loss": 0.5018322780411083,
+      "val_acc": 0.8746630727762803
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.08037041477881907,
+      "val_loss": 0.4910647350022592,
+      "val_acc": 0.8754716981132076
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_condor",
+    "models": [
+      "moirai"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

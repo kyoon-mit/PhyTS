@@ -1,0 +1,55 @@
+# Condor job: Kepler Q9v3 fine-tuning (LoRA / full / last_n) — one variant.
+#
+# Submit a single variant by passing args as Condor macros:
+#   condor_submit \
+#     -a 'tag=lora_timemoe_r16' \
+#     -a 'model=timemoe' \
+#     -a 'model_size=small' \
+#     -a 'extra_args=--adapter lora --lora_r 16 --lora_alpha 32 --epochs 100 --patience 20 --head_lr 1e-3 --backbone_lr 1e-4 --out_dir plots/kepler_q9v3/lora_timemoe_r16_condor' \
+#     benchmarks/foundation/condor/kepler_finetune.job
+#
+# Resource sizing (tested on ramee 12 GiB / krakas 24 GiB):
+#   - chronos / timesfm / timemoe full FT at bs=4: ~10 GiB → request 16 GiB GPU.
+#   - LoRA at bs=4: ~6 GiB → 12 GiB is safe.
+#   - granite_ttm: tiny, anything works.
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_kepler_finetune_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+# Common args. The variant-specific knobs come in via $(extra_args).
+Arguments       = --zip data/keplerq9v3.zip \
+                  --models $(model) \
+                  --model_size $(model_size) \
+                  --batch_size 4 \
+                  --seed 42 \
+                  $(extra_args)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True"
+
+Log             = ft_$(tag)_$(ClusterId)_$(Process).log
+Output          = ft_$(tag)_$(ClusterId)_$(Process).out
+Error           = ft_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 16G
+RequestGpus     = 1
+# Walltime in seconds; chronos full FT topped out around 5 h, so give 8 h.
+RequestWalltime = 28800
+RequestDisk     = 10G
+
+# Need >= 10 GiB GPU memory to fit chronos/timemoe at bs=4 full FT (observed
+# peak ~10.2 GiB). The ESAT pool publishes this as `GPUs_GlobalMemoryMb`
+# (not `CUDAGlobalMemoryMb`, which is undefined on every slot).
+# Cap capability at 9.0 to exclude Blackwell (12.0, RTX 50 series) and AMD
+# (11.5, Radeon) — our PyTorch wheel has no kernels for those architectures.
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 10000)
+
+NiceUser        = True
+
+Queue 1

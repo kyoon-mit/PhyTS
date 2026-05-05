@@ -1,0 +1,32 @@
+{
+  "moment": {
+    "accuracy": 0.8642072213500785,
+    "balanced_accuracy": 0.8553186947765609,
+    "macro_f1": 0.8555123753183749,
+    "val_accuracy": 0.8738544474393531
+  },
+  "chronos": {
+    "accuracy": 0.8346415489272632,
+    "balanced_accuracy": 0.8291430804503532,
+    "macro_f1": 0.820494504097015,
+    "val_accuracy": 0.8601078167115903
+  },
+  "timesfm": {
+    "accuracy": 0.8783359497645212,
+    "balanced_accuracy": 0.8703704389571898,
+    "macro_f1": 0.8699258218337815,
+    "val_accuracy": 0.8886792452830189
+  },
+  "timemoe": {
+    "accuracy": 0.8788592360020931,
+    "balanced_accuracy": 0.874070009366154,
+    "macro_f1": 0.8707613600767433,
+    "val_accuracy": 0.8849056603773585
+  },
+  "moirai": {
+    "accuracy": 0.8759811616954474,
+    "balanced_accuracy": 0.8612590827860693,
+    "macro_f1": 0.8672003159998829,
+    "val_accuracy": 0.8838274932614555
+  }
+}

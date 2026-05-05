@@ -1,0 +1,74 @@
+# Condor job: Project 8 LoRA / last-N / full fine-tune — one model per submission.
+#
+#   condor_submit -a 'tag=moment_lora' -a 'model=moment' -a 'adapter=lora' \
+#     benchmarks/foundation/condor/project8_finetune.job
+#
+#   condor_submit -a 'tag=ttm_full' -a 'model=granite_ttm' -a 'adapter=full' \
+#     -a 'out_dir=plots/Project8/full_ft' \
+#     benchmarks/foundation/condor/project8_finetune.job
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_project8_finetune_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+# Defaults; override via -a 'name=value' on the condor_submit line.
+model_size      = base
+out_dir         = plots/Project8/lora
+noise_type      = cav
+cutoff          = 24576
+batch_size      = 8
+num_workers     = 8
+prefetch_factor = 4
+adapter         = lora
+epochs          = 10
+head_lr         = 1.0e-3
+backbone_lr     = 1.0e-4
+lora_r          = 8
+lora_alpha      = 16
+patience        = 3
+extra_args      =
+
+Arguments       = --data_root data/Project8 \
+                  --models $(model) \
+                  --model_size $(model_size) \
+                  --out_dir $(out_dir) \
+                  --noise_type $(noise_type) \
+                  --cutoff $(cutoff) \
+                  --batch_size $(batch_size) \
+                  --num_workers $(num_workers) \
+                  --prefetch_factor $(prefetch_factor) \
+                  --pin_memory \
+                  --persistent_workers \
+                  --adapter $(adapter) \
+                  --epochs $(epochs) \
+                  --head_lr $(head_lr) \
+                  --backbone_lr $(backbone_lr) \
+                  --lora_r $(lora_r) \
+                  --lora_alpha $(lora_alpha) \
+                  --patience $(patience) \
+                  $(extra_args)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache LAGLLAMA_CKPT=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"
+
+Log             = p8_ft_$(tag)_$(ClusterId)_$(Process).log
+Output          = p8_ft_$(tag)_$(ClusterId)_$(Process).out
+Error           = p8_ft_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 8
+RequestMemory   = 32G
+RequestGpus     = 1
+# Fine-tune at cutoff=24576 with grads is slow; allow up to 24 h.
+RequestWalltime = 86400
+RequestDisk     = 30G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (Machine != "pythagoras.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 16000)
+
+NiceUser        = True
+
+Queue 1

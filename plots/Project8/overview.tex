@@ -1,0 +1,34 @@
+\begin{table}[t]
+\centering
+\caption{Project 8 starting-energy regression on full-length 24576-sample I/Q
+traces with calibrated cavity noise.
+Zero-shot = frozen foundation-model embeddings + Ridge probe (linear-probe
+column of \texttt{plots/Project8/linear\_probe\_cav}). LoRA fine-tunes
+($r{=}8$, $\alpha{=}16$) report best-val test RMSE / $R^2$ from
+\texttt{plots/Project8/lora\_cav}. Full FT (\texttt{plots/Project8/full\_cav})
+uses backbone~LR $10^{-5}$, head~LR $10^{-3}$, 10 epochs, patience~3.
+All numbers are single-seed (seed~42); no across-seed standard deviation
+was collected. \textemdash{} indicates a run not yet completed; LoRA on
+Granite-TTM is unsupported by the wrapper. Lower RMSE is better;
+reference is the dataset's natural standard deviation $\sigma = 28.83$~eV
+(predict-mean baseline).}
+\label{tab:p8_zeroshot}
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{l c c c c c c}
+\toprule
+                        & \multicolumn{2}{c}{Zero-shot}      & \multicolumn{2}{c}{LoRA}     & \multicolumn{2}{c}{Full FT} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Model                   & RMSE [eV]   & $R^2$               & RMSE [eV]   & $R^2$         & RMSE [eV]   & $R^2$ \\
+\midrule
+\textit{predict-mean}   & 28.83       & 0.000               & \textemdash & \textemdash   & \textemdash & \textemdash \\
+\midrule
+moment                  & \textbf{25.22} & \textbf{0.236}   & 27.64       & 0.082         & \textemdash & \textemdash \\
+timesfm                 & 25.77       & 0.202               & \textemdash & \textemdash   & \textemdash & \textemdash \\
+moirai                  & 26.48       & 0.157               & \textemdash & \textemdash   & \textemdash & \textemdash \\
+granite\_ttm            & 26.61       & 0.149               & \textemdash & \textemdash   & 25.43       & 0.223 \\
+chronos                 & 25.22       & 0.235               & \textemdash & \textemdash   & \textemdash & \textemdash \\
+timemoe                 & \textemdash & \textemdash         & \textemdash & \textemdash   & \textemdash & \textemdash \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,176 @@
+{
+  "metrics": {
+    "accuracy": 0.8738880167451596,
+    "balanced_accuracy": 0.8711513247151823,
+    "macro_f1": 0.8670849223594088,
+    "val_accuracy": 0.8738544474393531
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.788659793814433,
+      "recall": 0.7611940298507462,
+      "f1-score": 0.7746835443037975,
+      "support": 201.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.8183807439824945,
+      "recall": 0.8404494382022472,
+      "f1-score": 0.8292682926829268,
+      "support": 445.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.9327485380116959,
+      "recall": 0.9131679389312977,
+      "f1-score": 0.922854387656702,
+      "support": 1048.0
+    },
+    "ECLIPSE": {
+      "precision": 0.9216867469879518,
+      "recall": 0.9272727272727272,
+      "f1-score": 0.9244712990936556,
+      "support": 165.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8831168831168831,
+      "recall": 0.7841845140032949,
+      "f1-score": 0.8307155322862129,
+      "support": 607.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.8997584541062802,
+      "recall": 0.9063260340632603,
+      "f1-score": 0.9030303030303031,
+      "support": 822.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 0.9948979591836735,
+      "recall": 0.9798994974874372,
+      "f1-score": 0.9873417721518988,
+      "support": 199.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.6899038461538461,
+      "recall": 0.8567164179104477,
+      "f1-score": 0.7643142476697736,
+      "support": 335.0
+    },
+    "accuracy": 0.8738880167451596,
+    "macro avg": {
+      "precision": 0.8661441206696572,
+      "recall": 0.8711513247151823,
+      "f1-score": 0.8670849223594088,
+      "support": 3822.0
+    },
+    "weighted avg": {
+      "precision": 0.8783502643601727,
+      "recall": 0.8738880167451596,
+      "f1-score": 0.8748002271271285,
+      "support": 3822.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.646079435893042,
+      "val_loss": 0.5215219828297167,
+      "val_acc": 0.8339622641509434
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.37536666934030083,
+      "val_loss": 0.4755499210599549,
+      "val_acc": 0.8533692722371967
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.23672402422512132,
+      "val_loss": 0.47051404911225886,
+      "val_acc": 0.8576819407008086
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.1616501273339309,
+      "val_loss": 0.5318507002562001,
+      "val_acc": 0.8646900269541778
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.11584382210426637,
+      "val_loss": 0.5533773982066781,
+      "val_acc": 0.8738544474393531
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.09322013067389005,
+      "val_loss": 0.6257466693942119,
+      "val_acc": 0.8584905660377359
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.07389107528949043,
+      "val_loss": 0.6089608665085648,
+      "val_acc": 0.8644204851752022
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.0650930683853353,
+      "val_loss": 0.6192813115413934,
+      "val_acc": 0.8617250673854447
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.058807177724645214,
+      "val_loss": 0.6165958019667999,
+      "val_acc": 0.871967654986523
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.053341356832727255,
+      "val_loss": 0.658539076813615,
+      "val_acc": 0.8657681940700809
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_condor",
+    "models": [
+      "moment"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

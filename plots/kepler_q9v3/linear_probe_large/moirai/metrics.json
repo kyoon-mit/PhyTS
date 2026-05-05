@@ -1,0 +1,109 @@
+{
+  "metrics": {
+    "accuracy": 0.9242105263157895,
+    "balanced_accuracy": 0.9049953049805298,
+    "macro_f1": 0.9103530663665487,
+    "val_accuracy": 0.9178947368421052,
+    "val_balanced_accuracy": 0.8627986459020058
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.8914728682170543,
+      "recall": 0.92,
+      "f1-score": 0.905511811023622,
+      "support": 125.0
+    },
+    "CONSTANT": {
+      "precision": 0.9036144578313253,
+      "recall": 1.0,
+      "f1-score": 0.9493670886075949,
+      "support": 150.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.9053254437869822,
+      "recall": 0.9026548672566371,
+      "f1-score": 0.9039881831610044,
+      "support": 339.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.9130434782608695,
+      "recall": 0.9051724137931034,
+      "f1-score": 0.9090909090909091,
+      "support": 116.0
+    },
+    "ECLIPSE": {
+      "precision": 1.0,
+      "recall": 0.9726027397260274,
+      "f1-score": 0.9861111111111112,
+      "support": 146.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8651685393258427,
+      "recall": 0.8191489361702128,
+      "f1-score": 0.8415300546448088,
+      "support": 94.0
+    },
+    "INSTRUMENT": {
+      "precision": 0.9691358024691358,
+      "recall": 0.8920454545454546,
+      "f1-score": 0.9289940828402367,
+      "support": 176.0
+    },
+    "RRLYR_CEPHEID": {
+      "precision": 0.875,
+      "recall": 0.7777777777777778,
+      "f1-score": 0.8235294117647058,
+      "support": 9.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.9347826086956522,
+      "recall": 0.9555555555555556,
+      "f1-score": 0.945054945054945,
+      "support": 270.0
+    },
+    "accuracy": 0.9242105263157895,
+    "macro avg": {
+      "precision": 0.9175047998429847,
+      "recall": 0.9049953049805298,
+      "f1-score": 0.9103530663665487,
+      "support": 1425.0
+    },
+    "weighted avg": {
+      "precision": 0.9248804873002818,
+      "recall": 0.9242105263157895,
+      "f1-score": 0.9239692526488781,
+      "support": 1425.0
+    }
+  },
+  "d_embed": 1024,
+  "class_names": [
+    "APERIODIC",
+    "CONSTANT",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT",
+    "RRLYR_CEPHEID",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "args": {
+    "zip": "data/keplerq9v3.zip",
+    "out_dir": "plots/kepler_q9v3/linear_probe_large",
+    "models": [
+      "moirai"
+    ],
+    "model_size": "large",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "C": 1.0,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

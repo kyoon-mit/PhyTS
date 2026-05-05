@@ -1,0 +1,99 @@
+{
+  "metrics": {
+    "rmse": 27.25091552734375,
+    "mae": 23.216991424560547,
+    "r2": 0.10729288029971362,
+    "best_val_mse_phys": 745.8839326461792,
+    "best_epoch": 9
+  },
+  "d_embed": 1536,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.46393006763509476,
+      "val_mse_phys": 840.5477761444092
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.46235474024619905,
+      "val_mse_phys": 840.3041109069824
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.4622120726260822,
+      "val_mse_phys": 840.827104852295
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.46226998920235784,
+      "val_mse_phys": 836.0091840698242
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.4426483901467174,
+      "val_mse_phys": 763.554539743042
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.43020814164811744,
+      "val_mse_phys": 815.4568484771728
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.4261592327218968,
+      "val_mse_phys": 755.4252993362427
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.4228456296226592,
+      "val_mse_phys": 758.8425631835937
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.41896340618031097,
+      "val_mse_phys": 745.8839326461792
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.41929584142691456,
+      "val_mse_phys": 821.4453488250732
+    }
+  ],
+  "args": {
+    "data_root": "data/Project8",
+    "out_dir": "plots/Project8/lora_cav_local",
+    "models": [
+      "moment",
+      "timesfm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 8,
+    "prefetch_factor": 4,
+    "pin_memory": true,
+    "persistent_workers": true,
+    "cutoff": 24576,
+    "noise_type": "cav",
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 10,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 3,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

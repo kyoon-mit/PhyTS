@@ -1,0 +1,59 @@
+{
+  "metrics": {
+    "mse": 0.5730657577514648,
+    "mae": 0.7283574938774109,
+    "r2": -26.704483032226562,
+    "pearson_r": -0.5519382852230181,
+    "spearman_r": -0.4285714285714286,
+    "val_mse": 0.42799665790076824
+  },
+  "target_name": "frot",
+  "d_embed": 192,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.8171465396881104,
+      "val_mse": 0.42799665790076824
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.18298473209142685,
+      "val_mse": 0.5736506775860063
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/lora_regression",
+    "models": [
+      "granite_ttm"
+    ],
+    "model_size": "base",
+    "device": "cpu",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "last_n",
+    "epochs": 2,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": null,
+    "seed": 42,
+    "smoke_test": true,
+    "max_train_batches": 2,
+    "max_test_batches": 2
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

@@ -1,0 +1,47 @@
+# Condor job: Kepler Q9v3 zero-shot linear probe — one model.
+#
+# Submit a single model (defaults to base size, base out_dir):
+#   condor_submit -a 'tag=lagllama' -a 'model=lagllama' \
+#     benchmarks/foundation/condor/kepler_zeroshot.job
+#
+# Submit a "large" variant:
+#   condor_submit -a 'tag=moment_large' -a 'model=moment' \
+#     -a 'model_size=large' -a 'out_dir=plots/kepler_q9v3/linear_probe_large' \
+#     benchmarks/foundation/condor/kepler_zeroshot.job
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_kepler_zeroshot_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+# Defaults; override via -a 'model_size=large' / -a 'out_dir=...'.
+model_size      = base
+out_dir         = plots/kepler_q9v3/linear_probe
+
+Arguments       = --zip data/keplerq9v3.zip \
+                  --models $(model) \
+                  --model_size $(model_size) \
+                  --out_dir $(out_dir)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache LAGLLAMA_CKPT=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"
+
+Log             = zs_$(tag)_$(ClusterId)_$(Process).log
+Output          = zs_$(tag)_$(ClusterId)_$(Process).out
+Error           = zs_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 16G
+RequestGpus     = 1
+# Lag-Llama zero-shot ~3-4 h on Kepler; give 6 h.
+RequestWalltime = 21600
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 10000)
+
+NiceUser        = True
+
+Queue 1

@@ -1,0 +1,125 @@
+{
+  "metrics": {
+    "accuracy": 0.25,
+    "balanced_accuracy": 0.5,
+    "macro_f1": 0.16666666666666666,
+    "val_accuracy": 0.12722371967654986
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "ECLIPSE": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 6.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 2.0
+    },
+    "accuracy": 0.25,
+    "macro avg": {
+      "precision": 0.0625,
+      "recall": 0.125,
+      "f1-score": 0.08333333333333333,
+      "support": 8.0
+    },
+    "weighted avg": {
+      "precision": 0.125,
+      "recall": 0.25,
+      "f1-score": 0.16666666666666666,
+      "support": 8.0
+    }
+  },
+  "d_embed": 192,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 2.005265235900879,
+      "val_loss": 2.240374945553726,
+      "val_acc": 0.10431266846361185
+    },
+    {
+      "epoch": 2,
+      "train_loss": 2.3017159700393677,
+      "val_loss": 2.0975805203719387,
+      "val_acc": 0.12722371967654986
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/lora",
+    "models": [
+      "granite_ttm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "last_n",
+    "epochs": 2,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": null,
+    "seed": 42,
+    "smoke_test": true,
+    "max_train_batches": 2,
+    "max_test_batches": 2
+  }
+}
