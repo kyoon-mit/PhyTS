@@ -49,15 +49,17 @@ from run_inference import (
     load_conv_denoiser,
     load_linoss_denoiser,
     load_chronos_denoiser,
+    load_moment_denoiser,
 )
 
 # ---------------------------------------------------------------------------
 # Variant registry — all paths relative to repo root
 # ---------------------------------------------------------------------------
 
-# Approximate parameter counts for Chronos model sizes (published values)
+# Approximate parameter counts for zero-shot models (published values)
 _CHRONOS_PARAMS = {"tiny": 8_000_000, "small": 46_000_000,
                    "base": 200_000_000, "large": 710_000_000}
+_MOMENT_PARAMS  = {"small": 40_000_000, "base": 125_000_000, "large": 385_000_000}
 
 VARIANTS = {
     # ---- ConvAE ablations (5 epochs each) — loss curves only, no inference ---
@@ -180,6 +182,24 @@ VARIANTS = {
         "arch":        "zero-shot, T5-base encoder-decoder",
         "n_params":    _CHRONOS_PARAMS["base"],
     },
+    # ---- MOMENT zero-shot baselines -----------------------------------------
+    # Native reconstruction head; 512-sample chunks, single forward pass.
+    "moment_small": {
+        "display_name": "MOMENT-Small (zero-shot)",
+        "category": "baseline",
+        "model_type": "moment",
+        "model_size":  "small",
+        "arch":        "zero-shot, patch-based transformer, reconstruction head",
+        "n_params":    _MOMENT_PARAMS["small"],
+    },
+    "moment_base": {
+        "display_name": "MOMENT-Base (zero-shot)",
+        "category": "baseline",
+        "model_type": "moment",
+        "model_size":  "base",
+        "arch":        "zero-shot, patch-based transformer, reconstruction head",
+        "n_params":    _MOMENT_PARAMS["base"],
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -270,7 +290,7 @@ def count_params_linoss(cfg_path: str) -> int:
 
 def count_params(variant_cfg: dict, repo_root: Path) -> int:
     model_type = variant_cfg["model_type"]
-    if model_type == "chronos":
+    if model_type in ("chronos", "moment"):
         return variant_cfg["n_params"]          # known from published model card
     try:
         cfg_path = str(repo_root / variant_cfg["cfg"])
@@ -354,6 +374,8 @@ def run_inference(variant_cfg: dict, ckpt_path: str | None, repo_root: Path,
             variant_cfg["model_size"], device,
             chunk_size=variant_cfg.get("chunk_size", 128),
         )
+    elif model_type == "moment":
+        denoise_fn = load_moment_denoiser(variant_cfg["model_size"], device)
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
 
@@ -388,7 +410,8 @@ def evaluate_variant(name: str, variant_cfg: dict, args, repo_root: Path):
     out_dir = Path(args.out_dir) / name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    is_chronos = variant_cfg["model_type"] == "chronos"
+    is_zero_shot = variant_cfg["model_type"] in ("chronos", "moment")
+    is_chronos = is_zero_shot  # kept for backward compat with downstream uses
 
     result = {
         "variant":          name,

@@ -43,6 +43,14 @@ Usage:
         --data_dir   data/TIDMAD/original \\
         --scale_path data/TIDMAD/preprocessed/scale.npy \\
         --out_dir    benchmarks/TIDMAD/results/chronos
+
+    # MOMENT zero-shot (native reconstruction head, no checkpoint or cfg needed)
+    python benchmarks/TIDMAD/run_inference.py \\
+        --model_type moment \\
+        --model_size base \\
+        --data_dir   data/TIDMAD/original \\
+        --scale_path data/TIDMAD/preprocessed/scale.npy \\
+        --out_dir    benchmarks/TIDMAD/results/moment_base
 """
 
 import argparse
@@ -242,6 +250,44 @@ def load_chronos_denoiser(model_size: str, device: torch.device, chunk_size: int
     return denoise
 
 
+def load_moment_denoiser(model_size: str, device: torch.device, chunk_size: int = 512,
+                         sub_batch: int = 512):
+    """Zero-shot MOMENT denoiser via the native reconstruction head.
+
+    Each 100k-sample window is split into non-overlapping chunks of `chunk_size`
+    (default 512 = MOMENT's seq_len).  All chunks are forwarded in sub-batches
+    of at most `sub_batch` to avoid OOM.  Unlike Chronos, MOMENT does a single
+    forward pass per chunk (not autoregressive), so it is much faster.
+    """
+    from foundation.wrappers.moment_wrapper import MomentWrapper
+    wrapper = MomentWrapper()
+    wrapper.load(device=str(device), model_size=model_size, seq_len=chunk_size)
+    print(f'MOMENT ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+
+    def denoise(x: np.ndarray) -> np.ndarray:
+        # x: (B, L) float32
+        B, L = x.shape
+        n_chunks = L // chunk_size
+        remainder = L % chunk_size
+
+        # Reshape to (B*n_chunks, chunk_size)
+        x_chunks = x[:, :n_chunks * chunk_size].reshape(B * n_chunks, chunk_size)
+
+        denoised_chunks = np.zeros_like(x_chunks)
+        for i in range(0, len(x_chunks), sub_batch):
+            batch = x_chunks[i:i + sub_batch]
+            denoised_chunks[i:i + sub_batch] = wrapper.denoise(batch).denoised
+
+        out = np.zeros_like(x)
+        out[:, :n_chunks * chunk_size] = denoised_chunks.reshape(B, n_chunks * chunk_size)
+        # Keep leftover samples (L not divisible by chunk_size) unchanged
+        if remainder > 0:
+            out[:, n_chunks * chunk_size:] = x[:, n_chunks * chunk_size:]
+        return out
+
+    return denoise
+
+
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
@@ -335,7 +381,7 @@ def find_best_eqx(ckpt_dir: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description='TIDMAD Denoising Benchmark Inference')
-    parser.add_argument('--model_type', choices=['conv', 'linoss', 's4d', 'chronos'], required=True)
+    parser.add_argument('--model_type', choices=['conv', 'linoss', 's4d', 'chronos', 'moment'], required=True)
     parser.add_argument('--ckpt',      default=None,
                         help='Checkpoint path (.ckpt or .eqx). Use --ckpt_dir for LinOSS.')
     parser.add_argument('--ckpt_dir',  default=None,
@@ -356,10 +402,11 @@ def main():
     parser.add_argument('--device',     default='cuda' if torch.cuda.is_available() else 'cpu')
     args = parser.parse_args()
 
-    if args.model_type != 'chronos' and args.ckpt is None and args.ckpt_dir is None:
-        parser.error('one of --ckpt or --ckpt_dir is required for non-chronos models')
-    if args.model_type != 'chronos' and args.cfg is None:
-        parser.error('--cfg is required for non-chronos models')
+    _zero_shot = args.model_type in ('chronos', 'moment')
+    if not _zero_shot and args.ckpt is None and args.ckpt_dir is None:
+        parser.error('one of --ckpt or --ckpt_dir is required for non-zero-shot models')
+    if not _zero_shot and args.cfg is None:
+        parser.error('--cfg is required for non-zero-shot models')
 
     scaling = float(np.load(args.scale_path))
     device  = torch.device(args.device)
@@ -368,6 +415,8 @@ def main():
 
     if args.model_type == 'chronos':
         denoise_fn = load_chronos_denoiser(args.model_size, device, args.chunk_size)
+    elif args.model_type == 'moment':
+        denoise_fn = load_moment_denoiser(args.model_size, device)
     elif args.model_type == 'linoss':
         ckpt_path = args.ckpt or find_best_eqx(args.ckpt_dir)
         denoise_fn = load_linoss_denoiser(ckpt_path, args.cfg)
@@ -397,9 +446,9 @@ def main():
     print(f'Denoising Benchmark Score: {score:.4f}')
     print(f'{"="*50}')
 
-    model_tag = f'{args.model_type}_{args.model_size}' if args.model_type == 'chronos' else args.model_type
+    model_tag = f'{args.model_type}_{args.model_size}' if _zero_shot else args.model_type
     out_csv = out_dir / f'benchmark_{model_tag}.csv'
-    ckpt_info = f'chronos-{args.model_size} (zero-shot)' if args.model_type == 'chronos' else args.ckpt
+    ckpt_info = f'{args.model_type}-{args.model_size} (zero-shot)' if _zero_shot else args.ckpt
     with open(out_csv, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(['TIDMAD Benchmark 1: Denoising Score'])
