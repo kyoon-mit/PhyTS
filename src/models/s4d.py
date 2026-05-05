@@ -30,6 +30,69 @@ from einops import repeat
 
 from functions.dropout import DropoutNd
 
+
+def count_s4model_nn_parameters(
+    d_input: int,
+    d_output: int,
+    d_model: int,
+    *,
+    d_state: int = 64,
+    n_layers: int = 4,
+) -> int:
+    """Return ``sum(p.numel() for p in model.parameters())`` for :class:`S4Model`.
+
+    The closed form sums, for each :class:`S4D` block, the :class:`S4DKernel`
+    parameters, the diagonal skip gain ``D``, and the 1×1 mixing conv; multiplies
+    by ``n_layers``; and adds the encoder/decoder linears plus per-block
+    :class:`~torch.nn.LayerNorm`. It matches :class:`~models.s4d_seq2seq.S4ModelSeq2Seq`
+    (same stacking and linear layers; only pooling differs).
+
+    Notes
+    -----
+    ``dropout``, ``lr``, ``prenorm``, ``dt_min``, and ``dt_max`` do not add
+    learnable tensors (``DropoutNd`` / ``Identity``).
+
+    Parameters
+    ----------
+    d_input
+        Input feature dimension ``d_input``.
+    d_output
+        Scalar or vector output size ``d_output``.
+    d_model
+        Hidden width ``d_model`` (called ``h`` below).
+    d_state
+        S4D diagonal state dimension ``N`` (:math:`\\texttt{d\\_state}`).
+    n_layers
+        Number of stacked :class:`S4D` blocks ``L``.
+
+    Returns
+    -------
+    int
+        Total ``nn.Parameter`` elements::
+
+            stack = L * (2*h**2 + 4*h*floor(N/2) + 4*h)
+            total = stack + h*d_input + h + L*2*h + h*d_output + d_output
+
+        Equivalent to folding ``floor(N/2)`` when ``d_state`` is odd: the kernel
+        stores ``C`` and diagonal ``A`` with ``N // 2`` frequency bins, matching
+        :class:`S4DKernel` (see ``torch.randn(H, N // 2, dtype=torch.cfloat)``).
+
+        When ``d_state`` is even, ``4*h*floor(N/2)`` equals ``2*h*N``.  If ``lr=0``
+        is passed into :class:`S4DKernel` so tensors become buffers, counts from
+        this function won't match ``.parameters()`` (buffers are omitted).
+    """
+    h = d_model
+    n_layers_i = int(n_layers)
+    d_state_i = int(d_state)
+    # S4DKernel uses N // 2 complex bins; parameter count follows q = floor(N/2).
+    q = d_state_i // 2
+    stack = n_layers_i * (2 * h * h + 4 * h * q + 4 * h)
+    encoder = int(d_input) * h + h
+    decoder = int(d_output) * h + int(d_output)
+    norms = n_layers_i * 2 * h
+    return stack + encoder + decoder + norms
+
+
 class S4DKernel(nn.Module):
     """Generate convolution kernel from diagonal SSM parameters."""
 
@@ -167,9 +230,11 @@ class S4Model(nn.Module):
         # Linear decoder
         self.decoder = nn.Linear(d_model, d_output)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         """
         Input x is shape (B, L, d_input)
+        mask: optional (B, L) bool — True for real positions, False for padding.
+              When provided, pooling averages only over real positions.
         """
         x = self.encoder(x)  # (B, L, d_input) -> (B, L, d_model)
         x = x.transpose(-1, -2)  # (B, L, d_model) -> (B, d_model, L)
@@ -195,10 +260,14 @@ class S4Model(nn.Module):
                 # Postnorm
                 x = norm(x.transpose(-1, -2)).transpose(-1, -2)
 
-        x = x.transpose(-1, -2)
+        x = x.transpose(-1, -2)  # (B, d_model, L) -> (B, L, d_model)
 
-        # Pooling: average pooling over the sequence length
-        x = x.mean(dim=1)
+        # Pooling: masked or full mean over the sequence length
+        if mask is not None:
+            mask_f = mask.unsqueeze(-1).float()  # (B, L, 1)
+            x = (x * mask_f).sum(dim=1) / mask_f.sum(dim=1).clamp(min=1)
+        else:
+            x = x.mean(dim=1)
 
         # Decode the outputs
         x = self.decoder(x)  # (B, d_model) -> (B, d_output)

@@ -1,0 +1,16 @@
+{
+  "variant": "moment_base",
+  "display_name": "MOMENT-Base (zero-shot)",
+  "category": "baseline",
+  "model_type": "moment",
+  "arch": "zero-shot, patch-based transformer, reconstruction head",
+  "timestamp": "2026-05-05 17:44:00",
+  "n_params": 125000000,
+  "best_val_loss": null,
+  "best_val_epoch": null,
+  "n_epochs": null,
+  "final_train_loss": null,
+  "benchmark_score": -2.274962,
+  "ckpt_path": null,
+  "error": null
+}

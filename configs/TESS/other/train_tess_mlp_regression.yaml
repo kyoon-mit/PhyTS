@@ -1,0 +1,48 @@
+# MLP end-to-end regression: TESS flux → frot (rotation frequency).
+#
+# Usage: python main.py fit --config configs/TESS/other/train_tess_mlp_regression.yaml
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: tasks.TESS.pytorch_checkpoint.TESSPyTorchModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_mlp_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: tess_mlp_regression
+
+model:
+  class_path: tasks.TESS.tess_regression.TESSRegressionMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.mlp.MLPRegressor
+      init_args:
+        seq_len: 1100
+        d_output: 1
+        hidden_dims: [512, 256, 128]
+        dropout: 0.1
+
+data:
+  class_path: dataloader.tess_dataloader.TESSRegressionDataModule
+  init_args:
+    data_dir: data/TESS/.cache/TESS
+    batch_size: 64
+    num_workers: 8
+    seq_len: 1100

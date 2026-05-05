@@ -1,0 +1,46 @@
+# wandb sweep config — CNN end-to-end classification
+#
+# Create sweep:
+#   wandb sweep configs/TESS/sweep/sweep_cls_cnn.yaml --project TimeSeriesPhysics
+# Launch agents:
+#   bash benchmarks/TESS/run_sweep.sh --model_type cnn --sweep_id <id>
+
+program: benchmarks/TESS/sweep_classification.py
+command:
+  - ${env}
+  - benchmarks/TESS/repo_python.sh
+  - ${program}
+  - --model_type=cnn
+  - ${args}
+
+name: cls_cnn
+method: bayes
+run_cap: 150
+metric:
+  name: val/balanced_acc
+  goal: maximize
+
+early_terminate:
+  type: hyperband
+  min_iter: 20
+  eta: 3
+
+parameters:
+  size:
+    values: [xs, sm, md, lg]
+  lr:
+    distribution: log_uniform_values
+    min: 0.00005
+    max: 0.02
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  weight_decay:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.01
+  batch_size:
+    values: [128, 256, 512]
+  seed:
+    values: [0, 1, 2]
