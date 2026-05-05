@@ -30,6 +30,22 @@ conda activate tsenv
 pip install -e .
 ```
 
+> Local dev env on this machine: `/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm` (Python 3.10, torch + lightning + h5py + scipy + huggingface_hub).
+
+### Project 8 dataset
+
+Download the ~50 GB HDF5 split from Hugging Face into `data/Project8/{train,val,test}/`:
+
+```bash
+bash tools/download_project8.sh
+```
+
+Then exercise the foundation-model linear probe:
+
+```bash
+python benchmarks/foundation/run_project8.py --models granite_ttm --smoke_test
+```
+
 ---
 
 ## Structure

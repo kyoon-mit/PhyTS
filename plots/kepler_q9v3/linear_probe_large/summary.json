@@ -1,0 +1,9 @@
+{
+  "moirai": {
+    "accuracy": 0.9242105263157895,
+    "balanced_accuracy": 0.9049953049805298,
+    "macro_f1": 0.9103530663665487,
+    "val_accuracy": 0.9178947368421052,
+    "val_balanced_accuracy": 0.8627986459020058
+  }
+}

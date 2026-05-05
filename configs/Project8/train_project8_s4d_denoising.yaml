@@ -1,0 +1,48 @@
+# Usage: python main.py fit --config configs/Project8/train_project8_s4d_denoising.yaml
+# Trains an S4D seq2seq denoiser: noisy I/Q -> clean I/Q (per-channel std-normalised).
+
+trainer:
+  max_epochs: 50
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 10
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/project8_s4d_denoising
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+
+model:
+  class_path: tasks.Project8.denoising.DenoisingMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+      init_args:
+        d_input:  2
+        d_output: 2
+        d_model:  128
+        d_state:  64
+        n_layers: 4
+        dropout:  0.1
+
+data:
+  class_path: dataloader.project8_denoising_dataloader.Project8DenoisingDataModule
+  init_args:
+    train_dir: data/Project8/train
+    val_dir:   data/Project8/val
+    test_dir:  data/Project8/test
+    inputs:    [output_ts_I, output_ts_Q]
+    cutoff:    24576         # full trace length
+    noise_type: cav          # canonical (calibrated cavity noise); 'gauss' = safety baseline
+    batch_size: 32
+    num_workers: 4

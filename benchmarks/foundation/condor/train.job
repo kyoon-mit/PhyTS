@@ -1,0 +1,38 @@
+# Condor job: train any Lightning-CLI config (Python 3.12 tsenv).
+#
+# Submit a specific config:
+#   condor_submit -a "config=configs/toy/train_toy_mlp_regression_raw.yaml" \
+#                 benchmarks/foundation/condor/train.job
+#
+# Or loop:
+#   for c in configs/toy/train_toy_mlp_regression_raw.yaml \
+#            configs/toy/train_toy_mlp_regression_clean.yaml; do
+#     condor_submit -a "config=$c" benchmarks/foundation/condor/train.job
+#   done
+
+REPO = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_train.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+Arguments       = $(REPO)/$(config)
+
+Environment     = "PYTHONHOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv WANDB_MODE=offline"
+
+# Derive a log stem from the config's base filename (without extension).
+Log             = train_$(ClusterId).log
+Output          = train_$(ClusterId).out
+Error           = train_$(ClusterId).err
+
+RequestCpus     = 4
+RequestMemory   = 32G
+RequestGpus     = 1
+RequestWalltime = 21600
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") && (GPUs_Capability >= 7.0)
+
+NiceUser        = True
+
+Queue 1

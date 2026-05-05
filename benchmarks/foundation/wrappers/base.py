@@ -99,10 +99,14 @@ class BaseFoundationModel(ABC):
         """
         return self.denoise_via_forecast(noisy)
 
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
         """Extract per-sample embedding from a full signal (B, L) -> (B, d).
 
-        Default raises NotImplementedError.  Subclasses with native embedding
+        `pool` selects the temporal pooling strategy (mean / last / max) and
+        is respected by subclasses that support it. The default "mean" matches
+        historical behaviour.
+
+        Default raises NotImplementedError. Subclasses with native embedding
         heads (Chronos, MOMENT) override; others can use
         `embed_via_hidden_states` if they expose a hookable layer.
         """
@@ -110,6 +114,29 @@ class BaseFoundationModel(ABC):
             f"{self.name} does not provide embed(); either override it or "
             "call embed_via_hidden_states(...)."
         )
+
+    def embed_torch(self, signal: np.ndarray, *, pool: str = "mean") -> torch.Tensor:
+        """Gradient-preserving embedding.  (B, L) numpy -> (B, d) tensor on device.
+
+        Unlike :meth:`embed`, which returns detached numpy for zero-shot /
+        linear-probe evaluation, this keeps the computation graph intact so
+        LoRA / unfrozen-backbone parameters receive gradients during
+        fine-tuning.  Subclasses must override; default raises.
+        """
+        raise NotImplementedError(
+            f"{self.name} does not implement embed_torch(); fine-tuning on "
+            "this model is not supported.  Override in the wrapper to expose "
+            "a grad-preserving embedding path."
+        )
+
+    def get_finetune_backbone(self) -> Optional[torch.nn.Module]:
+        """Return the nn.Module to inject LoRA / unfreeze layers into.
+
+        Defaults to ``self.model``.  Wrappers whose fine-tuning-relevant
+        backbone lives in a different attribute (e.g. MOMENT's
+        ``embed_model``, Chronos' ``pipeline.model``) override this.
+        """
+        return self.model
 
     # ── Shared fallbacks ──────────────────────────────────────────────────
 
@@ -217,6 +244,22 @@ class BaseFoundationModel(ABC):
         return [p for p in self.model.parameters() if p.requires_grad]
 
     # ── Shared utilities ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _pool_time(h: torch.Tensor, pool: str = "mean") -> torch.Tensor:
+        """Pool a (B, T, d) or (B, d) tensor down to (B, d).
+
+        Strategies: "mean", "last", "max". Unknown values fall back to mean.
+        """
+        if h.dim() == 2:
+            return h
+        if h.dim() != 3:
+            return h.flatten(start_dim=1)
+        if pool == "last":
+            return h[:, -1]
+        if pool == "max":
+            return h.amax(dim=1)
+        return h.mean(dim=1)
 
     @staticmethod
     def _instance_normalize(

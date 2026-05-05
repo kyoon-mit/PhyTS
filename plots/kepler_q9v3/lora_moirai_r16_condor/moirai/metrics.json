@@ -1,0 +1,265 @@
+{
+  "metrics": {
+    "accuracy": 0.9291228070175439,
+    "balanced_accuracy": 0.9226828958565763,
+    "macro_f1": 0.9196556716099149,
+    "val_accuracy": 0.9403508771929825
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.8604651162790697,
+      "recall": 0.888,
+      "f1-score": 0.8740157480314961,
+      "support": 125.0
+    },
+    "CONSTANT": {
+      "precision": 0.9259259259259259,
+      "recall": 1.0,
+      "f1-score": 0.9615384615384616,
+      "support": 150.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.9418960244648318,
+      "recall": 0.9085545722713865,
+      "f1-score": 0.924924924924925,
+      "support": 339.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.9126984126984127,
+      "recall": 0.9913793103448276,
+      "f1-score": 0.9504132231404959,
+      "support": 116.0
+    },
+    "ECLIPSE": {
+      "precision": 0.993103448275862,
+      "recall": 0.9863013698630136,
+      "f1-score": 0.9896907216494846,
+      "support": 146.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8505747126436781,
+      "recall": 0.7872340425531915,
+      "f1-score": 0.8176795580110497,
+      "support": 94.0
+    },
+    "INSTRUMENT": {
+      "precision": 0.9529411764705882,
+      "recall": 0.9204545454545454,
+      "f1-score": 0.9364161849710982,
+      "support": 176.0
+    },
+    "RRLYR_CEPHEID": {
+      "precision": 0.8888888888888888,
+      "recall": 0.8888888888888888,
+      "f1-score": 0.8888888888888888,
+      "support": 9.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.9333333333333333,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9333333333333333,
+      "support": 270.0
+    },
+    "accuracy": 0.9291228070175439,
+    "macro avg": {
+      "precision": 0.9177585598867323,
+      "recall": 0.9226828958565763,
+      "f1-score": 0.9196556716099149,
+      "support": 1425.0
+    },
+    "weighted avg": {
+      "precision": 0.9293246105866467,
+      "recall": 0.9291228070175439,
+      "f1-score": 0.9287341709033896,
+      "support": 1425.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONSTANT",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT",
+    "RRLYR_CEPHEID",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.5375340598225437,
+      "val_loss": 0.3055275049613637,
+      "val_acc": 0.9031578947368422
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.3037236333135583,
+      "val_loss": 0.24226044960507825,
+      "val_acc": 0.9221052631578948
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.2440502892428381,
+      "val_loss": 0.2307481542060084,
+      "val_acc": 0.9326315789473684
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.2054929721155313,
+      "val_loss": 0.21653616231936618,
+      "val_acc": 0.9403508771929825
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.18261538735461788,
+      "val_loss": 0.23614282718682217,
+      "val_acc": 0.9347368421052632
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.15040093203457727,
+      "val_loss": 0.3085770141418126,
+      "val_acc": 0.9059649122807018
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.14666247598127413,
+      "val_loss": 0.27089861669305043,
+      "val_acc": 0.9263157894736842
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.12610181512017649,
+      "val_loss": 0.264195055852472,
+      "val_acc": 0.9178947368421052
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.11744707679083113,
+      "val_loss": 0.3154484553158894,
+      "val_acc": 0.9214035087719298
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.12463410365348626,
+      "val_loss": 0.30483861417178304,
+      "val_acc": 0.9003508771929825
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.11032980703220238,
+      "val_loss": 0.2672703986814968,
+      "val_acc": 0.9249122807017544
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.08994062418307548,
+      "val_loss": 0.2914675641643517,
+      "val_acc": 0.9249122807017544
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.10031479238695853,
+      "val_loss": 0.2918566415717053,
+      "val_acc": 0.9171929824561403
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.09484892370532917,
+      "val_loss": 0.2964808588837083,
+      "val_acc": 0.9207017543859649
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.09818369796336783,
+      "val_loss": 0.31968272110011625,
+      "val_acc": 0.9136842105263158
+    },
+    {
+      "epoch": 16,
+      "train_loss": 0.10675654364575832,
+      "val_loss": 0.29011309533432145,
+      "val_acc": 0.9249122807017544
+    },
+    {
+      "epoch": 17,
+      "train_loss": 0.10301438016849596,
+      "val_loss": 0.31263533982458713,
+      "val_acc": 0.9185964912280702
+    },
+    {
+      "epoch": 18,
+      "train_loss": 0.08054696398347966,
+      "val_loss": 0.32903387142351503,
+      "val_acc": 0.9178947368421052
+    },
+    {
+      "epoch": 19,
+      "train_loss": 0.08624164531445559,
+      "val_loss": 0.32114499661545154,
+      "val_acc": 0.9192982456140351
+    },
+    {
+      "epoch": 20,
+      "train_loss": 0.09490801512852932,
+      "val_loss": 0.29835975287626926,
+      "val_acc": 0.9192982456140351
+    },
+    {
+      "epoch": 21,
+      "train_loss": 0.06946184659976563,
+      "val_loss": 0.34294653486121146,
+      "val_acc": 0.9157894736842105
+    },
+    {
+      "epoch": 22,
+      "train_loss": 0.08016376159586254,
+      "val_loss": 0.27069657217614684,
+      "val_acc": 0.9228070175438596
+    },
+    {
+      "epoch": 23,
+      "train_loss": 0.07035787114312803,
+      "val_loss": 0.32433829597749875,
+      "val_acc": 0.927719298245614
+    },
+    {
+      "epoch": 24,
+      "train_loss": 0.09456054892634262,
+      "val_loss": 0.32500456296398594,
+      "val_acc": 0.9129824561403509
+    }
+  ],
+  "args": {
+    "zip": "data/keplerq9v3.zip",
+    "out_dir": "plots/kepler_q9v3/lora_moirai_r16_condor",
+    "models": [
+      "moirai"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 100,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 20,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

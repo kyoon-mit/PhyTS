@@ -1,0 +1,188 @@
+[tess-reg] dropping 26 rows with non-positive frot
+TESS regression (frot): 4157 LCs (train/val/test = (2925, 582, 650)), unique TICs per split = (434, 93, 94), target mean/std = 1.1162/0.6127, lc_len=1024
+
+======================================================================
+[moment] loading (size=base, adapter=lora)
+======================================================================
+/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/momentfm/models/moment.py:174: UserWarning: Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.
+  warnings.warn("Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.")
+  [moment] pool=mean
+  [finetune-reg] moment: LoRA r=8 α=16 into 48 modules, 0.590M trainable params.
+  [finetune-reg] moment: d_embed=768
+  [finetune-reg] epoch 1/100  train_loss=0.2295  val_mse=0.1755
+  [finetune-reg] epoch 2/100  train_loss=0.1684  val_mse=0.1681
+  [finetune-reg] epoch 3/100  train_loss=0.1356  val_mse=0.1576
+  [finetune-reg] epoch 4/100  train_loss=0.1275  val_mse=0.1397
+  [finetune-reg] epoch 5/100  train_loss=0.1083  val_mse=0.1404
+  [finetune-reg] epoch 6/100  train_loss=0.0944  val_mse=0.1296
+  [finetune-reg] epoch 7/100  train_loss=0.0824  val_mse=0.1461
+  [finetune-reg] epoch 8/100  train_loss=0.0746  val_mse=0.1407
+  [finetune-reg] epoch 9/100  train_loss=0.0638  val_mse=0.1485
+  [finetune-reg] epoch 10/100  train_loss=0.0576  val_mse=0.1507
+  [finetune-reg] epoch 11/100  train_loss=0.0498  val_mse=0.1573
+  [finetune-reg] epoch 12/100  train_loss=0.0479  val_mse=0.2062
+  [finetune-reg] epoch 13/100  train_loss=0.0425  val_mse=0.1220
+  [finetune-reg] epoch 14/100  train_loss=0.0388  val_mse=0.1971
+  [finetune-reg] epoch 15/100  train_loss=0.0321  val_mse=0.1485
+  [finetune-reg] epoch 16/100  train_loss=0.0297  val_mse=0.1252
+  [finetune-reg] epoch 17/100  train_loss=0.0259  val_mse=0.1305
+  [finetune-reg] epoch 18/100  train_loss=0.0237  val_mse=0.1192
+  [finetune-reg] epoch 19/100  train_loss=0.0214  val_mse=0.1219
+  [finetune-reg] epoch 20/100  train_loss=0.0243  val_mse=0.1254
+  [finetune-reg] epoch 21/100  train_loss=0.0177  val_mse=0.1234
+  [finetune-reg] epoch 22/100  train_loss=0.0165  val_mse=0.1263
+  [finetune-reg] epoch 23/100  train_loss=0.0140  val_mse=0.1204
+  [finetune-reg] epoch 24/100  train_loss=0.0123  val_mse=0.1138
+  [finetune-reg] epoch 25/100  train_loss=0.0115  val_mse=0.1229
+  [finetune-reg] epoch 26/100  train_loss=0.0137  val_mse=0.1278
+  [finetune-reg] epoch 27/100  train_loss=0.0114  val_mse=0.1317
+  [finetune-reg] epoch 28/100  train_loss=0.0094  val_mse=0.1285
+  [finetune-reg] epoch 29/100  train_loss=0.0087  val_mse=0.1250
+  [finetune-reg] epoch 30/100  train_loss=0.0077  val_mse=0.1292
+  [finetune-reg] epoch 31/100  train_loss=0.0083  val_mse=0.1210
+  [finetune-reg] epoch 32/100  train_loss=0.0077  val_mse=0.1220
+  [finetune-reg] epoch 33/100  train_loss=0.0082  val_mse=0.1259
+  [finetune-reg] epoch 34/100  train_loss=0.0074  val_mse=0.1236
+  [finetune-reg] epoch 35/100  train_loss=0.0066  val_mse=0.1261
+  [finetune-reg] epoch 36/100  train_loss=0.0062  val_mse=0.1276
+  [finetune-reg] epoch 37/100  train_loss=0.0116  val_mse=0.1277
+  [finetune-reg] epoch 38/100  train_loss=0.0270  val_mse=0.1481
+  [finetune-reg] epoch 39/100  train_loss=0.0152  val_mse=0.1357
+  [finetune-reg] epoch 40/100  train_loss=0.0107  val_mse=0.1579
+  [finetune-reg] epoch 41/100  train_loss=0.0121  val_mse=0.1224
+  [finetune-reg] epoch 42/100  train_loss=0.0074  val_mse=0.1272
+  [finetune-reg] epoch 43/100  train_loss=0.0066  val_mse=0.1266
+  [finetune-reg] epoch 44/100  train_loss=0.0058  val_mse=0.1267
+  [finetune-reg] early stop at epoch 44: no val improvement for 20 epochs (best val_mse=0.1138 at epoch 24).
+
+[moment] test metrics (best-val checkpoint):
+  mse: 0.4261
+  mae: 0.1547
+  r2: 0.3801
+  pearson_r: 0.6184
+  spearman_r: 0.8577
+  val_mse: 0.1138
+  d_embed: 768
+
+======================================================================
+[chronos] loading (size=base, adapter=lora)
+======================================================================
+  [chronos] pool=mean
+  [finetune-reg] chronos: LoRA r=8 α=16 into 144 modules, 1.769M trainable params.
+  [finetune-reg] chronos: d_embed=768
+  [finetune-reg] epoch 1/100  train_loss=0.2836  val_mse=0.2503
+  [finetune-reg] epoch 2/100  train_loss=0.2222  val_mse=0.2135
+  [finetune-reg] epoch 3/100  train_loss=0.1967  val_mse=0.2051
+  [finetune-reg] epoch 4/100  train_loss=0.1785  val_mse=0.1859
+  [finetune-reg] epoch 5/100  train_loss=0.1725  val_mse=0.1902
+  [finetune-reg] epoch 6/100  train_loss=0.1639  val_mse=0.1839
+  [finetune-reg] epoch 7/100  train_loss=0.1624  val_mse=0.1831
+  [finetune-reg] epoch 8/100  train_loss=0.1499  val_mse=0.1796
+  [finetune-reg] epoch 9/100  train_loss=0.1417  val_mse=0.1825
+  [finetune-reg] epoch 10/100  train_loss=0.1444  val_mse=0.1664
+  [finetune-reg] epoch 11/100  train_loss=0.1333  val_mse=0.1864
+  [finetune-reg] epoch 12/100  train_loss=0.1284  val_mse=0.1804
+  [finetune-reg] epoch 13/100  train_loss=0.1272  val_mse=0.1877
+  [finetune-reg] epoch 14/100  train_loss=0.1185  val_mse=0.1959
+  [finetune-reg] epoch 15/100  train_loss=0.1179  val_mse=0.2052
+  [finetune-reg] epoch 16/100  train_loss=0.1092  val_mse=0.1965
+  [finetune-reg] epoch 17/100  train_loss=0.1106  val_mse=0.1973
+  [finetune-reg] epoch 18/100  train_loss=0.1091  val_mse=0.2236
+  [finetune-reg] epoch 19/100  train_loss=0.0998  val_mse=0.2088
+  [finetune-reg] epoch 20/100  train_loss=0.0990  val_mse=0.1755
+  [finetune-reg] epoch 21/100  train_loss=0.0962  val_mse=0.1899
+  [finetune-reg] epoch 22/100  train_loss=0.0920  val_mse=0.1872
+  [finetune-reg] epoch 23/100  train_loss=0.0860  val_mse=0.1832
+  [finetune-reg] epoch 24/100  train_loss=0.0833  val_mse=0.1863
+  [finetune-reg] epoch 25/100  train_loss=0.0841  val_mse=0.1977
+  [finetune-reg] epoch 26/100  train_loss=0.0788  val_mse=0.1875
+  [finetune-reg] epoch 27/100  train_loss=0.0740  val_mse=0.1920
+  [finetune-reg] epoch 28/100  train_loss=0.0796  val_mse=0.2132
+  [finetune-reg] epoch 29/100  train_loss=0.0719  val_mse=0.2069
+  [finetune-reg] epoch 30/100  train_loss=0.0739  val_mse=0.2008
+  [finetune-reg] early stop at epoch 30: no val improvement for 20 epochs (best val_mse=0.1664 at epoch 10).
+
+[chronos] test metrics (best-val checkpoint):
+  mse: 0.4984
+  mae: 0.2193
+  r2: 0.2749
+  pearson_r: 0.5280
+  spearman_r: 0.7952
+  val_mse: 0.1664
+  d_embed: 768
+
+======================================================================
+[timesfm] loading (size=base, adapter=lora)
+======================================================================
+ See https://github.com/google-research/timesfm/blob/master/README.md for updated APIs.
+Loaded PyTorch TimesFM, likely because python version is 3.10.20 (main, Mar 11 2026, 17:46:40) [GCC 14.3.0].
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 213.27it/s]
+  [timesfm] pool=last
+  [finetune-reg] timesfm: LoRA r=8 α=16 into 40 modules, 1.229M trainable params.
+  [finetune-reg] timesfm: d_embed=1280
+  [finetune-reg] epoch 1/100  train_loss=0.2419  val_mse=0.1713
+  [finetune-reg] epoch 2/100  train_loss=0.1318  val_mse=0.1379
+  [finetune-reg] epoch 3/100  train_loss=0.1013  val_mse=0.1551
+  [finetune-reg] epoch 4/100  train_loss=0.0755  val_mse=0.1555
+  [finetune-reg] epoch 5/100  train_loss=0.0653  val_mse=0.1290
+  [finetune-reg] epoch 6/100  train_loss=0.0600  val_mse=0.1217
+  [finetune-reg] epoch 7/100  train_loss=0.0465  val_mse=0.1292
+  [finetune-reg] epoch 8/100  train_loss=0.0449  val_mse=0.1255
+  [finetune-reg] epoch 9/100  train_loss=0.0353  val_mse=0.1443
+  [finetune-reg] epoch 10/100  train_loss=0.0308  val_mse=0.1316
+  [finetune-reg] epoch 11/100  train_loss=0.0200  val_mse=0.1357
+  [finetune-reg] epoch 12/100  train_loss=0.0182  val_mse=0.1266
+  [finetune-reg] epoch 13/100  train_loss=0.0144  val_mse=0.1183
+  [finetune-reg] epoch 14/100  train_loss=0.0112  val_mse=0.1177
+  [finetune-reg] epoch 15/100  train_loss=0.0106  val_mse=0.1162
+  [finetune-reg] epoch 16/100  train_loss=0.0095  val_mse=0.1218
+  [finetune-reg] epoch 17/100  train_loss=0.0087  val_mse=0.1221
+  [finetune-reg] epoch 18/100  train_loss=0.0082  val_mse=0.1205
+  [finetune-reg] epoch 19/100  train_loss=0.0078  val_mse=0.1208
+  [finetune-reg] epoch 20/100  train_loss=0.0071  val_mse=0.1199
+  [finetune-reg] epoch 21/100  train_loss=0.0067  val_mse=0.1189
+  [finetune-reg] epoch 22/100  train_loss=0.0065  val_mse=0.1278
+  [finetune-reg] epoch 23/100  train_loss=0.0059  val_mse=0.1227
+  [finetune-reg] epoch 24/100  train_loss=0.0053  val_mse=0.1256
+  [finetune-reg] epoch 25/100  train_loss=0.0055  val_mse=0.1209
+  [finetune-reg] epoch 26/100  train_loss=0.0047  val_mse=0.1214
+  [finetune-reg] epoch 27/100  train_loss=0.0047  val_mse=0.1307
+  [finetune-reg] epoch 28/100  train_loss=0.0335  val_mse=0.1237
+  [finetune-reg] epoch 29/100  train_loss=0.0258  val_mse=0.1430
+  [finetune-reg] epoch 30/100  train_loss=0.0245  val_mse=0.1456
+  [finetune-reg] epoch 31/100  train_loss=0.0102  val_mse=0.1286
+  [finetune-reg] epoch 32/100  train_loss=0.0068  val_mse=0.1611
+  [finetune-reg] epoch 33/100  train_loss=0.0055  val_mse=0.1376
+  [finetune-reg] epoch 34/100  train_loss=0.0049  val_mse=0.1315
+  [finetune-reg] epoch 35/100  train_loss=0.0045  val_mse=0.1298
+  [finetune-reg] early stop at epoch 35: no val improvement for 20 epochs (best val_mse=0.1162 at epoch 15).
+
+[timesfm] test metrics (best-val checkpoint):
+  mse: 0.4058
+  mae: 0.1536
+  r2: 0.4095
+  pearson_r: 0.6439
+  spearman_r: 0.8701
+  val_mse: 0.1162
+  d_embed: 1280
+
+======================================================================
+[timemoe] loading (size=base, adapter=lora)
+======================================================================
+  [timemoe] pool=last
+  [finetune-reg] timemoe: LoRA r=8 α=16 into 48 modules, 0.295M trainable params.
+  [finetune-reg] timemoe: d_embed=384
+Traceback (most recent call last):
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_regression_finetune.py", line 159, in <module>
+    main()
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_regression_finetune.py", line 107, in main
+    res = finetune_regression(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/regression_finetune.py", line 176, in finetune_regression
+    loss_val.backward()
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/_tensor.py", line 521, in backward
+    torch.autograd.backward(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/autograd/__init__.py", line 289, in backward
+    _engine_run_backward(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/autograd/graph.py", line 769, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 288.00 MiB. GPU 0 has a total capacity of 23.45 GiB of which 271.69 MiB is free. Including non-PyTorch memory, this process has 23.18 GiB memory in use. Of the allocated memory 22.47 GiB is allocated by PyTorch, and 519.82 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

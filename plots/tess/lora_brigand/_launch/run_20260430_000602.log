@@ -1,0 +1,120 @@
+TESS classification: 25935 LCs (train/val/test = (18403, 3710, 3822)), unique TICs per split = (4275, 854, 856), n_classes=8, lc_len=1024
+
+======================================================================
+[moment] loading (size=base, adapter=lora)
+======================================================================
+/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/momentfm/models/moment.py:174: UserWarning: Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.
+  warnings.warn("Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.")
+  [moment] pool=mean
+  [finetune-cls] moment: LoRA r=8 α=16 injected into 48 modules (whole backbone), 0.590M trainable params.
+  [finetune-cls] moment: d_embed=768
+  [finetune-cls] epoch 1/100  train_loss=0.7141  val_loss=0.5532  val_acc=0.8086
+  [finetune-cls] epoch 2/100  train_loss=0.4637  val_loss=0.4783  val_acc=0.8439
+  [finetune-cls] epoch 3/100  train_loss=0.3799  val_loss=0.5056  val_acc=0.8402
+  [finetune-cls] epoch 4/100  train_loss=0.3175  val_loss=0.4828  val_acc=0.8526
+  [finetune-cls] epoch 5/100  train_loss=0.2773  val_loss=0.5033  val_acc=0.8496
+  [finetune-cls] epoch 6/100  train_loss=0.2395  val_loss=0.4940  val_acc=0.8574
+  [finetune-cls] epoch 7/100  train_loss=0.2075  val_loss=0.5421  val_acc=0.8588
+  [finetune-cls] epoch 8/100  train_loss=0.1760  val_loss=0.5286  val_acc=0.8639
+  [finetune-cls] epoch 9/100  train_loss=0.1487  val_loss=0.6003  val_acc=0.8590
+  [finetune-cls] epoch 10/100  train_loss=0.1345  val_loss=0.6063  val_acc=0.8598
+  [finetune-cls] epoch 11/100  train_loss=0.1172  val_loss=0.6629  val_acc=0.8588
+  [finetune-cls] epoch 12/100  train_loss=0.1062  val_loss=0.6725  val_acc=0.8647
+  [finetune-cls] epoch 13/100  train_loss=0.0899  val_loss=0.6514  val_acc=0.8550
+  [finetune-cls] epoch 14/100  train_loss=0.0792  val_loss=0.7110  val_acc=0.8596
+  [finetune-cls] epoch 15/100  train_loss=0.0762  val_loss=0.7138  val_acc=0.8569
+  [finetune-cls] epoch 16/100  train_loss=0.0760  val_loss=0.7513  val_acc=0.8588
+  [finetune-cls] epoch 17/100  train_loss=0.0612  val_loss=0.7879  val_acc=0.8536
+  [finetune-cls] epoch 18/100  train_loss=0.0578  val_loss=0.8259  val_acc=0.8553
+  [finetune-cls] epoch 19/100  train_loss=0.0521  val_loss=0.8834  val_acc=0.8606
+  [finetune-cls] epoch 20/100  train_loss=0.0507  val_loss=0.8426  val_acc=0.8620
+  [finetune-cls] epoch 21/100  train_loss=0.0494  val_loss=0.8455  val_acc=0.8561
+  [finetune-cls] epoch 22/100  train_loss=0.0484  val_loss=0.8287  val_acc=0.8566
+  [finetune-cls] epoch 23/100  train_loss=0.0406  val_loss=0.8782  val_acc=0.8558
+  [finetune-cls] epoch 24/100  train_loss=0.0413  val_loss=0.8602  val_acc=0.8593
+  [finetune-cls] epoch 25/100  train_loss=0.0430  val_loss=0.8536  val_acc=0.8628
+  [finetune-cls] epoch 26/100  train_loss=0.0409  val_loss=0.8927  val_acc=0.8628
+  [finetune-cls] epoch 27/100  train_loss=0.0364  val_loss=0.9200  val_acc=0.8601
+  [finetune-cls] epoch 28/100  train_loss=0.0254  val_loss=0.9616  val_acc=0.8512
+  [finetune-cls] epoch 29/100  train_loss=0.0377  val_loss=1.0838  val_acc=0.8523
+  [finetune-cls] epoch 30/100  train_loss=0.0350  val_loss=0.9870  val_acc=0.8582
+  [finetune-cls] epoch 31/100  train_loss=0.0240  val_loss=0.9937  val_acc=0.8623
+  [finetune-cls] epoch 32/100  train_loss=0.0278  val_loss=0.9337  val_acc=0.8596
+  [finetune-cls] early stop at epoch 32: no val improvement for 20 epochs (best val_acc=0.8647 at epoch 12).
+
+[moment] test metrics (best-val checkpoint):
+  accuracy: 0.8613
+  balanced_accuracy: 0.8457
+  macro_f1: 0.8533
+  val_accuracy: 0.8647
+  d_embed: 768
+
+Per-class F1:
+  APERIODIC          f1=0.733  n=201
+  CONTACT_ROT        f1=0.789  n=445
+  DSCT_BCEP          f1=0.907  n=1048
+  ECLIPSE            f1=0.921  n=165
+  GDOR_SPB           f1=0.824  n=607
+  INSTRUMENT/JUNK    f1=0.888  n=822
+  RRLYR_CEPH         f1=0.980  n=199
+  SOLARLIKE          f1=0.786  n=335
+
+Confusion matrix (rows=true, cols=pred):
+   APER  CONT  DSCT  ECLI  GDOR  INST  RRLY  SOLA
+  APER   133     5     5     1     1    36     0    20
+  CONT    10   342     9    10    44    19     2     9
+  DSCT     1    29   933     0    31    45     0     9
+  ECLI     0     2     2   151     5     4     0     1
+  GDOR     2    34    40     0   502     7     0    22
+  INST    10     3    19     1     2   772     0    15
+  RRLY     0     4     0     0     2     0   193     0
+  SOLA     6     3     1     0    25    34     0   266
+
+======================================================================
+[chronos] loading (size=base, adapter=lora)
+======================================================================
+  [chronos] pool=mean
+  [finetune-cls] chronos: LoRA r=8 α=16 injected into 144 modules (whole backbone), 1.769M trainable params.
+  [finetune-cls] chronos: d_embed=768
+Traceback (most recent call last):
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_finetune.py", line 222, in <module>
+    main()
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_finetune.py", line 162, in main
+    res = finetune_classification(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 282, in finetune_classification
+    logits = _run_forward(flux)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 256, in _run_forward
+    emb = _embed_pooled(wrapper, flux_np, win_len=win_len, pool=pool)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 115, in _embed_pooled
+    win_embs.append(wrapper.embed_torch(chunk, pool=pool))    # (B, d)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/wrappers/chronos_wrapper.py", line 145, in embed_torch
+    emb = model.encode(input_ids=token_ids, attention_mask=attention_mask)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/chronos/chronos.py", line 308, in encode
+    return self.model.encoder(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 1106, in forward
+    layer_outputs = layer_module(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 686, in forward
+    self_attention_outputs = self.layer[0](
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 593, in forward
+    attention_output = self.SelfAttention(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 553, in forward
+    attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/functional.py", line 1888, in softmax
+    ret = input.softmax(dim)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 290.00 MiB. GPU 0 has a total capacity of 23.45 GiB of which 67.69 MiB is free. Including non-PyTorch memory, this process has 5.21 GiB memory in use. Process 2703258 has 18.18 GiB memory in use. Of the allocated memory 4.95 GiB is allocated by PyTorch, and 56.78 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

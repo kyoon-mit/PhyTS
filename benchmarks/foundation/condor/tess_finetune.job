@@ -1,0 +1,48 @@
+# Condor job: PhyTS-bench TESS classification fine-tuning (LoRA / full / last_n).
+#
+# Submit a single variant by passing args as Condor macros:
+#   condor_submit \
+#     -a 'tag=full_moment' \
+#     -a 'model=moment' \
+#     -a 'model_size=base' \
+#     -a 'extra_args=--adapter full --epochs 30 --patience 5 --backbone_lr 1e-5 --batch_size 4 --out_dir plots/tess/full_condor' \
+#     benchmarks/foundation/condor/tess_finetune.job
+#
+# Resource sizing (mirrors kepler_finetune.job, validated 4070 Ti / krakas / brigand):
+#   - chronos / timesfm / timemoe full FT at bs=4: ~10 GiB → request 16 GiB GPU.
+#   - LoRA at bs=4: ~6 GiB → 12 GiB safe.
+#   - granite_ttm: tiny.
+
+REPO            = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_tess_finetune_condor.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+Arguments       = --models $(model) \
+                  --model_size $(model_size) \
+                  --batch_size 4 \
+                  --seed 42 \
+                  $(extra_args)
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True LAGLLAMA_CKPT=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"
+
+Log             = ft_tess_$(tag)_$(ClusterId)_$(Process).log
+Output          = ft_tess_$(tag)_$(ClusterId)_$(Process).out
+Error           = ft_tess_$(tag)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 16G
+RequestGpus     = 1
+# 25k LCs × 2 windows × bs=4 → ~3-6 h Full FT, ~2-4 h LoRA. Give 12 h headroom.
+RequestWalltime = 43200
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") \
+                  && (GPUs_Capability >= 7.0) \
+                  && (GPUs_Capability <= 9.0) \
+                  && (GPUs_GlobalMemoryMb >= 10000)
+
+NiceUser        = True
+
+Queue 1

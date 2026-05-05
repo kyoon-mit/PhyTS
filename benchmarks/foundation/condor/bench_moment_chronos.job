@@ -1,0 +1,47 @@
+# Condor job: MOMENT + Chronos benchmark (Python 3.12 tsenv).
+#
+# Submit:
+#   condor_submit benchmarks/foundation/condor/bench_moment_chronos.job
+#
+# Prerequisites:
+#   The Python 3.12 tsenv must be installed on NFS at:
+#     /esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv
+#   with momentfm, chronos-forecasting, and the main project installed.
+
+REPO = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_benchmark_moment.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+Arguments       = --data_dir $(REPO)/data/toy/sinusoidal_signal_white_noise \
+                  --out_dir   $(REPO)/plots/toy/foundation \
+                  --models    moment \
+                  --tasks     denoising \
+                  --mode      zero_shot \
+                  --context_len 512 \
+                  --horizon   128 \
+                  --batch_size 32 \
+                  --device    cuda \
+                  --baseline_regressor_raw_ckpt   $(REPO)/checkpoints/toy_mlp_regression_raw/best.ckpt \
+                  --baseline_regressor_raw_cfg    $(REPO)/configs/toy/train_toy_mlp_regression_raw.yaml \
+                  --baseline_regressor_clean_ckpt $(REPO)/checkpoints/toy_mlp_regression_clean/best.ckpt \
+                  --baseline_regressor_clean_cfg  $(REPO)/configs/toy/train_toy_mlp_regression_clean.yaml
+
+Environment     = "HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache PYTHONHOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv"
+
+Log             = moment_chronos_$(ClusterId)_$(Process).log
+Output          = moment_chronos_$(ClusterId)_$(Process).out
+Error           = moment_chronos_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 32G
+RequestGpus     = 1
+RequestWalltime = 14400
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") && (GPUs_Capability >= 7.0)
+
+NiceUser        = True
+
+Queue 1

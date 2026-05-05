@@ -1,0 +1,93 @@
+{
+  "metrics": {
+    "rmse": 27.64114761352539,
+    "mae": 23.782785415649414,
+    "r2": 0.08154272426597053,
+    "best_val_mse_phys": 773.9154561523437,
+    "best_epoch": 6
+  },
+  "d_embed": 1536,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.46468134529516103,
+      "val_mse_phys": 840.5555206298828
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.4623346680343151,
+      "val_mse_phys": 840.5249267089844
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.46220558647960425,
+      "val_mse_phys": 840.9378373535156
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.46235597418099644,
+      "val_mse_phys": 840.1832573242187
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.4622468893304467,
+      "val_mse_phys": 839.9470850341797
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.4537083359532058,
+      "val_mse_phys": 773.9154561523437
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.4309313663959503,
+      "val_mse_phys": 777.718287890625
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.4256525109909475,
+      "val_mse_phys": 777.1709748535156
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.4229028589144349,
+      "val_mse_phys": 820.7016023925781
+    }
+  ],
+  "args": {
+    "data_root": "data/Project8",
+    "out_dir": "plots/Project8/lora_cav",
+    "models": [
+      "moment"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 8,
+    "num_workers": 8,
+    "prefetch_factor": 4,
+    "pin_memory": true,
+    "persistent_workers": true,
+    "cutoff": 24576,
+    "noise_type": "cav",
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 10,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 3,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

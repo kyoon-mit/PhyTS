@@ -1,0 +1,7 @@
+{
+  "granite_ttm": {
+    "linear_probe_phys_rmse": 27.8712158203125,
+    "mlp_head_phys_rmse": 26.5725040435791,
+    "mlp_head_phys_r2": -0.6925106677012074
+  }
+}

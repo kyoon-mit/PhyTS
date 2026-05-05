@@ -166,18 +166,31 @@ class MomentWrapper(BaseFoundationModel):
     # ── Embedding (native) ────────────────────────────────────────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
         if self.embed_model is None:
             raise RuntimeError("Call .load() before embed().")
-        B, L = signal.shape
-        x = self._prep_input(signal, target_len=self._seq_len)              # (B, 1, seq_len)
+        emb = self._embed_forward(signal, pool=pool)
+        return EmbeddingResult(embeddings=emb.detach().cpu().numpy().astype(np.float32))
+
+    def embed_torch(self, signal: np.ndarray, *, pool: str = "mean") -> torch.Tensor:
+        if self.embed_model is None:
+            raise RuntimeError("Call .load() before embed_torch().")
+        return self._embed_forward(signal, pool=pool)
+
+    def get_finetune_backbone(self) -> torch.nn.Module:
+        if self.embed_model is None:
+            raise RuntimeError("Call .load() before get_finetune_backbone().")
+        return self.embed_model
+
+    def _embed_forward(self, signal: np.ndarray, *, pool: str) -> torch.Tensor:
+        B, _ = signal.shape
+        x = self._prep_input(signal, target_len=self._seq_len)
         mask = torch.ones(B, self._seq_len, dtype=torch.float32, device=self.device)
         out = self.embed_model(x_enc=x, input_mask=mask)
-        # MOMENT returns .embeddings of shape (B, d_model) after its pooling head.
-        emb = out.embeddings.cpu().numpy().astype(np.float32)
-        if emb.ndim == 3:  # (B, T, d) -> mean pool
-            emb = emb.mean(axis=1)
-        return EmbeddingResult(embeddings=emb)
+        emb = out.embeddings
+        if not torch.is_tensor(emb):
+            emb = torch.as_tensor(emb)
+        return self._pool_time(emb, pool=pool)
 
     # ── Fine-tuning parameter selection ───────────────────────────────────
 

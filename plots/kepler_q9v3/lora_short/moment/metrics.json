@@ -1,0 +1,150 @@
+{
+  "metrics": {
+    "accuracy": 0.9171929824561403,
+    "balanced_accuracy": 0.8979598020595133,
+    "macro_f1": 0.9022173646070522,
+    "val_accuracy": 0.9235087719298246
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.8625954198473282,
+      "recall": 0.904,
+      "f1-score": 0.8828125,
+      "support": 125.0
+    },
+    "CONSTANT": {
+      "precision": 0.8947368421052632,
+      "recall": 0.9066666666666666,
+      "f1-score": 0.9006622516556292,
+      "support": 150.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.9303030303030303,
+      "recall": 0.9056047197640118,
+      "f1-score": 0.9177877428998505,
+      "support": 339.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.8951612903225806,
+      "recall": 0.9568965517241379,
+      "f1-score": 0.925,
+      "support": 116.0
+    },
+    "ECLIPSE": {
+      "precision": 0.993006993006993,
+      "recall": 0.9726027397260274,
+      "f1-score": 0.9826989619377162,
+      "support": 146.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8941176470588236,
+      "recall": 0.8085106382978723,
+      "f1-score": 0.8491620111731844,
+      "support": 94.0
+    },
+    "INSTRUMENT": {
+      "precision": 0.8926553672316384,
+      "recall": 0.8977272727272727,
+      "f1-score": 0.8951841359773371,
+      "support": 176.0
+    },
+    "RRLYR_CEPHEID": {
+      "precision": 0.875,
+      "recall": 0.7777777777777778,
+      "f1-score": 0.8235294117647058,
+      "support": 9.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.9345454545454546,
+      "recall": 0.9518518518518518,
+      "f1-score": 0.9431192660550459,
+      "support": 270.0
+    },
+    "accuracy": 0.9171929824561403,
+    "macro avg": {
+      "precision": 0.9080135604912347,
+      "recall": 0.8979598020595133,
+      "f1-score": 0.9022173646070522,
+      "support": 1425.0
+    },
+    "weighted avg": {
+      "precision": 0.9176014651996095,
+      "recall": 0.9171929824561403,
+      "f1-score": 0.9170404189876039,
+      "support": 1425.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONSTANT",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT",
+    "RRLYR_CEPHEID",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.6217391277269388,
+      "val_loss": 0.43934937980439925,
+      "val_acc": 0.8519298245614035
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.38584444652168226,
+      "val_loss": 0.30173162461982833,
+      "val_acc": 0.8933333333333333
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.3134054205505751,
+      "val_loss": 0.29523500746323,
+      "val_acc": 0.8940350877192983
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.271462544807806,
+      "val_loss": 0.27612719043261474,
+      "val_acc": 0.903859649122807
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.24013253392723316,
+      "val_loss": 0.23399886292301947,
+      "val_acc": 0.9235087719298246
+    }
+  ],
+  "args": {
+    "zip": "data/keplerq9v3.zip",
+    "out_dir": "plots/kepler_q9v3/lora_short",
+    "models": [
+      "moment"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 0,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 5,
+    "head_lr": 0.0005,
+    "backbone_lr": 5e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

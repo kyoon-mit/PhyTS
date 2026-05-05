@@ -127,21 +127,30 @@ class GraniteTTMWrapper(BaseFoundationModel):
     # ── Embedding via backbone hidden state ───────────────────────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
         if self.model is None:
             raise RuntimeError("Call .load() before embed().")
+        emb = self._embed_forward(signal, pool=pool)
+        return EmbeddingResult(embeddings=emb.detach().cpu().numpy().astype(np.float32))
+
+    def embed_torch(self, signal: np.ndarray, *, pool: str = "mean") -> torch.Tensor:
+        if self.model is None:
+            raise RuntimeError("Call .load() before embed_torch().")
+        return self._embed_forward(signal, pool=pool)
+
+    def get_finetune_backbone(self) -> torch.nn.Module:
+        if self.model is None:
+            raise RuntimeError("Call .load() before get_finetune_backbone().")
+        return self.model.backbone
+
+    def _embed_forward(self, signal: np.ndarray, *, pool: str) -> torch.Tensor:
         normed, _, _ = self._instance_normalize(signal.astype(np.float32))
         buf = self._prep_input(normed, target_len=self._ctx_len)    # (B, ctx, 1)
         out = self.model.backbone(buf)
         hs = out.last_hidden_state                                  # (B, C, N, d) or (B, N, d)
-        # Mean-pool over every non-batch, non-feature axis to land at (B, d).
         if hs.dim() == 4:
-            emb = hs.mean(dim=(1, 2))
-        elif hs.dim() == 3:
-            emb = hs.mean(dim=1)
-        else:
-            emb = hs.flatten(start_dim=1)
-        return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))
+            hs = hs.mean(dim=1)                                     # (B, N, d)
+        return self._pool_time(hs, pool=pool)
 
     # ── Helpers ───────────────────────────────────────────────────────────
 

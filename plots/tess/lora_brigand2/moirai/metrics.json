@@ -1,0 +1,201 @@
+{
+  "metrics": {
+    "accuracy": 0.8731030873888017,
+    "balanced_accuracy": 0.8677264985269901,
+    "macro_f1": 0.8644201105601921,
+    "val_accuracy": 0.8773584905660378
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.7704081632653061,
+      "recall": 0.7512437810945274,
+      "f1-score": 0.760705289672544,
+      "support": 201.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.7922912205567452,
+      "recall": 0.8314606741573034,
+      "f1-score": 0.8114035087719298,
+      "support": 445.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.9286412512218963,
+      "recall": 0.9064885496183206,
+      "f1-score": 0.9174311926605505,
+      "support": 1048.0
+    },
+    "ECLIPSE": {
+      "precision": 0.875,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9032258064516129,
+      "support": 165.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8325281803542673,
+      "recall": 0.8517298187808896,
+      "f1-score": 0.8420195439739414,
+      "support": 607.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.9169811320754717,
+      "recall": 0.8868613138686131,
+      "f1-score": 0.9016697588126159,
+      "support": 822.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 1.0,
+      "recall": 0.9597989949748744,
+      "f1-score": 0.9794871794871794,
+      "support": 199.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.7790368271954674,
+      "recall": 0.8208955223880597,
+      "f1-score": 0.7994186046511628,
+      "support": 335.0
+    },
+    "accuracy": 0.8731030873888017,
+    "macro avg": {
+      "precision": 0.8618608468336443,
+      "recall": 0.8677264985269901,
+      "f1-score": 0.8644201105601921,
+      "support": 3822.0
+    },
+    "weighted avg": {
+      "precision": 0.8749589477750354,
+      "recall": 0.8731030873888017,
+      "f1-score": 0.8737514544250926,
+      "support": 3822.0
+    }
+  },
+  "d_embed": 768,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.6850561785578831,
+      "val_loss": 0.48730422128875067,
+      "val_acc": 0.8366576819407008
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.4218980880837716,
+      "val_loss": 0.4295211025866969,
+      "val_acc": 0.861455525606469
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.3303042035161491,
+      "val_loss": 0.5060355874814157,
+      "val_acc": 0.8450134770889488
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.2594157408843615,
+      "val_loss": 0.45574512644690973,
+      "val_acc": 0.8676549865229111
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.21593759783327604,
+      "val_loss": 0.4455386346059546,
+      "val_acc": 0.8676549865229111
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.1748473811101696,
+      "val_loss": 0.45352649982819926,
+      "val_acc": 0.8773584905660378
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.14459733551851175,
+      "val_loss": 0.5152161967407978,
+      "val_acc": 0.8679245283018868
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.11656831035659132,
+      "val_loss": 0.5771441042604144,
+      "val_acc": 0.868733153638814
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.1072967856346454,
+      "val_loss": 0.5141602546673625,
+      "val_acc": 0.8663072776280324
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.08920398713030862,
+      "val_loss": 0.5471913686289617,
+      "val_acc": 0.8752021563342318
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.07716183232779304,
+      "val_loss": 0.5483685897180639,
+      "val_acc": 0.8725067385444744
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.07297731346836504,
+      "val_loss": 0.597905560282329,
+      "val_acc": 0.8668463611859838
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.06745914209065239,
+      "val_loss": 0.5815741308424862,
+      "val_acc": 0.8700808625336928
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.060607572384324286,
+      "val_loss": 0.6082433136549487,
+      "val_acc": 0.8695417789757413
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/lora_brigand2",
+    "models": [
+      "timemoe",
+      "moirai"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "lora",
+    "epochs": 50,
+    "head_lr": 0.001,
+    "backbone_lr": 0.0001,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 8,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

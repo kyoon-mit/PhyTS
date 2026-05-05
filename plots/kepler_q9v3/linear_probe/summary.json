@@ -1,0 +1,9 @@
+{
+  "chronos": {
+    "accuracy": 0.9326315789473684,
+    "balanced_accuracy": 0.9263460547649502,
+    "macro_f1": 0.9301557355539595,
+    "val_accuracy": 0.9298245614035088,
+    "val_balanced_accuracy": 0.91136388174218
+  }
+}

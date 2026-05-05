@@ -1,0 +1,119 @@
+{
+  "metrics": {
+    "mse": 0.49884679913520813,
+    "mae": 0.2416173815727234,
+    "r2": 0.2742329239845276,
+    "pearson_r": 0.5247913734726295,
+    "spearman_r": 0.7455935966398145,
+    "val_mse": 0.1721468692800651
+  },
+  "target_name": "frot",
+  "d_embed": 192,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.240455908791316,
+      "val_mse": 0.21563038139690444
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.17945587090464676,
+      "val_mse": 0.1880231330393657
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.1573124911110973,
+      "val_mse": 0.18604836095671756
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.14449211609212026,
+      "val_mse": 0.19446510490977376
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.13732703398662502,
+      "val_mse": 0.19991191350811927
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.12406980746159778,
+      "val_mse": 0.19903107805984074
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.11501346187617711,
+      "val_mse": 0.2055305241778352
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.10972377529292739,
+      "val_mse": 0.17233845482890806
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.09785511149625886,
+      "val_mse": 0.1721468692800651
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.09178979304454371,
+      "val_mse": 0.20792023713710076
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.08832754556641817,
+      "val_mse": 0.20450856120412036
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.0762441858212776,
+      "val_mse": 0.17682463878924123
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.07190072432545566,
+      "val_mse": 0.18707162587578596
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.06845640252303596,
+      "val_mse": 0.18159463744181692
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_regression_condor",
+    "models": [
+      "granite_ttm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

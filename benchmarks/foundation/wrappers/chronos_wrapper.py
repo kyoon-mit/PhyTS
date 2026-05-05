@@ -112,18 +112,40 @@ class ChronosWrapper(BaseFoundationModel):
     # ── Embedding (native) ────────────────────────────────────────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
         if self.pipeline is None:
             raise RuntimeError("Call .load() before embed().")
         ctx = torch.from_numpy(signal.astype(np.float32))
         # pipeline.embed returns (embeddings, tokenizer_state) where
         # embeddings is (B, T, d_model).
         out = self.pipeline.embed(ctx)
-        if isinstance(out, tuple):
-            emb = out[0]
-        else:
-            emb = out
-        # Mean-pool over time axis to get (B, d_model)
-        if emb.dim() == 3:
-            emb = emb.mean(dim=1)
+        emb = out[0] if isinstance(out, tuple) else out
+        emb = self._pool_time(emb, pool=pool)
         return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))
+
+    # ── Grad-preserving embedding for fine-tuning ────────────────────────
+    #
+    # ChronosPipeline.embed is wrapped with @torch.no_grad, so we replicate
+    # its tokenise→encode steps here without the decorator.  Tokenisation
+    # (quantile binning) is non-differentiable by design and stays no-grad;
+    # only the T5 encoder forward receives gradients.
+
+    def embed_torch(self, signal: np.ndarray, *, pool: str = "mean") -> torch.Tensor:
+        if self.pipeline is None:
+            raise RuntimeError("Call .load() before embed_torch().")
+        ctx = torch.from_numpy(signal.astype(np.float32))
+        with torch.no_grad():
+            token_ids, attention_mask, _ = (
+                self.pipeline.tokenizer.context_input_transform(ctx)
+            )
+        model = self.pipeline.model
+        dev = next(model.parameters()).device
+        token_ids = token_ids.to(dev)
+        attention_mask = attention_mask.to(dev)
+        emb = model.encode(input_ids=token_ids, attention_mask=attention_mask)
+        return self._pool_time(emb, pool=pool)
+
+    def get_finetune_backbone(self) -> torch.nn.Module:
+        if self.pipeline is None:
+            raise RuntimeError("Call .load() before get_finetune_backbone().")
+        return self.pipeline.model

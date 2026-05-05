@@ -6,7 +6,7 @@ can be plugged in via the `model` argument.
 
 Usage (LightningCLI YAML):
     model:
-      class_path: tasks.LIGO_denoising.DenoisingMSE
+      class_path: tasks.LIGO.denoising.DenoisingMSE
       init_args:
         lr: 1.0e-3
         lr_decay: 0.99

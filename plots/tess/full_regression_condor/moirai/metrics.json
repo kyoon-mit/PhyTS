@@ -1,0 +1,94 @@
+{
+  "metrics": {
+    "mse": 0.42588815093040466,
+    "mae": 0.17394961416721344,
+    "r2": 0.38037973642349243,
+    "pearson_r": 0.6224514338998062,
+    "spearman_r": 0.8611225880021754,
+    "val_mse": 0.1550568475419926
+  },
+  "target_name": "frot",
+  "d_embed": 768,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.20553358621220613,
+      "val_mse": 0.17063709477577166
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.13885954068213738,
+      "val_mse": 0.18916028898388434
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.14099322075264742,
+      "val_mse": 0.27226973720349584
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.09815306790433038,
+      "val_mse": 0.1550568475419926
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.09179093119169947,
+      "val_mse": 0.17657557137792218
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.0837811944159674,
+      "val_mse": 0.1876818477457792
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.07818076286611951,
+      "val_mse": 0.25500948341045077
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.06862685797972519,
+      "val_mse": 0.17988097626166127
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.06171780187077805,
+      "val_mse": 0.18817842122066974
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_regression_condor",
+    "models": [
+      "moirai"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 2,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  },
+  "target_mean": 1.1162035962549222,
+  "target_std": 0.6127495944819832
+}

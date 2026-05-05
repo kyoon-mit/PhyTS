@@ -1,0 +1,51 @@
+{
+  "linear_probe_norm": {
+    "rmse": 0.8747054934501648,
+    "mae": 0.7222630977630615,
+    "r2": 0.2353294259556935
+  },
+  "linear_probe_phys": {
+    "rmse": 25.221092224121094,
+    "mae": 20.825597763061523,
+    "r2": 0.23532904470856442
+  },
+  "mlp_head_norm": {
+    "rmse": 0.8939672112464905,
+    "mae": 0.7407764792442322,
+    "r2": 0.20128133380437063
+  },
+  "mlp_head_phys": {
+    "rmse": 25.776458740234375,
+    "mae": 21.359390258789062,
+    "r2": 0.20128229415486598
+  },
+  "d_embed_per_channel": 768,
+  "d_embed_total": 1536,
+  "input_channels": 2,
+  "pool": "mean",
+  "args": {
+    "data_root": "data/Project8",
+    "out_dir": "plots/Project8/linear_probe_cav",
+    "models": [
+      "chronos"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 8,
+    "prefetch_factor": 4,
+    "pin_memory": true,
+    "persistent_workers": true,
+    "win_len": 512,
+    "pool": null,
+    "noise_type": "cav",
+    "freq_transform": null,
+    "cutoff": 24576,
+    "alpha": 1.0,
+    "epochs": 50,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

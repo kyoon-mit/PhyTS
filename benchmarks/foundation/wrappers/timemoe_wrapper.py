@@ -139,12 +139,20 @@ class TimeMoEWrapper(BaseFoundationModel):
     # ── Embedding via final hidden state ──────────────────────────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
         if self.model is None:
             raise RuntimeError("Call .load() before embed().")
+        emb = self._embed_forward(signal, pool=pool)
+        return EmbeddingResult(embeddings=emb.detach().cpu().numpy().astype(np.float32))
+
+    def embed_torch(self, signal: np.ndarray, *, pool: str = "mean") -> torch.Tensor:
+        if self.model is None:
+            raise RuntimeError("Call .load() before embed_torch().")
+        return self._embed_forward(signal, pool=pool)
+
+    def _embed_forward(self, signal: np.ndarray, *, pool: str) -> torch.Tensor:
         normed, _, _ = self._instance_normalize(signal.astype(np.float32))
         x = torch.from_numpy(normed).to(self.device)
         out = self.model(x, output_hidden_states=True)
         hs = out.hidden_states[-1]          # (B, T, d_model)
-        emb = hs.mean(dim=1)                # (B, d_model)
-        return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))
+        return self._pool_time(hs, pool=pool)

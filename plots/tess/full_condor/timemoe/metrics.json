@@ -1,0 +1,164 @@
+{
+  "metrics": {
+    "accuracy": 0.8888016745159603,
+    "balanced_accuracy": 0.8818183904558334,
+    "macro_f1": 0.8803993389646156,
+    "val_accuracy": 0.8824797843665768
+  },
+  "report": {
+    "APERIODIC": {
+      "precision": 0.7819905213270142,
+      "recall": 0.8208955223880597,
+      "f1-score": 0.8009708737864077,
+      "support": 201.0
+    },
+    "CONTACT_ROT": {
+      "precision": 0.8195652173913044,
+      "recall": 0.8471910112359551,
+      "f1-score": 0.8331491712707182,
+      "support": 445.0
+    },
+    "DSCT_BCEP": {
+      "precision": 0.943050193050193,
+      "recall": 0.9322519083969466,
+      "f1-score": 0.9376199616122841,
+      "support": 1048.0
+    },
+    "ECLIPSE": {
+      "precision": 0.9316770186335404,
+      "recall": 0.9090909090909091,
+      "f1-score": 0.9202453987730062,
+      "support": 165.0
+    },
+    "GDOR_SPB": {
+      "precision": 0.8694096601073346,
+      "recall": 0.800658978583196,
+      "f1-score": 0.8336192109777015,
+      "support": 607.0
+    },
+    "INSTRUMENT/JUNK": {
+      "precision": 0.9011764705882352,
+      "recall": 0.9318734793187348,
+      "f1-score": 0.916267942583732,
+      "support": 822.0
+    },
+    "RRLYR_CEPH": {
+      "precision": 0.9746192893401016,
+      "recall": 0.964824120603015,
+      "f1-score": 0.9696969696969697,
+      "support": 199.0
+    },
+    "SOLARLIKE": {
+      "precision": 0.8160919540229885,
+      "recall": 0.8477611940298507,
+      "f1-score": 0.8316251830161054,
+      "support": 335.0
+    },
+    "accuracy": 0.8888016745159603,
+    "macro avg": {
+      "precision": 0.8796975405575889,
+      "recall": 0.8818183904558334,
+      "f1-score": 0.8803993389646156,
+      "support": 3822.0
+    },
+    "weighted avg": {
+      "precision": 0.8895260838833228,
+      "recall": 0.8888016745159603,
+      "f1-score": 0.8887901571326904,
+      "support": 3822.0
+    }
+  },
+  "d_embed": 384,
+  "class_names": [
+    "APERIODIC",
+    "CONTACT_ROT",
+    "DSCT_BCEP",
+    "ECLIPSE",
+    "GDOR_SPB",
+    "INSTRUMENT/JUNK",
+    "RRLYR_CEPH",
+    "SOLARLIKE"
+  ],
+  "pool": "last",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.5745923746524122,
+      "val_loss": 0.5970705688446873,
+      "val_acc": 0.8150943396226416
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.2934022099671201,
+      "val_loss": 0.4061775576832941,
+      "val_acc": 0.8765498652291105
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.17273063012127288,
+      "val_loss": 0.46344907659278856,
+      "val_acc": 0.8824797843665768
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.09591901194274771,
+      "val_loss": 0.5797603017841603,
+      "val_acc": 0.8743935309973045
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.06346522485340811,
+      "val_loss": 0.5796161034422335,
+      "val_acc": 0.8749326145552561
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.044282138621664184,
+      "val_loss": 0.6867876705615551,
+      "val_acc": 0.8746630727762803
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.03504961980921322,
+      "val_loss": 0.711270553587099,
+      "val_acc": 0.8776280323450135
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.03188266023350352,
+      "val_loss": 0.6992167211931946,
+      "val_acc": 0.8708894878706199
+    }
+  ],
+  "args": {
+    "out_dir": "plots/tess/full_condor",
+    "models": [
+      "timemoe"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 2,
+    "num_workers": 0,
+    "prefetch_factor": null,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 30,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "class_weights": "none",
+    "patience": 5,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

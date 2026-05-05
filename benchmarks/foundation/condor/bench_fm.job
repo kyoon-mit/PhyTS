@@ -1,0 +1,56 @@
+# Condor job: foundation model benchmark — one model at a time.
+#
+# Submit a single model:
+#   condor_submit -a 'model=timesfm' benchmarks/foundation/condor/bench_fm.job
+#
+# Submit all four blocked models sequentially (one job per model):
+#   for m in timesfm timemoe moirai lagllama; do
+#     condor_submit -a "model=$m" benchmarks/foundation/condor/bench_fm.job
+#   done
+#
+# Prerequisites:
+#   1. Create the tsenv_fm conda env on NFS:
+#        conda create -p /esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm python=3.10 -y
+#        /esat/.../envs/tsenv_fm/bin/pip install -r benchmarks/foundation/requirements_fm.txt
+#        /esat/.../envs/tsenv_fm/bin/pip install 'git+https://github.com/time-series-foundation-models/lag-llama.git#egg=lag-llama'
+#        /esat/.../envs/tsenv_fm/bin/pip install 'setuptools<72'
+#   2. Download Lag-Llama checkpoint (once):
+#        /esat/.../envs/tsenv_fm/bin/huggingface-cli download \
+#            time-series-foundation-models/Lag-Llama lag-llama.ckpt \
+#            --local-dir /esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/
+
+REPO = /esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics
+
+Notification    = Never
+Executable      = $(REPO)/benchmarks/foundation/condor/run_benchmark_fm.sh
+initialdir      = $(REPO)/benchmarks/foundation/condor/logs
+
+# Pass benchmark arguments as a single string — edit tasks/horizon as needed
+Arguments       = --data_dir $(REPO)/data/toy/sinusoidal_signal_white_noise \
+                  --out_dir   $(REPO)/plots/toy/foundation \
+                  --models    $(model) \
+                  --tasks     forecasting embedding \
+                  --mode      zero_shot \
+                  --context_len 512 \
+                  --horizon   128 \
+                  --batch_size 64 \
+                  --device    cuda \
+                  --lagllama_ckpt /esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt
+
+Environment     = "FM_PYTHON=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/bin/python HF_HOME=/esat/smcdata/users/kkontras/Image_Dataset/no_backup/huggingface_cache"
+
+Log             = $(model)_$(ClusterId)_$(Process).log
+Output          = $(model)_$(ClusterId)_$(Process).out
+Error           = $(model)_$(ClusterId)_$(Process).err
+
+RequestCpus     = 4
+RequestMemory   = 32G
+RequestGpus     = 1
+RequestWalltime = 14400
+RequestDisk     = 10G
+
+Requirements    = (Machine != "libra.esat.kuleuven.be") && (GPUs_Capability >= 7.0)
+
+NiceUser        = True
+
+Queue 1

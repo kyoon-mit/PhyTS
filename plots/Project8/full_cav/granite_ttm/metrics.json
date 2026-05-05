@@ -1,0 +1,98 @@
+{
+  "metrics": {
+    "rmse": 25.43067741394043,
+    "mae": 21.073200225830078,
+    "r2": 0.2225674970040985,
+    "best_val_mse_phys": 643.9402841705322,
+    "best_epoch": 10
+  },
+  "d_embed": 384,
+  "pool": "mean",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.46415304802521135,
+      "val_mse_phys": 840.4989691650391
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.46251881393743677,
+      "val_mse_phys": 840.2550700988769
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.444696082341671,
+      "val_mse_phys": 743.1140705047608
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.40050347948556303,
+      "val_mse_phys": 701.4110805297852
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.3902841640388127,
+      "val_mse_phys": 706.3578371917724
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.38497378450676334,
+      "val_mse_phys": 680.9992842147827
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.3799083815259626,
+      "val_mse_phys": 680.374293914795
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.37466462760679425,
+      "val_mse_phys": 693.2664180282593
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.3697628005107399,
+      "val_mse_phys": 672.3923081726074
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.3638901463692542,
+      "val_mse_phys": 643.9402841705322
+    }
+  ],
+  "args": {
+    "data_root": "data/Project8",
+    "out_dir": "plots/Project8/full_cav",
+    "models": [
+      "granite_ttm"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 4,
+    "num_workers": 8,
+    "prefetch_factor": 4,
+    "pin_memory": true,
+    "persistent_workers": true,
+    "cutoff": 24576,
+    "noise_type": "cav",
+    "win_len": 512,
+    "pool": null,
+    "adapter": "full",
+    "epochs": 10,
+    "head_lr": 0.001,
+    "backbone_lr": 1e-05,
+    "unfreeze_last_n": 2,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "lora_last_n_blocks": null,
+    "weight_decay": 0.0001,
+    "loss": "huber",
+    "huber_beta": 1.0,
+    "patience": 3,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

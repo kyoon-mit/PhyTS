@@ -1,0 +1,52 @@
+% Zero-shot linear probe on Kepler Q9 v3 (9-class stellar variability)
+\begin{table}[h]
+\centering
+\caption{Zero-shot linear probe on Kepler Q9 v3 (stratified 70/15/15 split, seed=42). Each foundation model's backbone is frozen; embeddings are extracted from three overlapping 512-sample windows and pooled (mean for encoders, last-token for causal decoders) before fitting an L2-regularised logistic regression. Model rows are labelled by checkpoint size; bold = best per column; $d$ = embedding dimension.}
+\label{tab:kepler_q9v3_linear_probe}
+\begin{tabular}{llccccc}
+\toprule
+Model & Arch. & Pool & $d$ & Accuracy & Bal.\ Acc. & Macro F1 \\
+\midrule
+MOMENT-base & enc. & mean & 768 & 0.912 & 0.902 & 0.899 \\
+MOMENT-large & enc. & mean & 1024 & 0.904 & 0.884 & 0.876 \\
+\midrule
+Chronos-base & enc-dec. & mean & 768 & \textbf{0.933} & \textbf{0.926} & \textbf{0.930} \\
+Chronos-large & enc-dec. & mean & 1024 & 0.930 & 0.924 & 0.927 \\
+\midrule
+Time-MoE-base & dec. & last & 384 & 0.887 & 0.885 & 0.879 \\
+Time-MoE-large & dec. & last & 768 & 0.882 & 0.863 & 0.852 \\
+\midrule
+Granite-TTM-base & mixer & mean & 192 & 0.811 & 0.770 & 0.770 \\
+Granite-TTM-large & mixer & mean & 192 & 0.754 & 0.691 & 0.704 \\
+\midrule
+TimesFM-base & dec. & last & 1280 & 0.919 & 0.898 & 0.904 \\
+TimesFM-large & dec. & last & 1280 & 0.844 & 0.768 & 0.781 \\
+\midrule
+MOIRAI-base & enc. & mean & 768 & 0.904 & 0.883 & 0.881 \\
+MOIRAI-large & enc. & mean & 1024 & 0.924 & 0.905 & 0.910 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Per-class F1 on Kepler Q9 v3 (zero-shot linear probe).}
+\label{tab:kepler_q9v3_per_class_f1}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccccccccc}
+\toprule
+Class & MOMENT-base & MOMENT-large & Chronos-base & Chronos-large & Time-MoE-base & Time-MoE-large & Granite-TTM-base & Granite-TTM-large & TimesFM-base & TimesFM-large & MOIRAI-base & MOIRAI-large \\
+\midrule
+APERIODIC ($n=125$) & 0.893 & 0.840 & \textbf{0.916} & 0.883 & 0.865 & 0.840 & 0.820 & 0.784 & 0.894 & 0.857 & 0.890 & 0.906 \\
+CONSTANT ($n=150$) & 0.895 & 0.924 & \textbf{0.970} & 0.964 & 0.933 & 0.910 & 0.820 & 0.713 & 0.938 & 0.828 & 0.903 & 0.949 \\
+CONTACT\_ROT ($n=339$) & \textbf{0.914} & 0.902 & 0.913 & 0.911 & 0.850 & 0.861 & 0.776 & 0.729 & 0.903 & 0.837 & 0.889 & 0.904 \\
+DSCT\_BCEP ($n=116$) & 0.926 & 0.913 & \textbf{0.945} & 0.931 & 0.896 & 0.852 & 0.815 & 0.800 & 0.926 & 0.877 & 0.904 & 0.909 \\
+ECLIPSE ($n=146$) & 0.976 & 0.983 & 0.979 & 0.976 & 0.940 & 0.965 & 0.920 & 0.870 & 0.965 & 0.911 & 0.975 & \textbf{0.986} \\
+GDOR\_SPB ($n=94$) & 0.829 & 0.811 & 0.828 & 0.838 & 0.762 & 0.756 & 0.710 & 0.648 & 0.832 & 0.729 & 0.802 & \textbf{0.842} \\
+INSTRUMENT ($n=176$) & 0.876 & 0.880 & 0.925 & \textbf{0.939} & 0.895 & 0.883 & 0.821 & 0.680 & 0.908 & 0.787 & 0.898 & 0.929 \\
+RRLYR\_CEPHEID ($n=9$) & 0.842 & 0.700 & \textbf{0.941} & \textbf{0.941} & 0.842 & 0.667 & 0.421 & 0.308 & 0.824 & 0.308 & 0.737 & 0.824 \\
+SOLARLIKE ($n=270$) & 0.942 & 0.932 & 0.952 & \textbf{0.956} & 0.926 & 0.931 & 0.831 & 0.808 & 0.951 & 0.897 & 0.934 & 0.945 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

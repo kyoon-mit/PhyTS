@@ -1,0 +1,7 @@
+{
+  "chronos": {
+    "linear_probe_phys_rmse": 25.221092224121094,
+    "mlp_head_phys_rmse": 25.776458740234375,
+    "mlp_head_phys_r2": 0.20128229415486598
+  }
+}

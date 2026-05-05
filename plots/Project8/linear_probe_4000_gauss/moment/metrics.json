@@ -1,0 +1,53 @@
+{
+  "linear_probe_norm": {
+    "rmse": 0.9745580554008484,
+    "mae": 0.8241324424743652,
+    "r2": 0.050781646909306755
+  },
+  "linear_probe_phys": {
+    "rmse": 28.10021209716797,
+    "mae": 23.762859344482422,
+    "r2": 0.050781832359385826
+  },
+  "mlp_head_norm": {
+    "rmse": 0.9819339513778687,
+    "mae": 0.8440448641777039,
+    "r2": 0.03635912552309806
+  },
+  "mlp_head_phys": {
+    "rmse": 28.31288719177246,
+    "mae": 24.337020874023438,
+    "r2": 0.03635921624103311
+  },
+  "d_embed_per_channel": 768,
+  "d_embed_total": 1536,
+  "input_channels": 2,
+  "pool": "mean",
+  "args": {
+    "data_root": "data/Project8",
+    "out_dir": "plots/Project8/linear_probe",
+    "models": [
+      "moment",
+      "chronos",
+      "timesfm",
+      "timemoe",
+      "moirai",
+      "granite_ttm",
+      "lagllama"
+    ],
+    "model_size": "base",
+    "device": "cuda",
+    "batch_size": 16,
+    "num_workers": 4,
+    "win_len": 512,
+    "pool": null,
+    "noise_type": "gauss",
+    "freq_transform": null,
+    "alpha": 1.0,
+    "epochs": 50,
+    "seed": 42,
+    "smoke_test": false,
+    "max_train_batches": null,
+    "max_test_batches": null
+  }
+}

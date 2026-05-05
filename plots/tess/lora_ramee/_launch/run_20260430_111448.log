@@ -1,0 +1,54 @@
+TESS classification: 25935 LCs (train/val/test = (18403, 3710, 3822)), unique TICs per split = (4275, 854, 856), n_classes=8, lc_len=1024
+
+======================================================================
+[chronos] loading (size=base, adapter=lora)
+======================================================================
+  [chronos] pool=mean
+  [finetune-cls] chronos: LoRA r=8 α=16 injected into 144 modules (whole backbone), 1.769M trainable params.
+  [finetune-cls] chronos: d_embed=768
+Traceback (most recent call last):
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_finetune.py", line 222, in <module>
+    main()
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/run_tess_finetune.py", line 162, in main
+    res = finetune_classification(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 282, in finetune_classification
+    logits = _run_forward(flux)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 256, in _run_forward
+    emb = _embed_pooled(wrapper, flux_np, win_len=win_len, pool=pool)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/evaluators/classification_finetune.py", line 115, in _embed_pooled
+    win_embs.append(wrapper.embed_torch(chunk, pool=pool))    # (B, d)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/wrappers/chronos_wrapper.py", line 145, in embed_torch
+    emb = model.encode(input_ids=token_ids, attention_mask=attention_mask)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/chronos/chronos.py", line 308, in encode
+    return self.model.encoder(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 1106, in forward
+    layer_outputs = layer_module(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 686, in forward
+    self_attention_outputs = self.layer[0](
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 593, in forward
+    attention_output = self.SelfAttention(
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/transformers/models/t5/modeling_t5.py", line 565, in forward
+    attn_output = self.o(attn_output)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/esat/smcdata/users/kkontras/Image_Dataset/no_backup/git/TimeSeriesPhysics/benchmarks/foundation/finetuning/finetune.py", line 97, in forward
+    return result + delta * self.scaling
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 26.00 MiB. GPU 0 has a total capacity of 11.60 GiB of which 10.25 MiB is free. Including non-PyTorch memory, this process has 11.55 GiB memory in use. Of the allocated memory 11.02 GiB is allocated by PyTorch, and 309.48 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

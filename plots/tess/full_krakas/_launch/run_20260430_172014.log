@@ -1,0 +1,10 @@
+TESS classification: 25935 LCs (train/val/test = (18403, 3710, 3822)), unique TICs per split = (4275, 854, 856), n_classes=8, lc_len=1024
+
+======================================================================
+[moment] loading (size=base, adapter=full)
+======================================================================
+/esat/smcdata/users/kkontras/Image_Dataset/no_backup/envs/tsenv_fm/lib/python3.10/site-packages/momentfm/models/moment.py:174: UserWarning: Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.
+  warnings.warn("Only reconstruction head is pre-trained. Classification and forecasting heads must be fine-tuned.")
+  [moment] pool=mean
+  [finetune-cls] moment: full fine-tune (109.64M backbone params trainable).
+  [finetune-cls] moment: d_embed=768
