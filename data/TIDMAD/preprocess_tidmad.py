@@ -133,17 +133,21 @@ def main():
     # -----------------------------------------------------------------------
     # Collect and split files
     # -----------------------------------------------------------------------
-    # Match exactly 4-digit suffixes to exclude derived files like
-    # abra_validation_denoised_s4denois_XXXX.h5
+    # Accept both HuggingFace naming (tidmad_training_*.h5) and legacy naming
+    # (abra_training_*.h5).  Match exactly 4-digit suffixes to exclude derived
+    # files like abra_validation_denoised_s4denois_XXXX.h5.
     import re
-    _4digit = re.compile(r'^abra_(training|validation)_\d{4}\.h5$')
-    all_h5 = sorted(glob.glob(os.path.join(args.data_dir, 'abra_*.h5')))
+    _4digit = re.compile(r'^(abra|tidmad)_(training|validation)_\d{4}\.h5$')
+    all_h5 = sorted(glob.glob(os.path.join(args.data_dir, 'abra_*.h5')) +
+                    glob.glob(os.path.join(args.data_dir, 'tidmad_*.h5')))
     train_h5 = [f for f in all_h5 if _4digit.match(os.path.basename(f)) and 'training' in f]
     val_h5   = [f for f in all_h5 if _4digit.match(os.path.basename(f)) and 'validation' in f]
     all_files = train_h5 + val_h5
 
     if not all_files:
-        raise FileNotFoundError(f'No abra_training_*.h5 or abra_validation_*.h5 in {args.data_dir}')
+        raise FileNotFoundError(
+            f'No tidmad_training_*.h5 / abra_training_*.h5 in {args.data_dir}'
+        )
 
     rng = np.random.default_rng(args.seed)
     shuffled = list(rng.permutation(len(all_files)))

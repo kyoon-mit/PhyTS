@@ -58,19 +58,24 @@ CUDA 13 (driver ≥ 580): replace `env-jax` with `uv sync --extra jax --extra cu
 
 All datasets are on Hugging Face at [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench).
 
-**LIGO** — download and place HDF5 files at `data/LIGO/{train,val,test}/sig_combined_{split}.h5`.
+For pipeline verification (NeurIPS reproducibility), sample files covering all four domains can be downloaded in one step:
 
-**ABRACADABRA** — download raw HDF5 files, then preprocess:
 ```bash
-python data/TIDMAD/preprocess_tidmad.py  # see data/TIDMAD/README.md
+python data/download.py --sample
 ```
 
-**TESS** — download the parquet file:
+To download a full dataset:
+
 ```bash
-python data/TESS/download_tess.py  # → data/TESS/tess_classification.parquet
+python data/download.py --domain tess        # 194 MB
+python data/download.py --domain ligo        # ~157 GB
+python data/download.py --domain project8    # ~44 GB
+python data/download.py --domain tidmad      # ~163 GB; then run:
+python data/TIDMAD/preprocess_tidmad.py \
+    --data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed
 ```
 
-**Project 8** — download and place HDF5 files at `data/Project8/{train,valid,test}/`.
+See `data/download.py --help` for options.
 
 ---
 
@@ -87,9 +92,6 @@ One example per domain:
 ```bash
 # LIGO — chirp-mass regression, S4D
 python main.py fit --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml
-
-# LIGO — chirp-mass regression, 1D CNN
-python main.py fit --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
 
 # ABRACADABRA — denoising, LinOSS  (requires env-jax)
 python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
@@ -194,11 +196,6 @@ Makefile          # Environment setup targets
 | S4D Seq2Seq | `models.s4d_seq2seq.S4ModelSeq2Seq` | PyTorch |
 | LinOSS | `models.linoss.LinOSS` | JAX / Equinox |
 | 1D CNN | `models.conv1d_regressor.Conv1DRegressor` | PyTorch |
-| Conv-AE | `models.conv_ae.ConvAE` | PyTorch |
-| Conv-Attn-AE | `models.conv_attn_ae.ConvAttnAE` | PyTorch |
-| RNN Seq2Seq | `models.rnn_seq2seq.RNNSeq2Seq` | PyTorch |
-| MLP | `models.mlp.MLPRegressor` | PyTorch |
-| Classical filter | `models.classical_filter` | NumPy |
 
 Tasks are organized by domain, not by model. Any model can be swapped into any compatible task by changing the `model.class_path` in the YAML config.
 

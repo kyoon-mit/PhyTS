@@ -2,9 +2,8 @@
 # Project 8 benchmark — train all models and run evaluation.
 #
 # Prerequisites:
-#   source .venv/bin/activate          # make env (PyTorch models)
-#   # LinOSS also needs JAX: make env-jax && source .venv/bin/activate
-#   # Data in data/Project8/{train,valid,test}/ (from PhyTS-team/PhyTS-bench on HuggingFace)
+#   source .venv/bin/activate          # make env (PyTorch) or make env-jax (LinOSS)
+#   python data/download.py --domain project8 --sample   # or full dataset
 #
 # Usage:
 #   bash benchmarks/Project8/run.sh

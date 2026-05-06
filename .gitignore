@@ -2,53 +2,47 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.eggs/
 dist/
 build/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Logs & checkpoints (Lightning)
+# Logs & checkpoints
 logs/
 lightning_logs/
 checkpoints/
 *.ckpt
 
-# Env
-.env
+# Environments
 .venv/
 benchmarks/foundation/.venv/
+.env
 
 # IDE / tools
 .vscode/
 .idea/
 .claude/
 
-# SLURM
-slurm/
+# SLURM outputs
 slurm_logs/
 *.out
 *.err
 
-# Data files
-*.h5
-*.npz
-
-# Large data directories (fetch from HuggingFace; see README)
+# Data (download from HuggingFace; see README)
 data/LIGO/
 data/Project8/
-data/TESS/*.parquet
-data/TIDMAD/*.h5
+data/TESS/
+data/TIDMAD/original/
 data/TIDMAD/preprocessed/
-data/TIDMAD/preprocessed_local_backup/
 
-# Generated plots and results (reproduced by running benchmarks)
+# Generated outputs
 plots/
 results/
+wandb/
 *.png
 *.pdf
-
-# Wandb
-wandb/
-tea_debug.log
+*.h5
+*.hdf5
+*.npy
+*.parquet
