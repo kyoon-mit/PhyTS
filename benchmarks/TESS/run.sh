@@ -4,7 +4,7 @@
 # Prerequisites:
 #   source .venv/bin/activate                  # make env (PyTorch models)
 #   # LinOSS also needs JAX: make env-jax && source .venv/bin/activate
-#   bash benchmarks/TESS/setup_data.sh         # downloads data/TESS/tess_classification.parquet
+#   python data/TESS/download_tess.py           # downloads data/TESS/tess_classification.parquet
 #
 # Usage:
 #   bash benchmarks/TESS/run.sh

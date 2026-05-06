@@ -56,14 +56,21 @@ CUDA 13 (driver ≥ 580): replace `env-jax` with `uv sync --extra jax --extra cu
 
 ## Data
 
-Download each dataset from [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face and place it as follows:
+All datasets are on Hugging Face at [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench).
 
-| Dataset | Location |
-|---------|----------|
-| LIGO | `data/LIGO/{train,val,test}/sig_combined_{split}.h5` |
-| ABRACADABRA | Raw HDF5 → `python data/TIDMAD/preprocess_tidmad.py` (see `data/TIDMAD/README.md`) |
-| TESS | `bash benchmarks/TESS/setup_data.sh` → `data/TESS/tess_classification.parquet` |
-| Project 8 | `data/Project8/{train,valid,test}/` |
+**LIGO** — download and place HDF5 files at `data/LIGO/{train,val,test}/sig_combined_{split}.h5`.
+
+**ABRACADABRA** — download raw HDF5 files, then preprocess:
+```bash
+python data/TIDMAD/preprocess_tidmad.py  # see data/TIDMAD/README.md
+```
+
+**TESS** — download the parquet file:
+```bash
+python data/TESS/download_tess.py  # → data/TESS/tess_classification.parquet
+```
+
+**Project 8** — download and place HDF5 files at `data/Project8/{train,valid,test}/`.
 
 ---
 
