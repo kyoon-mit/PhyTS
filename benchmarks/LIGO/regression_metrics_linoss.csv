@@ -1,0 +1,2 @@
+model,backend,target,n_test,rmse,r2
+LinOSS,jax,chirp_mass,100000,0.2598610818386078,0.08158009485106188
