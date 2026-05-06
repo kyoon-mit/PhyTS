@@ -36,7 +36,7 @@ Three environments are needed depending on which models you run.
 All main environments are managed by [uv](https://github.com/astral-sh/uv).
 
 ```bash
-# PyTorch models (S4D, CNN, RNN, MLP, Conv-AE) — covers all four datasets
+# PyTorch models (S4D, CNN, RNN, MLP, Conv-AE) and data download — covers all four datasets
 make env
 source .venv/bin/activate
 
