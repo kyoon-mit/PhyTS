@@ -44,8 +44,8 @@ data/TIDMAD/preprocessed/
 data/TIDMAD/preprocessed_local_backup/
 
 # Generated plots and results (reproduced by running benchmarks)
-plots/TIDMAD/
-results/**/*.csv
+plots/
+results/
 *.png
 *.pdf
 
