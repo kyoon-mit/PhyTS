@@ -1,0 +1,76 @@
+# Usage:
+#   python main.py fit  --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml
+#   python main.py test --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml \
+#                       --ckpt_path checkpoints/ligo_s4d_gaussnll_regression/best.ckpt
+#
+# S4D Gaussian NLL regression: 2-channel (H1+L1) strain 59-63 s -> chirp_mass.
+# Loss: Gaussian NLL.  d_output=2 (mean + log-var for chirp_mass).
+# ~3.6M parameters.
+
+trainer:
+  max_epochs: 1000
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 10
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 30
+        min_delta: 1.0e-5
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/ligo_s4d_gaussnll_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: ligo_s4d_gaussnll_regression
+
+model:
+  class_path: tasks.LIGO.regression.LIGORegressionGaussNLL
+  init_args:
+    target_names:
+      - chirp_mass
+    observed_names:
+      - snr
+    lr: 1.0e-3
+    lr_decay: 0.99
+    csv_out: results/LIGO/s4d_gaussnll_regression/test_predictions.csv
+    model:
+      class_path: models.s4d.S4Model
+      init_args:
+        d_input: 2          # H1 (index 0) + L1 (index 1)
+        d_output: 2         # mean + log-var for chirp_mass
+        d_model: 512
+        d_state: 32
+        n_layers: 4
+        dropout: 0.1
+        dt_min: 0.001
+        dt_max: 0.1
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/train/sig_combined_train.h5
+    val_file:   /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/val/sig_combined_val.h5
+    test_file:  /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/test/sig_combined_test.h5
+    injected_data_key: whitened_injected
+    target_variables:
+      - chirp_mass
+    observed_variables:
+      - snr
+    strain_frequency:  256
+    strain_duration:   64.0
+    window_begin:      59.0
+    window_end:        63.0
+    train_batch_size:  64
+    val_batch_size:    64
+    test_batch_size:   128
+    num_workers:       4
+    shuffle:           true

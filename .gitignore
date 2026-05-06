@@ -18,12 +18,15 @@ checkpoints/
 # Env
 .env
 .venv/
+benchmarks/foundation/.venv/
 
 # IDE
 .vscode/
+.idea/
 
 # SLURM
 slurm/
+slurm_logs/
 *.out
 *.err
 
@@ -31,9 +34,13 @@ slurm/
 *.h5
 *.npz
 
-# Large data directories (symlink or populate locally, see each dir's README)
-data/TIDMAD/*.h5
+# Large data directories (fetch from HuggingFace; see README)
+data/LIGO/
+data/Project8/
 data/TESS/*.parquet
+data/TIDMAD/*.h5
+data/TIDMAD/preprocessed/
+data/TIDMAD/preprocessed_local_backup/
 
 # Plots (exclude generated plots everywhere except the plots/ directory)
 *.png

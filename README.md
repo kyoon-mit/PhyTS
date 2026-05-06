@@ -1,24 +1,135 @@
-# TimeSeriesPhysics
+# PhyTS
 
-Deep learning for physics time series across four experimental domains. Built with PyTorch Lightning and configurable via YAML CLI. JAX-based models (LinOSS) use a separate `uv`-managed environment.
+PhyTS is a machine learning benchmark built around four precision physics experiments: LIGO (gravitational waves), ABRACADABRA (axion dark matter), TESS (stellar variability), and Project 8 (neutrino mass). Each dataset is drawn from real or high-fidelity simulated detector data and defines a concrete inference task—chirp-mass regression, time-series denoising, variability classification, or electron energy regression—where better model performance maps directly to improved scientific sensitivity.
 
-## Domains
+The datasets span twelve orders of magnitude in sampling rate, sequence lengths from hundreds to millions of samples, and noise backgrounds that are non-Gaussian, non-stationary, and shaped by detector hardware. They are a poor fit for standard time-series benchmarks in all of these respects.
 
-### TIDMAD — Dark Matter Direct Detection
-Time series from dark matter axion detection experiment (ABRACADABRA, [arXiv:2406.04378](https://arxiv.org/abs/2406.04378)).
+**Paper:** PhyTS: A Benchmark for Scientific Time Series (NeurIPS 2026)  
+**Data:** [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face
 
-### Project 8 — Neutrino Mass Spectroscopy
-Cyclotron Radiation Emission Spectroscopy (CRES) signals for tritium beta-decay spectroscopy.
+---
 
-### TESS — Exoplanet Transit Photometry
-Stellar light curves from the Transiting Exoplanet Survey Satellite.
+## Datasets
 
-### LIGO — Gravitational Wave Denoising
-Gravitational wave strain from LIGO detectors (H1 + L1).
+| Experiment | Domain | Task | Sampling rate | Seq. length | SNR |
+|-----------|--------|------|:-------------:|:-----------:|:---:|
+| LIGO | Gravitational waves | Chirp-mass regression | 256 Hz | 1,024 (4 s) | 5–50 |
+| ABRACADABRA | Axion dark matter | Time-series denoising | 10 MHz | 100,000 (1 s) | 0.02–200 |
+| TESS | Stellar variability | 8-class classification | 0.56–1.67 mHz | 1,300–3,670 | 0.3–140 |
+| Project 8 | Neutrino mass | Energy regression | 403 MHz | 24,576 (61 μs) | 3–25 |
 
-### Toy — Sinusoidal Signal + White Noise
-Synthetic dataset for denoising benchmarks: `s(t) = A·sin(2πft + φ)` buried in white noise.
-See [`data/toy/sinusoidal_signal_white_noise/README.md`](data/toy/sinusoidal_signal_white_noise/README.md).
+Detailed dataset descriptions and preprocessing steps are in the paper (Section 3).
+
+---
+
+## Setup
+
+Three environments are needed depending on which models you run.
+All main environments are managed by [uv](https://github.com/astral-sh/uv).
+
+```bash
+# PyTorch models (S4D, CNN, RNN, MLP, Conv-AE) — covers all four datasets
+make env
+source .venv/bin/activate
+
+# LinOSS (JAX/Equinox) — same environment with JAX + CUDA 12 added
+make env-jax
+source .venv/bin/activate
+
+# Foundation models (MOMENT, Chronos, TimesFM, Time-MoE, MOIRAI, Granite TTM)
+# Uses a separate Python 3.10 environment due to conflicting dependencies
+make env-fm
+source benchmarks/foundation/.venv/bin/activate
+```
+
+---
+
+## Training
+
+All training goes through `main.py` (LightningCLI). Pick any config from `configs/`:
+
+```bash
+python main.py fit --config <path/to/config.yaml>
+```
+
+One example per domain:
+
+```bash
+# LIGO — chirp-mass regression, S4D
+python main.py fit --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml
+
+# LIGO — chirp-mass regression, 1D CNN
+python main.py fit --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
+
+# TIDMAD — denoising, LinOSS  (requires env-jax)
+python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
+
+# TESS — variability classification, S4D
+python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+
+# Project 8 — energy regression, S4D
+python main.py fit --config configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml
+```
+
+Any config value can be overridden on the command line:
+
+```bash
+python main.py fit --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
+  --model.init_args.lr 1e-4 \
+  --data.init_args.batch_size 64
+```
+
+The full set of configs is in `configs/`.
+
+---
+
+## Benchmarks
+
+Each domain has a pipeline script that trains all models and runs evaluation end-to-end:
+
+```bash
+bash benchmarks/LIGO/run.sh
+bash benchmarks/TIDMAD/run.sh
+bash benchmarks/TESS/run.sh
+```
+
+These scripts submit chained SLURM jobs. Adjust partition and GPU settings at the top of each script to match your cluster.
+
+For foundation models (zero-shot evaluation):
+
+```bash
+python benchmarks/foundation/run_benchmark.py \
+  --models moment chronos timesfm moirai granite_ttm \
+  --tasks  forecasting denoising embedding \
+  --mode   zero_shot
+```
+
+Results are written to `--out_dir/summary.csv` (default: `results/foundation/`).
+
+TIDMAD denoising score — to evaluate a trained denoiser, run inference to produce denoised HDF5 files and then:
+
+```bash
+python src/tasks/TIDMAD/tidmad_denoising.py \
+  --data_dir <path_to_denoised_h5_files> \
+  --output_dir results/TIDMAD/
+```
+
+---
+
+## Results
+
+Numbers from the paper (Table 2). Foundation models evaluated zero-shot.
+
+| Model | LIGO RMSE [M☉] | LIGO R² | TIDMAD score | P8 RMSE [eV] | P8 R² |
+|-------|:--------------:|:-------:|:------------:|:------------:|:-----:|
+| Mean baseline | 0.271 | 0.000 | 1.00 | 28.83 | 0.000 |
+| S4D | **0.254** | **0.125** | — | **15.68** | **0.704** |
+| LinOSS | 0.259 | 0.081 | **1.30** | 20.88 | 0.476 |
+| CNN | 0.280 | −0.068 | −0.11 | 20.11 | 0.514 |
+| MOMENT | 0.284 | −0.096 | 0.46 | 25.22 | 0.236 |
+| Chronos | 0.278 | −0.052 | −0.88 | 25.22 | 0.235 |
+
+Raw predictions and metrics are in `results/`.
 
 ---
 
@@ -26,290 +137,59 @@ See [`data/toy/sinusoidal_signal_white_noise/README.md`](data/toy/sinusoidal_sig
 
 ```
 src/
-  models/
-    s4d.py              # S4D kernel + S4Model (sequence classifier)      [Apache 2.0]
-    s4d_seq2seq.py      # S4ModelSeq2Seq (denoising, no pooling)
-    linoss.py           # LinOSS (JAX/equinox) — IM and IMEX discretizations
-    mlp.py              # MLPRegressor (flatten → FC)
-    mlp_denoiser.py     # MLP-based denoiser
-    conv_ae.py          # Convolutional autoencoder
-    conv_attn_ae.py     # Conv autoencoder + attention
-    rnn_seq2seq.py      # RNN seq2seq denoiser
-    classical_filter.py # Butterworth / matched-filter baselines
-    utils/jax/
-      wrapper.py        # JAXLightningModule — bridges equinox models into Lightning
-      training.py       # Pure-JAX train step (vmap + grad)
-  tasks/
-    toy/
-      toy_denoising.py      # DenoisingMSE (PyTorch)
-      toy_regression.py     # RegressionMSE (PyTorch)
-      toy_regression_jax.py # LinOSSToyRegression (JAX via JAXLightningModule)
-    TIDMAD/
-      tidmad_denoising.py   # Denoising task: Main task for TIDMAD
-      tidmad_regression.py  # RegressionMSE for TIDMAD
-    LIGO/
-      denoising.py          # DenoisingMSE for LIGO
-      classification.py     # classification task for LIGO
-configs/
-  toy/         # per-model YAML configs (LightningCLI)
-  TIDMAD/
-  LIGO/
+  models/         # S4D, LinOSS, CNN, RNN, MLP, Conv-AE, classical filter
+  tasks/          # LightningModules per domain (LIGO, TIDMAD, TESS, Project8, toy)
+  dataloader/     # PyTorch DataModules per domain
+  functions/      # Loss functions, dropout, learning-rate schedules
+configs/          # YAML training configs (70+), one per model × domain × task
 benchmarks/
-  toy/         # SLURM pipeline: denoiser → regressors → eval
-  TIDMAD/      # SLURM pipeline: denoiser → regressors → eval
-  foundation/  # Foundation-model benchmark (7 models, 3 tasks)
+  LIGO/           # Training pipeline + SLURM scripts
+  TIDMAD/         # Training + denoising score evaluation
+  TESS/           # Classification and regression sweeps
+  Project8/       # Evaluation pipeline
+  foundation/     # Foundation-model wrappers and benchmark runner
+results/          # CSV/JSON outputs from paper experiments
 data/
-  LIGO/sample_dataset/
-  toy/sinusoidal_signal_white_noise/
   TIDMAD/
-    tidmad_dataset.py      # Dataset reader for TIDMAD (PyTorch)
-tools/
-  save_checkpoint.py
-main.py          # LightningCLI entry point
-pyproject.toml   # uv-compatible; optional [jax] and [cu12] extras
+    preprocess_tidmad.py  # Converts raw HDF5 → .npy train/val/test splits
+main.py           # LightningCLI entry point
+pyproject.toml    # Dependencies (uv)
+Makefile          # Environment setup targets
 ```
-
----
-
-## Setup
-
-### Core (PyTorch models, all domains)
-
-Requires Python ≥ 3.12.  Use [uv](https://github.com/astral-sh/uv):
-
-```bash
-uv sync
-source .venv/bin/activate   # or: uv run python main.py ...
-```
-
-To install in editable mode inside an existing environment:
-
-```bash
-pip install -e .
-```
-
-### JAX models (LinOSS)
-
-LinOSS depends on JAX + Equinox, which are not in the default dependency set to keep
-the PyTorch environment clean. Install the optional `jax` extras:
-
-```bash
-# CPU
-uv sync --extra jax
-
-# GPU (CUDA 12)
-uv sync --extra jax --extra cu12
-```
-
-Verify JAX sees the GPU:
-
-```bash
-python -c "import jax; print(jax.devices())"
-```
-
-The `uv.lock` file pins all transitive dependencies. After adding a new package to
-`pyproject.toml`, run `uv lock` to update the lockfile and commit both files.
-
-### Foundation-model benchmark (separate conda env)
-
-The seven foundation-model wrappers (MOMENT, Chronos, TimesFM, Time-MoE, MOIRAI,
-Lag-Llama, Granite TTM) require Python 3.10 and have conflicting version requirements
-that are incompatible with the main env. Use a dedicated conda environment:
-
-```bash
-conda create -p envs/fm python=3.10 -y
-envs/fm/bin/pip install -r benchmarks/foundation/requirements_fm.txt
-
-# Lag-Llama (source install + legacy setuptools)
-envs/fm/bin/pip install \
-    'git+https://github.com/time-series-foundation-models/lag-llama.git#egg=lag-llama'
-envs/fm/bin/pip install 'setuptools<72'
-
-# Download Lag-Llama checkpoint
-huggingface-cli download time-series-foundation-models/Lag-Llama lag-llama.ckpt \
-    --local-dir checkpoints/lag-llama/
-```
-
----
-
-## Training (individual runs)
-
-All training goes through `main.py` (LightningCLI). Pick any config and run:
-
-(Make sure to activate the python environment or prefix with `uv run` as described in the setup section.)
-
-```bash
-python main.py fit --config <path/to/config.yaml>
-```
-
-Override any config value on the command line:
-
-```bash
-python main.py fit --config configs/toy/train_toy_mlp_regression_raw.yaml \
-  --model.init_args.lr 5e-4 \
-  --data.init_args.batch_size 128
-```
-
-### Example configs
-
-| Model | Domain | Config |
-|-------|--------|--------|
-| S4D denoiser | Toy | `configs/toy/train_toy_s4d_denoising.yaml` |
-| MLP regressor (raw) | Toy | `configs/toy/train_toy_mlp_regression_raw.yaml` |
-| MLP regressor (clean) | Toy | `configs/toy/train_toy_mlp_regression_clean.yaml` |
-| LinOSS regressor (raw) | Toy | `configs/toy/train_toy_linoss_regression_raw.yaml` |
-| Conv-AE denoiser (MSE) | Toy | `configs/toy/train_toy_conv_ae_denoising_mse.yaml` |
-| RNN seq2seq denoiser | Toy | `configs/toy/train_toy_rnn_denoising_mse.yaml` |
-| S4D denoiser | TIDMAD | `configs/TIDMAD/train_tidmad_s4d_denoising.yaml` |
-| MLP regressor | TIDMAD | `configs/TIDMAD/train_tidmad_mlp_regression_raw.yaml` |
-| LIGO denoiser | LIGO | `configs/LIGO/train_LIGO.yaml` |
-
----
-
-## LinOSS (JAX) — contributor notes
-
-LinOSS is implemented in JAX + Equinox ([paper](https://openreview.net/pdf?id=GRMfXcAAFh)).
-The model lives in [src/models/linoss.py](src/models/linoss.py); the Lightning integration
-lives in [src/models/utils/jax/wrapper.py](src/models/utils/jax/wrapper.py).
-
-**Adding a new JAX task:**
-
-1. Subclass `JAXLightningModule` (see [src/tasks/toy/toy_regression_jax.py](src/tasks/toy/toy_regression_jax.py)).
-2. Implement `_prepare_batch(batch) -> (x, y)` to extract inputs and targets.
-3. Pass an `optax` optimizer and a `loss_fn: (y_hat, y) -> scalar` to `super().__init__`.
-4. Write a YAML config pointing `model.class_path` at your new task class and
-   `model.init_args.model.class_path` at the equinox model.
-
-**Adding a new equinox model:**
-
-1. Implement it as an `eqx.Module` with `__call__(self, x, state, key)` returning
-   `(output, state)` — BatchNorm state must pass through.
-2. Register it under `src/models/` and export from [src/models/__init__.py](src/models/__init__.py).
-3. Activate the JAX extras before running: `uv sync --extra jax` (or `--extra cu12`).
-
----
-
-## Foundation-model benchmark — contributor notes
-
-The benchmark lives in [benchmarks/foundation/](benchmarks/foundation/) and evaluates
-pretrained time-series foundation models on the Toy dataset across three tasks:
-**forecasting**, **denoising** (via downstream regressor), and **embedding regression**.
-
-Supported models: MOMENT, Chronos, TimesFM, Time-MoE, MOIRAI, Lag-Llama, Granite TTM.
-
-### Running the benchmark
-
-Activate the foundation env, then:
-
-```bash
-# Zero-shot forecasting (smoke test: 2 batches only)
-python benchmarks/foundation/run_benchmark.py \
-    --models moment \
-    --tasks  forecasting \
-    --mode   zero_shot \
-    --smoke_test
-
-# Full zero-shot run, multiple models
-python benchmarks/foundation/run_benchmark.py \
-    --data_dir data/toy/sinusoidal_signal_white_noise \
-    --out_dir  plots/toy/foundation \
-    --models   moment chronos timesfm moirai \
-    --tasks    forecasting denoising embedding \
-    --mode     zero_shot \
-    --baseline_regressor_raw_ckpt   checkpoints/toy_mlp_regression_raw/best.ckpt \
-    --baseline_regressor_raw_cfg    configs/toy/train_toy_mlp_regression_raw.yaml \
-    --baseline_regressor_clean_ckpt checkpoints/toy_mlp_regression_clean/best.ckpt \
-    --baseline_regressor_clean_cfg  configs/toy/train_toy_mlp_regression_clean.yaml
-
-# Lag-Llama (requires checkpoint path)
-python benchmarks/foundation/run_benchmark.py \
-    --models lagllama \
-    --tasks  forecasting \
-    --mode   zero_shot \
-    --lagllama_ckpt checkpoints/lag-llama/lag-llama.ckpt
-```
-
-Results are written to `--out_dir/summary.csv`. The file is append-only so that
-concurrent jobs do not overwrite each other; delete it manually to start fresh.
-
-### Adding a new foundation model
-
-1. Create `benchmarks/foundation/wrappers/<name>_wrapper.py` subclassing
-   [`BaseWrapper`](benchmarks/foundation/wrappers/base.py).
-2. Implement `load(...)`, `forecast(...)`, `embed(...)` (optional), and `unload()`.
-   Set `self.name` and `self.supports_embed`.
-3. Register the model name in `_get_wrapper()` in
-   [`run_benchmark.py`](benchmarks/foundation/run_benchmark.py).
-4. Add its pip dependency to
-   [`benchmarks/foundation/requirements_fm.txt`](benchmarks/foundation/requirements_fm.txt).
-
----
-
-## Toy benchmark
-
-```bash
-bash benchmarks/toy/run.sh
-```
-
-Submits 4 chained SLURM jobs and compares three regression pipelines:
-
-```
-[1] train denoiser ──┬──> [2] train reg_raw   ──┬──> [4] eval
-                     └──> [3] train reg_clean ──┘
-```
-
-| Pipeline | Training input | Eval input | Purpose |
-|----------|---------------|------------|---------|
-| **raw** | `sig_bkg` (noisy) | `sig_bkg` | baseline |
-| **denoised** | `sig` (clean) | `denoiser(sig_bkg)` | benefit of denoising |
-| **oracle** | `sig` (clean) | `sig` (clean) | upper bound |
-
-Results saved to `benchmarks/toy/regression_benchmark.png`.
-
----
-
-## TIDMAD benchmark
-
-To obtain a denoising score for TIDMAD data, run inference over the validation data to produce denoised time series. 
-The denoised time series should be saved in the equivalent .h5 file format as the validation data.
-Run `tidmad_denoising.py` over denoised data files. 
-### Denoising Score — Usage
-This script evaluates denoised time-series data stored in denoised HDF5 (`.h5`) files. 
-For formulation of the denoising score, please see [TIDAMD NeurIPS Paper](https://neurips.cc/virtual/2025/loc/san-diego/poster/121748).
-Input files must contain one-second, chunked time series (`time_series_ch1`, `time_series_ch2`) and a corresponding `signal_frequency` dataset with precomputed peak frequencies, along with attributes such as `sample_rate_hz` and `n_chunks` all contained in the original validation file.
-To run the benchmark on denoised data, place the `.h5` files in a directory and execute the script via the command line: `python script.py --data_dir <path_to_h5_files> --output_dir <path_to_save_results>`. 
-Optionally, specify particular files using `--files file1.h5 file2.h5`, enable multiprocessing with `--parallel --num_workers <N>`, or run a coarse approximation using `--coarse` (processes every 10th chunk). 
-The script computes the power spectral density (PSD) per chunk, evaluates signal-to-noise ratios (SNR) at the provided peak frequencies for both channels, and aggregates these into a normalized, log-scaled denoising score. 
-Results are written to `benchmark_results.csv` in the output directory, including the final score and per-chunk SNR values.
-
-
-## Task architecture
-
-Tasks are organized **by domain**, not by model. Each `LightningModule` (or
-`JAXLightningModule`) accepts any compatible model as a constructor argument —
-swapping models only requires changing the YAML config.
 
 ---
 
 ## Models
 
-| Model | Class | Backend | Description |
-|-------|-------|---------|-------------|
-| S4D | `models.s4d.S4Model` | PyTorch | Diagonal SSM — sequence classifier |
-| S4D Seq2Seq | `models.s4d_seq2seq.S4ModelSeq2Seq` | PyTorch | Diagonal SSM — sequence-to-sequence |
-| LinOSS | `models.linoss.LinOSS` | JAX/equinox | Linear operator SSM — IM and IMEX |
-| MLP | `models.mlp.MLPRegressor` | PyTorch | Flatten → FC layers |
-| MLP Denoiser | `models.mlp_denoiser.MLPDenoiser` | PyTorch | MLP for denoising |
-| Conv-AE | `models.conv_ae.ConvAE` | PyTorch | Convolutional autoencoder |
-| Conv-Attn-AE | `models.conv_attn_ae.ConvAttnAE` | PyTorch | Conv-AE + attention |
-| RNN Seq2Seq | `models.rnn_seq2seq.RNNSeq2Seq` | PyTorch | RNN encoder-decoder |
-| Classical filter | `models.classical_filter` | NumPy | Butterworth / matched-filter |
+| Model | Class | Backend |
+|-------|-------|---------|
+| S4D | `models.s4d.S4Model` | PyTorch |
+| S4D Seq2Seq | `models.s4d_seq2seq.S4ModelSeq2Seq` | PyTorch |
+| LinOSS | `models.linoss.LinOSS` | JAX / Equinox |
+| 1D CNN | `models.conv1d_regressor.Conv1DRegressor` | PyTorch |
+| Conv-AE | `models.conv_ae.ConvAE` | PyTorch |
+| Conv-Attn-AE | `models.conv_attn_ae.ConvAttnAE` | PyTorch |
+| RNN Seq2Seq | `models.rnn_seq2seq.RNNSeq2Seq` | PyTorch |
+| MLP | `models.mlp.MLPRegressor` | PyTorch |
+| Classical filter | `models.classical_filter` | NumPy |
+
+Tasks are organized by domain, not by model. Any model can be swapped into any compatible task by changing the `model.class_path` in the YAML config.
 
 ---
 
-## Acknowledgements
+## Citation
 
-S4D implementation derived from [state-spaces/s4](https://github.com/state-spaces/s4) (Apache 2.0).
-See [NOTICE](NOTICE) for full attribution.
-LIGO dataset generated with [GWDatasetGeneration](https://github.com/ML4GW).
-LinOSS implementation adapted from [tk-rusch/linoss](https://github.com/tk-rusch/linoss/tree/main).
+```bibtex
+@inproceedings{phyts2026,
+  title     = {PhyTS: A Benchmark for Scientific Time Series},
+  author    = {...},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+```
+
+---
+
+## License
+
+Apache 2.0. The S4D implementation is derived from [state-spaces/s4](https://github.com/state-spaces/s4) (Apache 2.0); see [NOTICE](NOTICE) for full attribution. LinOSS adapted from [tk-rusch/linoss](https://github.com/tk-rusch/linoss).

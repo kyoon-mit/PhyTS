@@ -1,0 +1,61 @@
+# Usage: python main.py fit --config configs/LIGO/train_ligo_s4d_denoising_mse.yaml
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/ligo_s4d_denoising_mse
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: ligo_s4d_denoising_mse
+
+model:
+  class_path: tasks.LIGO.LIGO_denoising.DenoisingMSE
+  init_args:
+    lr: 1.0e-3
+    lr_decay: 0.99
+    model:
+      class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+      init_args:
+        d_input: 2        # H1 + L1 channels
+        d_output: 2
+        d_model: 256
+        d_state: 64
+        n_layers: 4
+        dropout: 0.2
+        dt_min: 0.001
+        dt_max: 0.1
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: data/LIGO/sample_dataset/train.h5
+    val_file:   data/LIGO/sample_dataset/val.h5
+    test_file:  data/LIGO/sample_dataset/test.h5
+    injected_data_key: injected_data
+    signal_data_key:   signal_only_data
+    strain_frequency:  512
+    strain_duration:   64.0
+    window_begin:      0.0
+    window_end:        64.0
+    train_batch_size:  32
+    val_batch_size:    32
+    test_batch_size:   32
+    num_workers:       4
+    shuffle:           true
+    persistent_workers: true
