@@ -44,6 +44,7 @@ model:
         output_step: 1
         discretization: damped_IMEX
         drop_rate: 0.1
+        norm_type: layer
         seed: 0
 
 data:

@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import equinox as eqx
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,14 +39,15 @@ from dataloader.LIGO_dataloader import LIGODataModule  # noqa: E402
 
 
 _ARCH_NAMES = {
-    "models.s4d.S4Model":                       "S4D",
-    "models.conv_regressor.Conv1DRegressor":    "CNN",
-    "models.linoss.LinOSS":                     "LinOSS",
+    "models.s4d.S4Model": "S4D",
+    "models.conv_regressor.Conv1DRegressor": "CNN",
+    "models.linoss.LinOSS": "LinOSS",
     "models.transformer.TransformerClassifier": "Transformer",
 }
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────
+
 
 def _load_cfg(path: str) -> dict:
     with open(path) as f:
@@ -92,6 +94,7 @@ def build_datamodule(cfg: dict) -> LIGODataModule:
 
 # ─── PyTorch loading ─────────────────────────────────────────────────────────
 
+
 def load_pt_model(cfg: dict, ckpt_path: str, device: torch.device) -> torch.nn.Module:
     """Load inner PyTorch model from a Lightning checkpoint.
 
@@ -103,9 +106,7 @@ def load_pt_model(cfg: dict, ckpt_path: str, device: torch.device) -> torch.nn.M
 
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
     state_dict = {
-        k[len("model."):]: v
-        for k, v in ckpt["state_dict"].items()
-        if k.startswith("model.")
+        k[len("model.") :]: v for k, v in ckpt["state_dict"].items() if k.startswith("model.")
     }
     model.load_state_dict(state_dict)
     return model.to(device).eval()
@@ -131,6 +132,7 @@ def predict_pt(
 
 # ─── JAX/equinox loading ─────────────────────────────────────────────────────
 
+
 def load_jax_task(cfg: dict, ckpt_path: str):
     """Instantiate the JAX Lightning task and restore weights from .eqx checkpoint.
 
@@ -139,9 +141,14 @@ def load_jax_task(cfg: dict, ckpt_path: str):
     """
     init_args = dict(cfg["model"]["init_args"])
     init_args["model"] = _instantiate(init_args["model"])
-    init_args["load_from_checkpoint"] = ckpt_path
     task_cls = _import_class(cfg["model"]["class_path"])
-    return task_cls(**init_args)
+    task = task_cls(**init_args)
+
+    task.jax_model, task.jax_model_state = eqx.tree_deserialise_leaves(
+        ckpt_path, (task.jax_model, task.jax_model_state)
+    )
+
+    return task
 
 
 def predict_jax(task, dm: LIGODataModule) -> np.ndarray:
@@ -155,12 +162,13 @@ def predict_jax(task, dm: LIGODataModule) -> np.ndarray:
     for X, _y, _z in dm.test_dataloader():
         # transpose to (B, L, n_ifos) — matches _prepare_batch in the task
         X_t = X.transpose(1, 2)
-        out = task.forward(X_t)         # JAX array (B, n_targets)
+        out = task.forward(X_t)  # JAX array (B, n_targets)
         preds.append(np.asarray(out))
     return np.concatenate(preds, axis=0)
 
 
 # ─── ground truth + metrics ──────────────────────────────────────────────────
+
 
 def collect_true(dm: LIGODataModule) -> np.ndarray:
     """Collect target labels (B, n_targets) over the full test set."""
@@ -172,8 +180,8 @@ def collect_true(dm: LIGODataModule) -> np.ndarray:
 
 def rmse_r2(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
     diff = y_true - y_pred
-    rmse = float(np.sqrt(np.mean(diff ** 2)))
-    ss_res = float(np.sum(diff ** 2))
+    rmse = float(np.sqrt(np.mean(diff**2)))
+    ss_res = float(np.sum(diff**2))
     ss_tot = float(np.sum((y_true - y_true.mean()) ** 2))
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
     return rmse, r2
@@ -181,21 +189,22 @@ def rmse_r2(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
 
 # ─── driver ──────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--config",     required=True, help="Training YAML config.")
+    parser.add_argument("--config", required=True, help="Training YAML config.")
     parser.add_argument("--checkpoint", required=True, help="Checkpoint file (.ckpt or .eqx).")
-    parser.add_argument("--out_dir",    default="benchmarks/LIGO")
-    parser.add_argument("--device",     default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--out_dir", default="benchmarks/LIGO")
+    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument(
         "--jax_platforms",
         default=None,
         help="Override JAX_PLATFORMS (e.g. 'cpu', 'cuda'). "
-             "Defaults to follow --device; useful when JAX's CUDA plugin "
-             "fails to initialise on a misconfigured node.",
+        "Defaults to follow --device; useful when JAX's CUDA plugin "
+        "fails to initialise on a misconfigured node.",
     )
     args = parser.parse_args()
 
@@ -225,8 +234,7 @@ def main():
         task = load_jax_task(cfg, args.checkpoint)
         y_pred = predict_jax(task, dm)
 
-    y_true = collect_true(dm)   # (N, n_targets)
-
+    y_true = collect_true(dm)  # (N, n_targets)
     # Ensure 2-D for consistent indexing when n_targets == 1
     if y_true.ndim == 1:
         y_true = y_true[:, None]
@@ -239,18 +247,22 @@ def main():
     for i, var in enumerate(target_vars):
         rmse, r2 = rmse_r2(y_true[:, i], y_pred[:, i])
         print(f"  {var:30s}  RMSE = {rmse:.6g}   R² = {r2:.6f}   (N={n_test})")
-        rows.append({
-            "model":   arch_name,
-            "backend": kind,
-            "target":  var,
-            "n_test":  n_test,
-            "rmse":    rmse,
-            "r2":      r2,
-        })
+        rows.append(
+            {
+                "model": arch_name,
+                "backend": kind,
+                "target": var,
+                "n_test": n_test,
+                "rmse": rmse,
+                "r2": r2,
+            }
+        )
 
     csv_path = out_dir / f"regression_metrics_{arch_name.lower()}.csv"
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["model", "backend", "target", "n_test", "rmse", "r2"])
+        writer = csv.DictWriter(
+            f, fieldnames=["model", "backend", "target", "n_test", "rmse", "r2"]
+        )
         writer.writeheader()
         writer.writerows(rows)
     print(f"\nWrote {csv_path}")

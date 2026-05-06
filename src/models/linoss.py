@@ -294,7 +294,7 @@ class LinOSSLayer(eqx.Module):
 class LinOSSBlock(eqx.Module):
     """Single LinOSS block with a LinOSS layer, GLU nonlinearity, and residual connection."""
 
-    norm: eqx.nn.LayerNorm
+    norm: eqx.nn.LayerNorm | eqx.nn.BatchNorm
     ssm: LinOSSLayer
     glu: GLU
     drop: eqx.nn.Dropout
@@ -307,12 +307,19 @@ class LinOSSBlock(eqx.Module):
         drop_rate=0.05,
         r_min=0.0,
         theta_max=math.pi,
+        norm_type="batch",
         *,
         key,
     ):
         ssmkey, glukey = jr.split(key, 2)
-        # self.norm = eqx.nn.BatchNorm(input_size=H, axis_name="batch", channelwise_affine=False)
-        self.norm = eqx.nn.LayerNorm(H)
+        if norm_type == "batch":
+            self.norm = eqx.nn.BatchNorm(
+                input_size=H, axis_name="batch", channelwise_affine=False, mode="ema"
+            )
+        elif norm_type == "layer":
+            self.norm = eqx.nn.LayerNorm(H)
+        else:
+            raise ValueError(f"norm_type must be 'batch' or 'layer'; got {norm_type!r}")
         self.ssm = LinOSSLayer(
             ssm_size,
             H,
@@ -328,9 +335,11 @@ class LinOSSBlock(eqx.Module):
         """Compute LinOSS block."""
         dropkey1, dropkey2 = jr.split(key, 2)
         skip = x
-        # x, state = self.norm(x.T, state)
-        # x = x.T
-        x = jax.vmap(self.norm)(x)
+        if isinstance(self.norm, eqx.nn.BatchNorm):
+            x, state = self.norm(x.T, state)
+            x = x.T
+        else:
+            x = jax.vmap(self.norm)(x)
         x = self.ssm(x)
         x = self.drop(jax.nn.gelu(x), key=dropkey1)
         x = jax.vmap(self.glu)(x)
@@ -378,6 +387,7 @@ class LinOSS(eqx.Module):
         r_min=0.0,
         theta_max=math.pi,
         drop_rate=0.05,
+        norm_type="batch",
         *,
         key=None,
         seed=0,
@@ -396,6 +406,7 @@ class LinOSS(eqx.Module):
                 r_min=r_min,
                 theta_max=theta_max,
                 key=key,
+                norm_type=norm_type,
             )
             for key in block_keys
         ]
