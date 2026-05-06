@@ -1,0 +1,71 @@
+# Usage: python main.py fit --config configs/LIGO/train_ligo_linoss_denoising.yaml
+# Trains LinOSS (JAX/equinox) seq2seq denoiser: noisy strain (H1+L1) -> clean waveform.
+# Window: 4 s at 256 Hz (512 Hz / 2x downsample) = 1024 timesteps per sample.
+# accelerator=cpu: JAX manages GPU memory directly; setting gpu here conflicts with JAX.
+
+trainer:
+  max_epochs: 100
+  accelerator: cpu
+  devices: 1
+  log_every_n_steps: 1
+  enable_progress_bar: false
+  callbacks:
+    - class_path: models.utils.callbacks.LogProgressCallback
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: models.utils.jax.save_model.JAXCheckpointManager
+      init_args:
+        dirpath: checkpoints/ligo_linoss_denoising
+        monitor: val/loss
+        mode: min
+        save_top_k: 5
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: TimeSeriesPhysics
+      name: ligo_linoss_denoising
+
+model:
+  class_path: tasks.LIGO.ligo_denoising_jax.LinOSSLIGODenoising
+  init_args:
+    lr: 1e-3
+    clip_grad_norm: 1.0
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 4
+        N: 2 # input feature dim: H1 + L1 interferometer channels
+        ssm_size: 64
+        H: 128
+        output_dim: 2 # denoised output channels: H1 + L1
+        task: forecasting
+        output_step: 1 # output_step=1 -> full L-length sequence output
+        discretization: damped_IMEX
+        seed: 0
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: /fast/barmstrong/LIGO/merged/train.h5
+    val_file: /fast/barmstrong/LIGO/merged/val.h5
+    test_file: /fast/barmstrong/LIGO/merged/test.h5
+    target_variables: []
+    observed_variables:
+      - snr
+    injected_data_key: whitened_injected
+    clean_data_key: whitened_signal
+    strain_frequency: 512
+    downsample_factor: 2
+    strain_duration: 32.0
+    window_begin: 28.0
+    window_end: 32.0
+    train_batch_size: 32
+    val_batch_size: 32
+    test_batch_size: 32
+    num_workers: 4
+    shuffle: true
+    persistent_workers: true

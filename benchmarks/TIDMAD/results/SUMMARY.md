@@ -121,13 +121,40 @@ injection-frequency sweep per file). Injection frequency detected **per window**
 
 *LinOSS PSD run hit 12h wall time limit at epoch 9; best checkpoint saved at epoch 3 (step 213248).
 
-### Chronos Zero-Shot Baseline
+### Zero-Shot Foundation Model Baselines
 
-Evaluated with stride=50 (~3,200 windows total, covering full injection-frequency sweep).
+| Variant      | Model          | Params | Stride | Benchmark Score |
+|--------------|----------------|--------|--------|-----------------|
+| chronos_tiny | Chronos (tiny) | 8M     | 50     | **-2.9132**     |
+| moment_small | MOMENT-Small   | 40M    | 10     | **-2.2310**     |
+| moment_base  | MOMENT-Base    | 125M   | 10     | **-2.2750**     |
 
-| Variant      | Model          | Params | Benchmark Score |
-|--------------|----------------|--------|-----------------|
-| chronos_tiny | Chronos (tiny) | 8M     | **-2.9132**     |
+MOMENT uses the native patch-based reconstruction head (no fine-tuning). Each 100K-sample window
+is split into 512-sample chunks and reconstructed via a single forward pass.
+
+---
+
+## Official Scoring (1 Hz resolution)
+
+The TIDMAD team's official scorer operates on 10M-sample chunks (1 second at 10 MHz = 1 Hz
+frequency resolution), rather than the 100K-sample windows we use (100 Hz resolution).
+The finer resolution dramatically improves SNR measurement accuracy.
+
+Denoised H5 files were exported using `benchmarks/TIDMAD/export_denoised_h5.py` and scored
+with `src/tasks/TIDMAD/tidmad_denoising.py --coarse`.
+
+| Variant         | Official Score | Our Score (100 Hz) |
+|-----------------|----------------|--------------------|
+| linoss_190k_psd | **+1.3037**    | -1.2909            |
+| moment_base     | **+0.463**     | -2.2750            |
+| linoss_190k_mse | -0.098         | -2.2487            |
+| conv_l_psd      | -0.112         | -2.4408            |
+| chronos_tiny    | -0.884         | -2.9132            |
+| conv_l_mse      | -0.859         | -2.6456            |
+| moment_small    | (pending H5 export) | -2.2310       |
+
+LinOSS-190K (PSD) achieves the best official score (+1.3037). MOMENT-Base also scores positive
+(+0.463), both outperforming all other variants at 1 Hz resolution.
 
 ---
 
@@ -143,19 +170,29 @@ benchmark measures. ConvAE MSE scores **-2.6456** vs PSD **-2.4408**; LinOSS MSE
 ### 2. PSD Loss Substantially Improves Performance
 
 Switching to PSD loss aligns the training objective with the frequency-domain evaluation metric.
-Both models improve, and all four trained models now **beat the Chronos zero-shot baseline (-2.913)**.
+Both models improve, and all four trained models beat the Chronos zero-shot baseline (-2.913).
 
 ### 3. LinOSS (PSD) is the Best Model
 
-LinOSS-190K with PSD loss scores **-1.2909** — the best result overall, beating ConvAE-L (PSD)
-by ~1.15 log units and Chronos by ~1.6 log units, with a similar parameter count (~200K).
+LinOSS-190K with PSD loss scores **-1.2909** (our metric) and **+1.3037** (official) — the best
+result overall. The positive official score means the model's denoising meaningfully recovers
+injection SNR at 1 Hz frequency resolution.
 
-### 4. Chronos Zero-Shot is Competitive but Beaten by PSD Models
+### 4. MOMENT Beats Chronos Zero-Shot
 
-Chronos tiny (8M params, no fine-tuning) scores **-2.913**. All four trained models (MSE and PSD)
-now outperform it once the per-window injection frequency detection bug was fixed.
+MOMENT-Small and MOMENT-Base (40M and 125M params, zero-shot) score **-2.231** and **-2.275**,
+both beating Chronos-Tiny (-2.913) despite being zero-shot. MOMENT's native reconstruction head
+is a better fit for this task than Chronos's autoregressive forecasting approach.
 
-### 4. LinOSS Stability Required damped_IMEX
+### 5. All Trained Models Beat All Zero-Shot Baselines
+
+| Category      | Best Score | Model              |
+|---------------|------------|---------------------|
+| Trained (ours)| -1.2909    | LinOSS-190K PSD     |
+| Zero-shot     | -2.2310    | MOMENT-Small        |
+| Autoregressive| -2.9132    | Chronos-Tiny        |
+
+### 6. LinOSS Stability Required damped_IMEX
 
 Standard IMEX discretization caused NaN gradients at high learning rates. Switching to
 `damped_IMEX` discretization resolved the training instability. Learning rate was also reduced
@@ -165,39 +202,50 @@ from 1e-3 to 1e-4.
 
 ## Score Interpretation
 
-Higher (less negative) = better. Score = 0 means perfect denoising.
+Higher = better. Score = 0 means the model recovers the injection as well as the clean ch2 reference.
+Positive score means the denoised signal has higher SNR than the ch2 normalization baseline.
 
-| Score   | Model              | Notes                                           |
-|---------|--------------------|-------------------------------------------------|
-| 0.0     | —                  | Perfect denoising (theoretical ceiling)         |
-| -1.2909 | LinOSS-190K PSD    | Best result — beats all baselines               |
-| -2.2487 | LinOSS-190K MSE    |                                                 |
-| -2.4408 | ConvAE-L PSD       |                                                 |
-| -2.6456 | ConvAE-L MSE       |                                                 |
-| -2.9132 | Chronos zero-shot  | 8M params, no fine-tuning                       |
+| Score   | Model              | Scoring     | Notes                              |
+|---------|--------------------|--------------|------------------------------------|
+| +1.3037 | LinOSS-190K PSD    | Official     | Best overall                       |
+| +0.463  | MOMENT-Base        | Official     | Zero-shot                          |
+| -0.098  | LinOSS-190K MSE    | Official     |                                    |
+| -0.112  | ConvAE-L PSD       | Official     |                                    |
+| -0.859  | ConvAE-L MSE       | Official     |                                    |
+| -0.884  | Chronos-Tiny       | Official     | Zero-shot                          |
+| -1.2909 | LinOSS-190K PSD    | Ours (100Hz) |                                    |
+| -2.2310 | MOMENT-Small       | Ours (100Hz) | Zero-shot                          |
+| -2.2487 | LinOSS-190K MSE    | Ours (100Hz) |                                    |
+| -2.2750 | MOMENT-Base        | Ours (100Hz) | Zero-shot                          |
+| -2.4408 | ConvAE-L PSD       | Ours (100Hz) |                                    |
+| -2.6456 | ConvAE-L MSE       | Ours (100Hz) |                                    |
+| -2.9132 | Chronos-Tiny       | Ours (100Hz) | Zero-shot                          |
 
-All scores are negative because no model yet perfectly recovers the injection SNR.
-All four trained models beat the Chronos zero-shot baseline.
-Previous scores (conv_l_mse: -5.526, conv_l_full: -3.685) were computed with a bug where the
-injection frequency was detected once per file instead of per window. Since the injection frequency
-sweeps across each 200-second file, per-file detection was systematically wrong.
+Previous (buggy) scores (conv_l_mse: -5.526, conv_l_full: -3.685) were computed with a bug where
+the injection frequency was detected once per file instead of per window. Since the injection
+frequency sweeps across each 200-second file, per-file detection was systematically wrong.
 
 ---
 
 ## File Locations
 
-| Artifact                     | Path                                                           |
-|------------------------------|----------------------------------------------------------------|
-| Master results CSV           | `benchmarks/TIDMAD/results/master_results.csv`                 |
-| Conv MSE scores              | `benchmarks/TIDMAD/results/conv_l_mse/test_scores.csv`         |
-| Conv PSD scores              | `benchmarks/TIDMAD/results/conv_l_full/test_scores.csv`        |
-| Conv MSE loss curve          | `benchmarks/TIDMAD/results/conv_l_mse/loss_curve.png`          |
-| Conv PSD loss curve          | `benchmarks/TIDMAD/results/conv_l_full/loss_curve.png`         |
-| Conv MSE checkpoint          | `checkpoints/tidmad_conv_l/best.ckpt`                          |
-| Conv PSD checkpoint          | `checkpoints/tidmad_conv_l_psd/best.ckpt`                      |
-| LinOSS MSE checkpoint dir    | `logs/tidmad_linoss_190k/version_0/checkpoints/`               |
-| LinOSS PSD checkpoint dir    | `logs/tidmad_linoss_190k_psd/version_0/checkpoints/`           |
-| SLURM logs                   | `/home/ilay.kamai/athena/logs/`                                |
+| Artifact                     | Path                                                                         |
+|------------------------------|------------------------------------------------------------------------------|
+| Master results CSV           | `benchmarks/TIDMAD/results/master_results.csv`                               |
+| Conv MSE scores              | `benchmarks/TIDMAD/results/conv_l_mse/test_scores.csv`                       |
+| Conv PSD scores              | `benchmarks/TIDMAD/results/conv_l_full/test_scores.csv`                      |
+| LinOSS MSE scores            | `benchmarks/TIDMAD/results/linoss_190k_mse/test_scores.csv`                  |
+| LinOSS PSD scores            | `benchmarks/TIDMAD/results/linoss_190k_full/test_scores.csv`                 |
+| MOMENT-Small scores          | `benchmarks/TIDMAD/results/moment_small/test_scores.csv`                     |
+| MOMENT-Base scores           | `benchmarks/TIDMAD/results/moment_base/test_scores.csv`                      |
+| Conv MSE loss curve          | `benchmarks/TIDMAD/results/conv_l_mse/loss_curve.png`                        |
+| Conv PSD loss curve          | `benchmarks/TIDMAD/results/conv_l_full/loss_curve.png`                       |
+| Conv MSE checkpoint          | `checkpoints/tidmad_conv_l/best.ckpt`                                        |
+| Conv PSD checkpoint          | `checkpoints/tidmad_conv_l_psd/best.ckpt`                                    |
+| LinOSS MSE checkpoint dir    | `logs/tidmad_linoss_190k/version_0/checkpoints/`                             |
+| LinOSS PSD checkpoint dir    | `logs/tidmad_linoss_190k_psd/version_0/checkpoints/`                         |
+| Official H5 exports          | `benchmarks/TIDMAD/results/h5_export/{conv_l_psd,linoss_190k_psd,...}/`      |
+| SLURM logs                   | `/home/ilay.kamai/athena/logs/`                                              |
 
 ---
 

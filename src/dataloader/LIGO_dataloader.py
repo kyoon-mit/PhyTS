@@ -17,6 +17,7 @@ class LIGODataset(Dataset):
         target_variables: tuple[str, ...],
         observed_variables: tuple[str, ...] = (),
         injected_data_key: str = 'injected_data',
+        clean_data_key: str | None = None,
         strain_frequency: int = 512,
         strain_duration: float = 64.0,
         window_begin: float = 0.0,
@@ -25,6 +26,7 @@ class LIGODataset(Dataset):
         dtype: torch.dtype = torch.float32,
     ):
         self.injected_data_key = injected_data_key
+        self.clean_data_key = clean_data_key
         self.target_variables = target_variables
         self.observed_variables = observed_variables
         self.downsample_factor = downsample_factor
@@ -65,7 +67,11 @@ class LIGODataset(Dataset):
         f = self._get_file()
         seq = f[self.injected_data_key][idx, :, self.start_idx:self.end_idx:self.downsample_factor]
         X = torch.as_tensor(seq, dtype=self.dtype)
-        y = self._get_vars(f, self.target_variables, idx)
+        if self.clean_data_key is not None:
+            clean = f[self.clean_data_key][idx, :, self.start_idx:self.end_idx:self.downsample_factor]
+            y = torch.as_tensor(clean, dtype=self.dtype)
+        else:
+            y = self._get_vars(f, self.target_variables, idx)
         z = self._get_vars(f, self.observed_variables, idx)
         return X, y, z
 
@@ -84,6 +90,7 @@ class LIGODataModule(L.LightningDataModule):
         target_variables: tuple[str, ...],
         observed_variables: tuple[str, ...] = (),
         injected_data_key: str = 'injected_data',
+        clean_data_key: str | None = None,
         strain_frequency: int = 512,
         strain_duration: float = 64.0,
         window_begin: float = 0.0,
@@ -106,6 +113,7 @@ class LIGODataModule(L.LightningDataModule):
             target_variables=target_variables,
             observed_variables=observed_variables,
             injected_data_key=injected_data_key,
+            clean_data_key=clean_data_key,
             strain_frequency=strain_frequency,
             strain_duration=strain_duration,
             window_begin=window_begin,
