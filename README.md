@@ -2,7 +2,7 @@
 
 PhyTS is a machine learning benchmark built around four precision physics experiments: LIGO (gravitational waves), ABRACADABRA (axion dark matter), TESS (stellar variability), and Project 8 (neutrino mass). Each dataset is drawn from real or high-fidelity simulated detector data and defines a concrete inference task—chirp-mass regression, time-series denoising, variability classification, or electron energy regression—where better model performance maps directly to improved scientific sensitivity.
 
-The datasets span twelve orders of magnitude in sampling rate, sequence lengths from hundreds to millions of samples, and noise backgrounds that are non-Gaussian, non-stationary, and shaped by detector hardware. They are a poor fit for standard time-series benchmarks in all of these respects.
+The datasets span twelve orders of magnitude in sampling rate, sequence lengths from hundreds to millions of samples, and noise backgrounds that are non-Gaussian, non-stationary, and shaped by detector hardware.
 
 **Paper:** PhyTS: A Benchmark for Scientific Time Series (NeurIPS 2026)  
 **Data:** [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face
