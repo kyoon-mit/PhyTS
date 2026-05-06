@@ -32,7 +32,7 @@ except ImportError:  # pragma: no cover
 
 REPO_ID = "PhyTS-team/PhyTS-bench"
 ALLOW_PATTERN = "TESS/split/*"
-_DEFAULT_CACHE_PARENT = Path(__file__).resolve().parent / ".cache"
+_DEFAULT_CACHE_PARENT = Path(__file__).resolve().parent.parent
 
 
 def flatten_hub_split_into_tess_root(tess_root: Path) -> tuple[int, int]:
@@ -96,9 +96,9 @@ def main() -> None:
         "--cache-dir",
         type=Path,
         default=None,
-        help="Root directory for downloaded data. "
+        help="Parent directory for downloaded data. "
         "Final layout: cache_dir/TESS/*.parquet (Hub TESS/split is flattened). "
-        f"Default: {_DEFAULT_CACHE_PARENT}",
+        "Default: data/ (so parquet files land at data/TESS/tess_classification.parquet).",
     )
     args = parser.parse_args()
     if args.cache_dir is not None:

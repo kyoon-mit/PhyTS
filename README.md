@@ -54,7 +54,7 @@ Download each dataset from [`PhyTS-team/PhyTS-bench`](https://huggingface.co/dat
 |---------|----------|
 | LIGO | `data/LIGO/{train,val,test}/sig_combined_{split}.h5` |
 | ABRACADABRA | Raw HDF5 → `python data/TIDMAD/preprocess_tidmad.py` (see `data/TIDMAD/README.md`) |
-| TESS | `python data/TESS/download_tess.py` → `data/TESS/tess_classification.parquet` |
+| TESS | `bash benchmarks/TESS/setup_data.sh` → `data/TESS/tess_classification.parquet` |
 | Project 8 | `data/Project8/{train,valid,test}/` |
 
 ---
@@ -131,14 +131,14 @@ PYTHONPATH=src python benchmarks/TIDMAD/evaluate_all.py
 
 Numbers from the paper (Table 2). Foundation models evaluated zero-shot.
 
-| Model | LIGO RMSE [M☉] | LIGO R² | TIDMAD score | P8 RMSE [eV] | P8 R² |
-|-------|:--------------:|:-------:|:------------:|:------------:|:-----:|
-| Mean baseline | 0.271 | 0.000 | 1.00 | 28.83 | 0.000 |
-| S4D | **0.254** | **0.125** | — | **15.68** | **0.704** |
-| LinOSS | 0.259 | 0.081 | **1.30** | 20.88 | 0.476 |
-| CNN | 0.280 | −0.068 | −0.11 | 20.11 | 0.514 |
-| MOMENT | 0.284 | −0.096 | 0.46 | 25.22 | 0.236 |
-| Chronos | 0.278 | −0.052 | −0.88 | 25.22 | 0.235 |
+| Model | LIGO RMSE [M☉] | LIGO R² | TESS Bal. Acc. | TESS R² | TIDMAD score | P8 RMSE [eV] | P8 R² |
+|-------|:--------------:|:-------:|:--------------:|:-------:|:------------:|:------------:|:-----:|
+| Mean baseline | 0.271 | 0.000 | 0.125 | −0.017 | 1.00 | 28.83 | 0.000 |
+| S4D | **0.254** | **0.125** | **0.887** | **0.665** | — | **15.68** | **0.704** |
+| LinOSS | 0.259 | 0.081 | 0.843 | 0.612 | **1.30** | 20.88 | 0.476 |
+| CNN | 0.280 | −0.068 | 0.851 | 0.617 | −0.11 | 20.11 | 0.514 |
+| MOMENT | 0.284 | −0.096 | 0.828 | 0.263 | 0.46 | 25.22 | 0.236 |
+| Chronos | 0.278 | −0.052 | 0.812 | 0.305 | −0.88 | 25.22 | 0.235 |
 
 ---
 
