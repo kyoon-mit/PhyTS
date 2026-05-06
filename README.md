@@ -42,6 +42,21 @@ make env-fm
 source benchmarks/foundation/.venv/bin/activate
 ```
 
+CUDA 13 (driver ≥ 580): replace `env-jax` with `uv sync --extra jax --extra cu13`.
+
+---
+
+## Data
+
+Download each dataset from [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face and place it as follows:
+
+| Dataset | Location |
+|---------|----------|
+| LIGO | `data/LIGO/{train,val,test}/sig_combined_{split}.h5` |
+| ABRACADABRA | Raw HDF5 → `python data/TIDMAD/preprocess_tidmad.py` (see `data/TIDMAD/README.md`) |
+| TESS | `python data/TESS/download_tess.py` → `data/TESS/tess_classification.parquet` |
+| Project 8 | `data/Project8/{train,valid,test}/` |
+
 ---
 
 ## Training
@@ -61,7 +76,7 @@ python main.py fit --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml
 # LIGO — chirp-mass regression, 1D CNN
 python main.py fit --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
 
-# TIDMAD — denoising, LinOSS  (requires env-jax)
+# ABRACADABRA — denoising, LinOSS  (requires env-jax)
 python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
 
 # TESS — variability classification, S4D
@@ -91,22 +106,20 @@ Each domain has a pipeline script that trains all models and runs evaluation end
 bash benchmarks/LIGO/run.sh
 bash benchmarks/TIDMAD/run.sh
 bash benchmarks/TESS/run.sh
+bash benchmarks/Project8/run.sh
 ```
-
-These scripts submit chained SLURM jobs. Adjust partition and GPU settings at the top of each script to match your cluster.
 
 For foundation models (zero-shot evaluation):
 
 ```bash
+source benchmarks/foundation/.venv/bin/activate
 python benchmarks/foundation/run_benchmark.py \
   --models moment chronos timesfm moirai granite_ttm \
   --tasks  forecasting denoising embedding \
   --mode   zero_shot
 ```
 
-Results are written to `--out_dir/summary.csv` (default: `results/foundation/`).
-
-TIDMAD denoising score — after training, evaluate all variants and compute the denoising score:
+ABRACADABRA denoising score — after training, evaluate all variants:
 
 ```bash
 PYTHONPATH=src python benchmarks/TIDMAD/evaluate_all.py
@@ -127,8 +140,6 @@ Numbers from the paper (Table 2). Foundation models evaluated zero-shot.
 | MOMENT | 0.284 | −0.096 | 0.46 | 25.22 | 0.236 |
 | Chronos | 0.278 | −0.052 | −0.88 | 25.22 | 0.235 |
 
-Raw predictions and metrics are in `results/`.
-
 ---
 
 ## Repository layout
@@ -136,20 +147,21 @@ Raw predictions and metrics are in `results/`.
 ```
 src/
   models/         # S4D, LinOSS, CNN, RNN, MLP, Conv-AE, classical filter
-  tasks/          # LightningModules per domain (LIGO, TIDMAD, TESS, Project8, toy)
+  tasks/          # LightningModules per domain (LIGO, TIDMAD, TESS, Project8)
   dataloader/     # PyTorch DataModules per domain
   functions/      # Loss functions, dropout, learning-rate schedules
-configs/          # YAML training configs (70+), one per model × domain × task
+configs/          # YAML training configs (one per model × domain × task)
 benchmarks/
-  LIGO/           # Training pipeline + SLURM scripts
-  TIDMAD/         # Training + denoising score evaluation
-  TESS/           # Classification and regression sweeps
-  Project8/       # Evaluation pipeline
+  LIGO/           # run.sh + chronos scripts
+  TIDMAD/         # run.sh + evaluation pipeline
+  TESS/           # run.sh + evaluation pipeline
+  Project8/       # run.sh + evaluation pipeline
   foundation/     # Foundation-model wrappers and benchmark runner
-results/          # CSV/JSON outputs from paper experiments
 data/
-  TIDMAD/
-    preprocess_tidmad.py  # Converts raw HDF5 → .npy train/val/test splits
+  LIGO/           # HDF5 strain files (gitignored; download from HuggingFace)
+  TIDMAD/         # Raw HDF5 + preprocess_tidmad.py
+  TESS/           # Parquet files (gitignored; python data/TESS/download_tess.py)
+  Project8/       # HDF5 files (gitignored; download from HuggingFace)
 main.py           # LightningCLI entry point
 pyproject.toml    # Dependencies (uv)
 Makefile          # Environment setup targets
