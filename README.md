@@ -4,7 +4,13 @@ PhyTS is a benchmark suite of precision scientific time series datasets for mach
 
 Unlike standard sequence modeling benchmarks such as audio and speech, these data exhibit non-Gaussian and nonstationary noise, long-range temporal correlations, detector-specific systematics, irregular sampling, and signals that are sparse, weak, or only partially modeled. As a result, they provide a challenging testbed for evaluating whether modern AI methods can support downstream scientific inference.
 
-We provide standardized tasks, data splits, and evaluation protocols for denoising, signal recovery, and parameter inference across physics domains, along with baseline results. By unifying diverse weak-signal inference problems under a common framework, this benchmark aims to enable reproducible evaluation and accelerate the development of more robust, interpretable, and physically grounded methods for scientific time series analysis.
+Existing time series benchmarks inadequately prepare models for scientific applications due to three critical limitations: (1) **unrealistic noise assumptions** — most benchmarks use Gaussian noise rather than the complex, frequency-dependent backgrounds found in real detectors; (2) **missing physics constraints** — standard metrics ignore that scientific applications require interpretable confidence estimates and respect for physical laws; and (3) **simplified temporal structure** — scientific signals often exhibit multi-scale dependencies and rare transient events that are poorly represented in current datasets.
+
+PhyTS addresses these gaps across four dimensions:
+- **Realistic complexity**: physics domains spanning 12 orders of magnitude in sampling rate with authentic detector noise, non-stationary backgrounds, and scientifically meaningful signal-to-noise ratios.
+- **Physics-informed evaluation**: task formulations that reflect real experimental constraints, including parameter inference under uncertainty and noise reduction across orders of magnitude of signal frequency.
+- **Systematic baselines**: comprehensive comparisons of supervised models and six zero-shot foundation models, revealing fundamental limitations of current architectures on scientific data.
+- **Grounding in scientific measurement**: each predicted value propagates transparently into a downstream physics result, enabling evaluation by scientific impact.
 
 **Paper:** PhyTS: A Benchmark for Scientific Time Series (NeurIPS 2026)  
 **Data:** [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face
