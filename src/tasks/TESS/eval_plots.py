@@ -2,6 +2,9 @@
 
 Regression: scatter true vs predicted frot + residual histogram.
 Classification: confusion matrix + per-class accuracy bars.
+
+Validation figures log every :const:`VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS`; test figures log once per
+``trainer.test`` when :func:`log_test_plots_to_wandb` is called (W&B active).
 """
 
 from __future__ import annotations
@@ -129,15 +132,21 @@ def make_classification_figure(
     return fig
 
 
-def _val_label_names(pl_module) -> list[str] | None:
+def _dm_label_names(pl_module, split: Literal["val", "test"]) -> list[str] | None:
+    """Resolve class names from the Lightning datamodule split (TESS classification)."""
     tr = getattr(pl_module, "trainer", None)
     dm = getattr(tr, "datamodule", None) if tr else None
     if dm is None:
         return None
-    val_ds = getattr(dm, "val", None)
-    if val_ds is not None and hasattr(val_ds, "label_names"):
-        return list(val_ds.label_names)
+    ds = getattr(dm, split, None)
+    if ds is not None and hasattr(ds, "label_names"):
+        # May be a class attribute (e.g. TESSClassificationDataset) — materialize to list.
+        return list(ds.label_names)
     return None
+
+
+def _val_label_names(pl_module) -> list[str] | None:
+    return _dm_label_names(pl_module, "val")
 
 
 def log_validation_plots_to_wandb(
@@ -191,4 +200,51 @@ def log_validation_plots_to_wandb(
     results = classification_results_dict(y_true, y_hat, names)
     fig = make_classification_figure(results, name, names)
     wandb.log({"val/classification_plot": wandb.Image(fig), "trainer/global_step": gs})
+    plt.close(fig)
+
+
+def log_test_plots_to_wandb(
+    pl_module: L.LightningModule,
+    *,
+    kind: Literal["regression", "classification"],
+    y_true: np.ndarray,
+    y_hat: np.ndarray,
+    label_names: list[str] | None = None,
+    model_name: str | None = None,
+) -> None:
+    """If a wandb run is active, log one-off test figures (no epoch throttle).
+
+    Logs ``test/regression_plot`` or ``test/classification_plot`` as :class:`wandb.Image`.
+    """
+    try:
+        import wandb
+    except ImportError:
+        return
+    if wandb.run is None:
+        return
+    tr = getattr(pl_module, "trainer", None)
+    if tr is None:
+        return
+
+    name = model_name or pl_module.__class__.__name__
+    gs = int(tr.global_step)
+
+    if kind == "regression":
+        results = regression_results_dict(y_true, y_hat)
+        fig = make_regression_figure(results, name)
+        wandb.log({"test/regression_plot": wandb.Image(fig), "trainer/global_step": gs})
+        plt.close(fig)
+        return
+
+    names = label_names or _dm_label_names(pl_module, "test") or _dm_label_names(
+        pl_module, "val"
+    )
+    if names is None:
+        n_cls = int(getattr(pl_module, "num_classes", 0))
+        if n_cls <= 0:
+            n_cls = int(max(np.max(y_true), np.max(y_hat))) + 1
+        names = [str(i) for i in range(n_cls)]
+    results = classification_results_dict(y_true, y_hat, names)
+    fig = make_classification_figure(results, name, names)
+    wandb.log({"test/classification_plot": wandb.Image(fig), "trainer/global_step": gs})
     plt.close(fig)

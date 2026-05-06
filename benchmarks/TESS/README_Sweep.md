@@ -73,7 +73,7 @@ Agents launched via ``run_sweep.sh`` prepend ``.venv/bin`` to ``PATH``, so the s
 
 If you change the sweep ``command`` in YAML after creating a sweep, **wandb keeps the old command** until you run ``wandb sweep ...`` again and point agents at the **new** sweep id.
 
-Each sweep YAML sets `**run_cap: 150**`, so a **single** sweep schedules at most **150** trials (Hyperband may still prune many of those runs early).
+Each sweep YAML sets `**run_cap: 100**`, so a **single** sweep schedules at most **150** trials (Hyperband may still prune many of those runs early).
 
 **Important:** wandb budgets are **per sweep**, not pooled across architectures. Running every classifier `**sweep_cls_*`** plus every `**sweep_reg_***` (seven architectures each × two tasks → **fourteen** YAMLs) would allow **up to 14 × 150** trials unless you pause sweeps sooner. To approximate **N** trials shared evenly across `**M`** sweep files, divide manually (`**run_cap: floor(N/M)**`) **before** calling `wandb sweep`, or shorten the list of architectures you tune.
 

@@ -172,11 +172,14 @@ def build_regression_sweep_task_and_datamodule(
     else:
         raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
 
+    # Always num_workers=0: forked loaders after CUDA is initialized in fit break
+    # `trainer.test` on many GPUs (workers exit / cudaErrorInitializationError).
     dm = TESSRegressionDataModule(
         data_dir=args.data_dir,
         batch_size=cfg.batch_size,
-        num_workers=0 if is_jax else args.num_workers,
+        num_workers=0,
         seq_len=args.seq_len,
+        seed=getattr(cfg, "seed", args.seed),
     )
     return task, dm, is_jax
 
@@ -239,25 +242,26 @@ def main():
         enable_progress_bar=True,
     )
 
-    trainer.fit(task, datamodule=dm)
+    try:
+        trainer.fit(task, datamodule=dm)
 
-    if is_jax:
-        # Restore the best JAX checkpoint before testing so test metrics match
-        # the best-val-loss model, not the final training epoch.
-        from models.utils.jax.load_model import load_model as jax_load_model
-        best_path = ckpt_dir / "best.eqx"
-        if best_path.exists():
-            task.jax_model, task.jax_model_state = jax_load_model(
-                path=str(best_path),
-                model=task.jax_model,
-                model_state=task.jax_model_state,
-            )
-        else:
-            print(f"WARNING: best JAX checkpoint not found at {best_path}; testing on final epoch weights.")
+        if is_jax:
+            # Restore the best JAX checkpoint before testing so test metrics match
+            # the best-val-loss model, not the final training epoch.
+            from models.utils.jax.load_model import load_model as jax_load_model
+            best_path = ckpt_dir / "best.eqx"
+            if best_path.exists():
+                task.jax_model, task.jax_model_state = jax_load_model(
+                    path=str(best_path),
+                    model=task.jax_model,
+                    model_state=task.jax_model_state,
+                )
+            else:
+                print(f"WARNING: best JAX checkpoint not found at {best_path}; testing on final epoch weights.")
 
-    trainer.test(task, datamodule=dm, ckpt_path="best" if not is_jax else None)
-
-    wandb.finish()
+        trainer.test(task, datamodule=dm, ckpt_path="best" if not is_jax else None)
+    finally:
+        wandb.finish()
 
 
 if __name__ == "__main__":

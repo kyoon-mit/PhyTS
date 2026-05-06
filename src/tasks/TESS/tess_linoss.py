@@ -34,7 +34,7 @@ from models.utils.jax.training import jax_inference
 from models.utils.jax.utils import jax_to_tensor, tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
 from tasks.param_count import attach_scalar_hyperparams, jax_equinox_model_hyper_dict
-from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
 from tasks.TESS.classification_metrics import log_extended_metrics
 
 
@@ -207,7 +207,9 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         ss_res = float(np.sum((y_hat - y) ** 2))
         ss_tot = float(max(np.sum((y - y.mean()) ** 2), 1e-8))
         rmse = float(np.sqrt(np.mean((y_hat - y) ** 2)))
+        mae = float(np.mean(np.abs(y_hat - y)))
         self.log("val/rmse", rmse)
+        self.log("val/mae", mae)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         log_validation_plots_to_wandb(
             self,
@@ -241,6 +243,12 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         self.log("test/rmse", rmse)
         self.log("test/mae", mae)
         self.log("test/r2", 1.0 - ss_res / ss_tot)
+        log_test_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y,
+            y_hat=y_hat,
+        )
 
 
 # ── Classification task ───────────────────────────────────────────────────────
@@ -386,6 +394,12 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         if per_class:
             self.log("test/balanced_acc", sum(per_class) / len(per_class))
         log_extended_metrics(self, preds, labels, num_classes=self.num_classes, prefix="test")
+        log_test_plots_to_wandb(
+            self,
+            kind="classification",
+            y_true=labels,
+            y_hat=preds,
+        )
         for c in range(self.num_classes):
             mask_c = labels == c
             if mask_c.sum() > 0:

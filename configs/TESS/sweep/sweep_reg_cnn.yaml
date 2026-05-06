@@ -15,7 +15,7 @@ command:
 
 name: reg_cnn
 method: bayes
-run_cap: 150
+run_cap: 100
 metric:
   name: val/r2
   goal: maximize

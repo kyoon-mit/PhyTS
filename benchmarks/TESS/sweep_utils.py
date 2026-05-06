@@ -146,9 +146,9 @@ def build_mlp(size: str, d_output: int, seq_len: int, dropout: float) -> nn.Modu
     """MLPRegressor with two equal hidden layers of width h.
 
     params ≈ h² + (seq_len + 2 + d_output)*h + d_output
-    With seq_len=1100, d_output=8:  h² + 1114*h + 8
-    With seq_len=1100, d_output=1:  h² + 1103*h + 1
-    Inverse (d_output=8): h = round((-1114 + sqrt(1114² + 4*(target − 8))) / 2)
+    With seq_len=1024, d_output=8:  h² + 1038*h + 8
+    With seq_len=1024, d_output=1:  h² + 1027*h + 1
+    Inverse (d_output=8): h = round((-1038 + sqrt(1038² + 4*(target − 8))) / 2)
 
     Tiers (hidden_dims=[h, h]):
         xs (~10K):  h=9   →  10,115 (cls) / 10,008 (reg)
@@ -363,10 +363,20 @@ def add_infra_args(parser) -> None:
     parser.add_argument("--model_type", choices=sorted(ALL_MODELS), required=True)
     parser.add_argument("--ckpt_dir",
                         default=os.environ.get("TESS_CKPT_DIR", "checkpoints/sweeps"))
-    parser.add_argument("--seq_len",     type=int, default=1100)
+    parser.add_argument("--seq_len",     type=int, default=1024)
     parser.add_argument("--max_epochs",  type=int, default=200)
     parser.add_argument("--patience",    type=int, default=20)
-    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=0,
+        help=(
+            "DataLoader worker processes for offline tools (digest/retest). "
+            "Wandb sweep entrypoints (`sweep_classification.py`, `sweep_regression.py`) "
+            "use 0 loaders regardless so `trainer.fit`→`trainer.test` does not fork workers "
+            "after CUDA init (CUDA init error / dead workers)."
+        ),
+    )
     # --data_dir is task-specific; each script adds it with its own default.
 
 

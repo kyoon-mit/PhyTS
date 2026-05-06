@@ -15,7 +15,7 @@ command:
 
 name: cls_transformer
 method: bayes
-run_cap: 150
+run_cap: 100
 metric:
   name: val/balanced_acc
   goal: maximize

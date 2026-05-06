@@ -25,7 +25,7 @@ from tasks.param_count import (
     torch_module_bundle_prefixed,
     torch_nn_parameter_count,
 )
-from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
 from tasks.TESS.classification_metrics import log_extended_metrics
 
 
@@ -141,6 +141,12 @@ class TESSClassificationCE(L.LightningModule):
             labels.numpy(),
             num_classes=self.num_classes,
             prefix="test",
+        )
+        log_test_plots_to_wandb(
+            self,
+            kind="classification",
+            y_true=labels.numpy(),
+            y_hat=preds.numpy(),
         )
         for c in range(self.num_classes):
             mask = labels == c
@@ -304,6 +310,12 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
             labels.numpy(),
             num_classes=self.num_classes,
             prefix="test",
+        )
+        log_test_plots_to_wandb(
+            self,
+            kind="classification",
+            y_true=labels.numpy(),
+            y_hat=preds.numpy(),
         )
         for c in range(self.num_classes):
             mask_c = labels == c

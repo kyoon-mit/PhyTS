@@ -37,7 +37,7 @@ from tasks.param_count import (
     torch_module_bundle_prefixed,
     torch_nn_parameter_count,
 )
-from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
 
 
 def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
@@ -119,6 +119,7 @@ class TESSRegressionMSE(L.LightningModule):
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
+        self.log("val/mae", (y_hat - y).abs().mean())
         log_validation_plots_to_wandb(
             self,
             kind="regression",
@@ -144,6 +145,12 @@ class TESSRegressionMSE(L.LightningModule):
         self.log("test/r2", 1.0 - ss_res / ss_tot)
         self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt())
         self.log("test/mae", (y_hat - y).abs().mean())
+        log_test_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y.numpy(),
+            y_hat=y_hat.numpy(),
+        )
 
     def configure_optimizers(self):
         opt = optim.AdamW(self.parameters(), lr=self.lr)
@@ -255,6 +262,7 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         ss_tot = (y - y.mean()).pow(2).sum().clamp(min=1e-8)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
+        self.log("val/mae", (y_hat - y).abs().mean())
         log_validation_plots_to_wandb(
             self,
             kind="regression",
@@ -280,6 +288,12 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         self.log("test/r2", 1.0 - ss_res / ss_tot)
         self.log("test/rmse", (y_hat - y).pow(2).mean().sqrt())
         self.log("test/mae", (y_hat - y).abs().mean())
+        log_test_plots_to_wandb(
+            self,
+            kind="regression",
+            y_true=y.numpy(),
+            y_hat=y_hat.numpy(),
+        )
 
     def configure_optimizers(self):
         # Only head parameters are trainable

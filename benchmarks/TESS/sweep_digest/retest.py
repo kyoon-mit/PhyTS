@@ -484,6 +484,7 @@ def _cls_dm_only(wandb_cfg: Any, args_ns: Namespace) -> TESSClassificationDataMo
         batch_size=cfg.batch_size,
         num_workers=0 if is_jax else args_ns.num_workers,
         seq_len=args_ns.seq_len,
+        seed=int(getattr(cfg, "seed", 42)),
     )
 
 
