@@ -1,25 +1,13 @@
-# This file is derived from the S4 repository:
+# Derived from state-spaces/s4 (Apache 2.0)
 #   https://github.com/state-spaces/s4/blob/main/models/s4/s4d.py
 #   https://github.com/state-spaces/s4/blob/main/examples.py
-#
 # Copyright (c) 2023 The S4 Authors
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
-#   http://www.apache.org/licenses/LICENSE-2.0
 #
-# Modifications (c) 2026 Kyungseop Yoon (kyoon@mit.edu), 2026-03-26
-#   - Adjusted the import path for DropoutNd to match this repository:
-#       from `src.models.nn` -> `BNSReg.functions.dropout`
-#   - `BNSReg.functions.dropout` is itself derived from S4 and retains
-#     Apache-2.0 licensing and attribution.
-#   - Removed unused imports and simplified the code for pedagogical clarity.
-#   - Replaced the local `dropout_fn` alias with direct use of `DropoutNd`
-#     in S4Model.
-#   - Added arguments to S4Model and passed it to S4D initialization
-#     (without further modification to the upstream kernel logic).
-#   - Replaced use of Python complex literals (e.g. `1j`) with
-#     `torch.complex(...)` to ensure compatibility with `torch.compile`
+# Modifications (c) 2026 Anonymous Authors
+#   - Adjusted DropoutNd import path for this repository layout.
+#   - Replaced `1j` complex literals with torch.complex() for torch.compile compatibility.
+#   - Added d_output, d_model, n_layers args to S4Model; added param_count utility.
+#   - Removed unused imports.
 
 """Minimal version of S4D with extra options and features stripped out, for pedagogical purposes."""
 

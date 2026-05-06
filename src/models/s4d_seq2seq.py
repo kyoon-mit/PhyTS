@@ -1,16 +1,11 @@
-# This file is a derivative work of the S4 repository:
+# Derived from state-spaces/s4 (Apache 2.0)
 #   https://github.com/state-spaces/s4
-#
 # Copyright (c) 2023 The S4 Authors
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
-#   http://www.apache.org/licenses/LICENSE-2.0
 #
-# Modifications (c) 2026 Kyungseop Yoon (kyoon@mit.edu), 2026-03-30
-#   - Derived S4ModelSeq2Seq from S4Model in s4d.py by removing temporal
-#     mean-pooling, enabling sequence-to-sequence (denoising) tasks.
-#   - The S4D kernel and S4D block are used unmodified from s4d.py.
+# Modifications (c) 2026 Anonymous Authors
+#   - Removed temporal mean-pooling from S4Model to produce S4ModelSeq2Seq,
+#     enabling sequence-to-sequence (denoising) tasks.
+#   - S4D kernel and block are unmodified from s4d.py.
 
 """S4D sequence-to-sequence model for denoising tasks."""
 

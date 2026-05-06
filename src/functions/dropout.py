@@ -1,12 +1,9 @@
-# Derived from state-spaces/s4
+# Derived from state-spaces/s4 (Apache 2.0)
 # https://github.com/state-spaces/s4
-#
 # Copyright (c) 2023 The S4 Authors
-# Licensed under the Apache License, Version 2.0
 #
-# Modifications:
-# - Modified by Kyungseop Yoon (kyoon@mit.edu), 2026-03-26
-#   * Removed unnecessary imports.
+# Modifications (c) 2026 Anonymous Authors
+#   - Removed unused imports.
 
 """Utility nn components, in particular handling activations, initializations, and normalization layers."""
 
