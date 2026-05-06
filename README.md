@@ -169,7 +169,7 @@ src/
   functions/      # Loss functions, dropout, learning-rate schedules
 configs/          # YAML training configs (one per model × domain × task)
 benchmarks/
-  LIGO/           # run.sh + chronos scripts
+  LIGO/           # run.sh + evaluation pipeline
   TIDMAD/         # run.sh + evaluation pipeline
   TESS/           # run.sh + evaluation pipeline
   Project8/       # run.sh + evaluation pipeline
