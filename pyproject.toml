@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib>=3.8.0",
     "pyarrow>=16.0.0",
     "torch>=2.11.0",
+    "tqdm>=4.66.0",
     "wandb>=0.26.0",
 ]
 

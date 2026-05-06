@@ -2349,6 +2349,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "pyarrow" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "wandb" },
 ]
 
@@ -2382,6 +2383,7 @@ requires-dist = [
     { name = "optax", marker = "extra == 'jax'", specifier = ">=0.2.8" },
     { name = "pyarrow", specifier = ">=16.0.0" },
     { name = "torch", specifier = ">=2.11.0" },
+    { name = "tqdm", specifier = ">=4.66.0" },
     { name = "wandb", specifier = ">=0.26.0" },
 ]
 provides-extras = ["jax", "cu12", "cu13"]

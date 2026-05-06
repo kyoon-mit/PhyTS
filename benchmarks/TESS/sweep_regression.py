@@ -43,6 +43,7 @@ import os
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 _BENCH_DIR = Path(__file__).resolve().parent
 if str(_BENCH_DIR) not in sys.path:
@@ -118,6 +119,68 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def build_regression_sweep_task_and_datamodule(
+    cfg: Any,
+    args: argparse.Namespace,
+) -> tuple[L.LightningModule, TESSRegressionDataModule, bool]:
+    """Rebuild regression task + datamodule from sweep config (for offline eval/plots)."""
+    if isinstance(cfg, dict):
+        cfg = types.SimpleNamespace(**cfg)
+
+    is_jax = cfg.model_type in JAX_MODELS
+
+    if cfg.model_type == "mlp":
+        model = build_mlp(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
+        task = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "s4d":
+        model = build_s4d(cfg.size, d_output=1, dropout=cfg.dropout)
+        task = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "cnn":
+        model = build_cnn(cfg.size, d_output=1, dropout=cfg.dropout)
+        task = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "cnn_attn":
+        model = build_cnn_attn(cfg.size, d_output=1, dropout=cfg.dropout)
+        task = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "transformer":
+        model = build_transformer(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
+        task = _build_torch_task(model, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "linoss_imex":
+        model = build_linoss(
+            cfg.size,
+            d_output=1,
+            discretization="IMEX",
+            seed=cfg.seed,
+            dropout=cfg.dropout,
+        )
+        task = _build_linoss_task(model, cfg.lr, cfg.weight_decay, cfg.seed)
+
+    elif cfg.model_type == "linoss_damped":
+        model = build_linoss(
+            cfg.size,
+            d_output=1,
+            discretization="damped_IMEX",
+            seed=cfg.seed,
+            dropout=cfg.dropout,
+        )
+        task = _build_linoss_task(model, cfg.lr, cfg.weight_decay, cfg.seed)
+
+    else:
+        raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
+
+    dm = TESSRegressionDataModule(
+        data_dir=args.data_dir,
+        batch_size=cfg.batch_size,
+        num_workers=0 if is_jax else args.num_workers,
+        seq_len=args.seq_len,
+    )
+    return task, dm, is_jax
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -141,63 +204,13 @@ def main():
 
     L.seed_everything(cfg.seed, workers=not is_jax)
 
-    # ── Build model & task ────────────────────────────────────────────────────
-    if cfg.model_type == "mlp":
-        model = build_mlp(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
-        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "s4d":
-        model = build_s4d(cfg.size, d_output=1, dropout=cfg.dropout)
-        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "cnn":
-        model = build_cnn(cfg.size, d_output=1, dropout=cfg.dropout)
-        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "cnn_attn":
-        model = build_cnn_attn(cfg.size, d_output=1, dropout=cfg.dropout)
-        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "transformer":
-        model = build_transformer(cfg.size, d_output=1, seq_len=args.seq_len, dropout=cfg.dropout)
-        task  = _build_torch_task(model, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "linoss_imex":
-        model = build_linoss(
-            cfg.size,
-            d_output=1,
-            discretization="IMEX",
-            seed=cfg.seed,
-            dropout=cfg.dropout,
-        )
-        task  = _build_linoss_task(model, cfg.lr, cfg.weight_decay, cfg.seed)
-
-    elif cfg.model_type == "linoss_damped":
-        model = build_linoss(
-            cfg.size,
-            d_output=1,
-            discretization="damped_IMEX",
-            seed=cfg.seed,
-            dropout=cfg.dropout,
-        )
-        task  = _build_linoss_task(model, cfg.lr, cfg.weight_decay, cfg.seed)
-
-    else:
-        raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
+    task, dm, _ = build_regression_sweep_task_and_datamodule(cfg, args)
 
     wandb.summary.update(collect_benchmark_param_counters(cfg.model_type, task))
 
     run_id = run.id if run is not None else "local"
     art_dir = tess_sweep_artifact_dir("regression", cfg.model_type, run_id)
     dump_sweep_run_config(art_dir / "run_config.yaml", args, run)
-
-    # ── Data ──────────────────────────────────────────────────────────────────
-    dm = TESSRegressionDataModule(
-        data_dir=args.data_dir,
-        batch_size=cfg.batch_size,
-        num_workers=0 if is_jax else args.num_workers,
-        seq_len=args.seq_len,
-    )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
     ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "regression" / cfg.model_type / run_id

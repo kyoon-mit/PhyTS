@@ -39,6 +39,7 @@ from tasks.param_count import (
     torch_nn_parameter_count,
 )
 from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+from tasks.TESS.classification_metrics import log_extended_metrics
 
 
 def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
@@ -125,6 +126,13 @@ class TESSClassificationCE(L.LightningModule):
         ]
         if per_class:
             self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(
+            self,
+            preds.numpy(),
+            labels.numpy(),
+            num_classes=self.num_classes,
+            prefix="val",
+        )
         log_validation_plots_to_wandb(
             self,
             kind="classification",
@@ -152,6 +160,13 @@ class TESSClassificationCE(L.LightningModule):
         ]
         if per_class:
             self.log("test/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(
+            self,
+            preds.numpy(),
+            labels.numpy(),
+            num_classes=self.num_classes,
+            prefix="test",
+        )
         for c in range(self.num_classes):
             mask_c = labels == c
             if mask_c.sum() > 0:
@@ -274,6 +289,13 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
         ]
         if per_class:
             self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(
+            self,
+            preds.numpy(),
+            labels.numpy(),
+            num_classes=self.num_classes,
+            prefix="val",
+        )
         log_validation_plots_to_wandb(
             self,
             kind="classification",
@@ -301,6 +323,13 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
         ]
         if per_class:
             self.log("test/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(
+            self,
+            preds.numpy(),
+            labels.numpy(),
+            num_classes=self.num_classes,
+            prefix="test",
+        )
         for c in range(self.num_classes):
             mask_c = labels == c
             if mask_c.sum() > 0:

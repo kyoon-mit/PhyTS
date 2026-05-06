@@ -44,6 +44,7 @@ import os
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 # Allow importing sweep_utils from the same directory.
 _BENCH_DIR = Path(__file__).resolve().parent
@@ -115,6 +116,70 @@ def _build_linoss_task(
     )
 
 
+def build_classification_sweep_task_and_datamodule(
+    cfg: Any,
+    args: argparse.Namespace,
+) -> tuple[L.LightningModule, TESSClassificationDataModule, bool]:
+    """Reconstruct task + datamodule from ``wandb.config`` and sweep CLI defaults.
+
+    Used by :mod:`sweep_digest.retest` and by ``main()`` below.
+    ``cfg`` may be a ``dict`` (converted to ``SimpleNamespace``).
+    """
+    if isinstance(cfg, dict):
+        cfg = types.SimpleNamespace(**cfg)
+
+    is_jax = cfg.model_type in JAX_MODELS
+
+    if cfg.model_type == "mlp":
+        model = build_mlp(cfg.size, args.num_classes, args.seq_len, cfg.dropout)
+        task = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "s4d":
+        model = build_s4d(cfg.size, args.num_classes, cfg.dropout)
+        task = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "cnn":
+        model = build_cnn(cfg.size, args.num_classes, dropout=cfg.dropout)
+        task = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "cnn_attn":
+        model = build_cnn_attn(cfg.size, args.num_classes, dropout=cfg.dropout)
+        task = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "transformer":
+        model = build_transformer(
+            cfg.size, args.num_classes, args.seq_len, cfg.dropout,
+        )
+        task = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
+
+    elif cfg.model_type == "linoss_imex":
+        model = build_linoss(
+            cfg.size, args.num_classes, "IMEX", cfg.seed, dropout=cfg.dropout,
+        )
+        task = _build_linoss_task(
+            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
+        )
+
+    elif cfg.model_type == "linoss_damped":
+        model = build_linoss(
+            cfg.size, args.num_classes, "damped_IMEX", cfg.seed, dropout=cfg.dropout,
+        )
+        task = _build_linoss_task(
+            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
+        )
+
+    else:
+        raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
+
+    dm = TESSClassificationDataModule(
+        data_dir=args.data_dir,
+        batch_size=cfg.batch_size,
+        num_workers=0 if is_jax else args.num_workers,
+        seq_len=args.seq_len,
+    )
+    return task, dm, is_jax
+
+
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
@@ -153,47 +218,7 @@ def main():
     # JAX uses native threads; fork-based DataLoader workers + JAX risks deadlocks.
     L.seed_everything(cfg.seed, workers=not is_jax)
 
-    # ── Build model & task ────────────────────────────────────────────────────
-    if cfg.model_type == "mlp":
-        model = build_mlp(cfg.size, args.num_classes, args.seq_len, cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "s4d":
-        model = build_s4d(cfg.size, args.num_classes, cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "cnn":
-        model = build_cnn(cfg.size, args.num_classes, dropout=cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "cnn_attn":
-        model = build_cnn_attn(cfg.size, args.num_classes, dropout=cfg.dropout)
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "transformer":
-        model = build_transformer(
-            cfg.size, args.num_classes, args.seq_len, cfg.dropout,
-        )
-        task  = _build_torch_task(model, args.num_classes, cfg.lr, cfg.weight_decay)
-
-    elif cfg.model_type == "linoss_imex":
-        model = build_linoss(
-            cfg.size, args.num_classes, "IMEX", cfg.seed, dropout=cfg.dropout,
-        )
-        task  = _build_linoss_task(
-            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
-        )
-
-    elif cfg.model_type == "linoss_damped":
-        model = build_linoss(
-            cfg.size, args.num_classes, "damped_IMEX", cfg.seed, dropout=cfg.dropout,
-        )
-        task  = _build_linoss_task(
-            model, args.num_classes, cfg.lr, cfg.weight_decay, cfg.seed,
-        )
-
-    else:
-        raise ValueError(f"Unknown model_type: {cfg.model_type!r}")
+    task, dm, _ = build_classification_sweep_task_and_datamodule(cfg, args)
 
     wandb.summary.update(collect_benchmark_param_counters(cfg.model_type, task))
 
@@ -201,15 +226,6 @@ def main():
     art_dir = tess_sweep_artifact_dir("classification", cfg.model_type, run_id)
     dump_sweep_run_config(art_dir / "run_config.yaml", args, run)
 
-    # ── Data ──────────────────────────────────────────────────────────────────
-    dm = TESSClassificationDataModule(
-        data_dir=args.data_dir,
-        batch_size=cfg.batch_size,
-        num_workers=0 if is_jax else args.num_workers,
-        seq_len=args.seq_len,
-    )
-
-    # ── Callbacks ─────────────────────────────────────────────────────────────
     ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "classification" / cfg.model_type / run_id
 
     early_stop = EarlyStopping(monitor="val/loss", patience=args.patience, mode="min")

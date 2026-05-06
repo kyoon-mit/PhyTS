@@ -35,6 +35,7 @@ from models.utils.jax.utils import jax_to_tensor, tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
 from tasks.param_count import attach_scalar_hyperparams, jax_equinox_model_hyper_dict
 from tasks.TESS.eval_plots import log_validation_plots_to_wandb
+from tasks.TESS.classification_metrics import log_extended_metrics
 
 
 # ── Checkpoint callback ───────────────────────────────────────────────────────
@@ -350,6 +351,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         ]
         if per_class:
             self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(self, preds, labels, num_classes=self.num_classes, prefix="val")
         log_validation_plots_to_wandb(
             self,
             kind="classification",
@@ -383,6 +385,7 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
         ]
         if per_class:
             self.log("test/balanced_acc", sum(per_class) / len(per_class))
+        log_extended_metrics(self, preds, labels, num_classes=self.num_classes, prefix="test")
         for c in range(self.num_classes):
             mask_c = labels == c
             if mask_c.sum() > 0:
