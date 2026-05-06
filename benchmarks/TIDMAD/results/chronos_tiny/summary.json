@@ -1,0 +1,16 @@
+{
+  "variant": "chronos_tiny",
+  "display_name": "Chronos-Tiny (zero-shot)",
+  "category": "baseline",
+  "model_type": "chronos",
+  "arch": "zero-shot, T5-tiny encoder-decoder",
+  "timestamp": "2026-05-04 02:17:31",
+  "n_params": 8000000,
+  "best_val_loss": null,
+  "best_val_epoch": null,
+  "n_epochs": null,
+  "final_train_loss": null,
+  "benchmark_score": -2.91322,
+  "ckpt_path": null,
+  "error": null
+}

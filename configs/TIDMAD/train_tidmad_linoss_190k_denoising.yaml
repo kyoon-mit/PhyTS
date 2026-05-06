@@ -1,0 +1,44 @@
+# Full LinOSS training for TIDMAD denoising (~190K params, matches ConvAE-L).
+# Architecture: blocks=4, ssm_size=32, H=128, damped_IMEX -> 199,937 params.
+# lr=1e-4 (1e-3 caused NaN in smaller linoss_m at step 101k).
+# Loss: PSD (MSE in frequency domain) — more aligned with the PSD-based SNR benchmark.
+
+trainer:
+  max_epochs: 100
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 10
+    - class_path: models.utils.jax.save_model.JAXCheckpointManager
+      init_args:
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: logs
+      name: tidmad_linoss_190k_psd
+
+model:
+  class_path: tasks.TIDMAD.linoss_denoising.TIDMADLinOSSDenoising
+  init_args:
+    num_blocks: 4
+    ssm_size: 32
+    H: 128
+    discretization: damped_IMEX
+    lr: 1.0e-4
+    clip_grad_norm: 1.0
+    seed: 0
+
+data:
+  class_path: dataloader.tidmad_dataloader.TIDMADDataModule
+  init_args:
+    data_dir: data/TIDMAD/preprocessed
+    batch_size: 2
+    num_workers: 4

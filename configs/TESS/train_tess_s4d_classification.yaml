@@ -1,6 +1,5 @@
-# Usage: python main.py fit --config configs/TIDMAD/train_tidmad_s4d_denoising.yaml
-# Trains S4D seq2seq denoiser: channel0001 (noisy) -> channel0002 (clean).
-# Input: 100,000 samples at 10 MHz (0.01 s, no downsampling). Nyquist = 5 MHz.
+# Usage: python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
+# Multi-class classification of TESS stellar variability light curves using S4D.
 
 trainer:
   max_epochs: 100
@@ -15,7 +14,7 @@ trainer:
         patience: 10
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: checkpoints/tidmad_s4d_denoising
+        dirpath: checkpoints/tess_s4d_classification
         filename: best
         monitor: val/loss
         mode: min
@@ -24,28 +23,34 @@ trainer:
     class_path: lightning.pytorch.loggers.CSVLogger
     init_args:
       save_dir: logs
-      name: tidmad_s4d_denoising
+      name: tess_s4d_classification
 
 model:
-  class_path: tasks.toy.toy_denoising.DenoisingMSE
+  class_path: tasks.TESS.classification.TESSClassification
   init_args:
     lr: 1.0e-3
     lr_decay: 0.99
+    weight_decay: 1.0e-4
+    use_mask: true
     model:
-      class_path: models.s4d_seq2seq.S4ModelSeq2Seq
+      class_path: models.s4d.S4Model
       init_args:
         d_input: 1
-        d_output: 1
+        d_output: 8       # 8 variability classes
         d_model: 64
         d_state: 16
         n_layers: 4
-        dropout: 0.1
+        dropout: 0.2
         dt_min: 0.001
         dt_max: 0.1
 
 data:
-  class_path: dataloader.tidmad_dataloader.TIDMADDataModule
+  class_path: dataloader.tess_dataloader.TESSDataModule
   init_args:
-    data_dir: data/TIDMAD/preprocessed
-    batch_size: 32
+    data_path: data/TESS/tess_classification.parquet
+    seq_len: 3917
+    batch_size: 64
     num_workers: 4
+    train_frac: 0.7
+    val_frac: 0.15
+    seed: 42

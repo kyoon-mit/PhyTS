@@ -1,0 +1,51 @@
+# Smoke test for the Project 8 LinOSS run — verifies the JAX/equinox pipeline
+# runs end-to-end with a tiny model on a couple of batches.  No wandb, no
+# checkpoints.
+# Usage:
+#   python main.py fit --config configs/Project8/smoke_test_linoss.yaml
+
+trainer:
+  max_epochs: 1
+  limit_train_batches: 2
+  limit_val_batches: 2
+  limit_test_batches: 2
+  accelerator: auto
+  devices: 1
+  logger: false
+  enable_checkpointing: false
+  enable_progress_bar: true
+  log_every_n_steps: 1
+
+model:
+  class_path: tasks.Project8.project8_regression_jax.Project8RegressionJAX
+  init_args:
+    lr: 1.0e-3
+    clip_grad_norm: 1.0
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 1
+        N: 2            # FFT real/imag channels
+        ssm_size: 8
+        H: 16
+        output_dim: 2   # [mean, raw_var] for energy_eV
+        task: regression
+        output_step: 1
+        discretization: damped_IMEX
+        seed: 0
+
+data:
+  class_path: dataloader.project8_dataloader.Project8DataModule
+  init_args:
+    train_dir: /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/train
+    val_dir:   /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/valid
+    test_dir:  /n/holystore01/LABS/iaifi_lab/Users/creissel/Project8/test
+    inputs:    [output_ts_I, output_ts_Q]
+    variables: [energy_eV]
+    cutoff:    8192
+    norm:      true
+    noise_type: cav
+    freq_transform: fft
+    batch_size: 4
+    num_workers: 1

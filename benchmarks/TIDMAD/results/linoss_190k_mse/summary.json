@@ -1,0 +1,16 @@
+{
+  "variant": "linoss_190k_mse",
+  "display_name": "LinOSS-190K (MSE)",
+  "category": "full_training",
+  "model_type": "linoss",
+  "arch": "blocks=4, ssm_size=32, H=128, damped_IMEX, loss=MSE",
+  "timestamp": "2026-05-04 02:08:46",
+  "n_params": 199937,
+  "best_val_loss": 52.43449,
+  "best_val_epoch": 0,
+  "n_epochs": 9,
+  "final_train_loss": 48.85689,
+  "benchmark_score": -2.248687,
+  "ckpt_path": "/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/logs/tidmad_linoss_190k/version_0/checkpoints/checkpoint_step_53312.eqx",
+  "error": null
+}
