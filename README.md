@@ -1,8 +1,10 @@
 # PhyTS
 
-PhyTS is a machine learning benchmark built around four precision physics experiments: LIGO (gravitational waves), ABRACADABRA (axion dark matter), TESS (stellar variability), and Project 8 (neutrino mass). Each dataset is drawn from real or high-fidelity simulated detector data and defines a concrete inference task—chirp-mass regression, time-series denoising, variability classification, or electron energy regression—where better model performance maps directly to improved scientific sensitivity.
+PhyTS is a benchmark suite of precision scientific time series datasets for machine learning, spanning experiments in gravitational-wave detection, dark matter searches, neutrino mass determination, and stellar variability detection. Despite their diverse scientific goals, these domains share a common challenge: recovering weak, structured signals and estimating underlying physical parameters from noise-dominated measurements.
 
-The datasets span twelve orders of magnitude in sampling rate, sequence lengths from hundreds to millions of samples, and noise backgrounds that are non-Gaussian, non-stationary, and shaped by detector hardware.
+Unlike standard sequence modeling benchmarks such as audio and speech, these data exhibit non-Gaussian and nonstationary noise, long-range temporal correlations, detector-specific systematics, irregular sampling, and signals that are sparse, weak, or only partially modeled. As a result, they provide a challenging testbed for evaluating whether modern AI methods can support downstream scientific inference.
+
+We provide standardized tasks, data splits, and evaluation protocols for denoising, signal recovery, and parameter inference across physics domains, along with baseline results. By unifying diverse weak-signal inference problems under a common framework, this benchmark aims to enable reproducible evaluation and accelerate the development of more robust, interpretable, and physically grounded methods for scientific time series analysis.
 
 **Paper:** PhyTS: A Benchmark for Scientific Time Series (NeurIPS 2026)  
 **Data:** [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench) on Hugging Face
