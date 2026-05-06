@@ -41,6 +41,7 @@ class JAXLightningModule(L.LightningModule):
     jax_model_state: eqx.nn.State
     jax_model_filter_spec: PyTree[bool]
 
+    _base_optimizer: optax.GradientTransformation
     jax_optimizer: optax.GradientTransformation
     clip_grad_norm: float | None = None
 
@@ -76,12 +77,29 @@ class JAXLightningModule(L.LightningModule):
             eqx.is_inexact_array, self.jax_model
         )
 
-        # load model and optimizer state from checkpoint if provided
+        # Save the unwrapped optimizer so configure_optimizers can be called repeatedly
+        # by Lightning without double-wrapping it each time.
+        self._base_optimizer = optimizer
+        self.configure_optimizers()
+
+        # load model weights from checkpoint if provided (optimizer state is reset)
         if load_from_checkpoint is not None:
+            """Load checkpoint saved as (model, state, opt_state)."""
+            jax_opt = optax.chain(
+                optax.clip_by_global_norm(clip_grad_norm)
+                if clip_grad_norm is not None
+                else optax.identity(),
+                optax.adamw(1e-4),
+            )
+            filter_spec = jax.tree_util.tree_map(eqx.is_inexact_array, self.jax_model)
+            diff_model, _ = eqx.partition(self.jax_model, filter_spec)
+            opt_state = jax_opt.init(diff_model)
+
             self.jax_model, self.jax_model_state = load_model(
                 path=load_from_checkpoint,
-                model=self.jax_model,
+                model=diff_model,
                 model_state=self.jax_model_state,
+                # opt_state=opt_state
             )
 
         # Parameter accounting after optional checkpoint hydration.
@@ -105,7 +123,9 @@ class JAXLightningModule(L.LightningModule):
         """Split a scalar PRNG key into one key per sample for vmapped dropout."""
         return jax.random.split(base_key, batch_size)
 
-    def _training_step_extra_logs(self, model_output: PyTree[jax.Array], y: PyTree[jax.Array]) -> None:
+    def _training_step_extra_logs(
+        self, model_output: PyTree[jax.Array], y: PyTree[jax.Array]
+    ) -> None:
         """Log additional ``train/*`` metrics from forward outputs; override in task modules."""
         return
 
@@ -222,12 +242,13 @@ class JAXLightningModule(L.LightningModule):
 
     def configure_optimizers(self):
         """Configure optimizer and learning rate scheduler."""
-        # Return the JAX optimizer and learning rate scheduler if provided
+        # Always wrap _base_optimizer (the original, unwrapped optimizer) so that
+        # repeated calls from Lightning don't accumulate chain() wrappers.
         self.jax_optimizer = optax.chain(
             optax.clip_by_global_norm(self.clip_grad_norm)
             if self.clip_grad_norm is not None
             else optax.identity(),
-            self.jax_optimizer,
+            self._base_optimizer,
         )
 
         # separate trainable and non-trainable parameters for optimizer state initialization

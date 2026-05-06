@@ -33,6 +33,7 @@ model:
   init_args:
     lr: 1e-3
     seed: 0
+    load_from_checkpoint: /home/barmstrong/TimeSeriesPhysics/checkpoints/ligo_linoss_denoising/checkpoint_epoch_0056_step_320625_metric_0.000448.eqx
     model:
       class_path: models.linoss.LinOSS
       init_args:
@@ -44,6 +45,7 @@ model:
         task: forecasting
         output_step: 1 # output_step=1 -> full L-length sequence output
         discretization: damped_IMEX
+        drop_rate: 0.1
         seed: 0
 
 data:

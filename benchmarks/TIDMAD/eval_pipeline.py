@@ -19,14 +19,14 @@ Usage:
 """
 
 import argparse
-from pathlib import Path
-
-import yaml
 import importlib
+import io
+from pathlib import Path
 
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+import torch.nn as nn
+import yaml
 
 from dataloader.tidmad_dataloader import TIDMADDataModule, Param
 
@@ -48,14 +48,74 @@ COLORS = {'raw': 'steelblue', 'denoised': 'tomato', 'signal': 'seagreen'}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _is_jax_model(class_path: str) -> bool:
+    """Return True if class_path points to an equinox Module (JAX model)."""
+    try:
+        import equinox as eqx
+        module_name, class_name = class_path.rsplit('.', 1)
+        cls = getattr(importlib.import_module(module_name), class_name)
+        return issubclass(cls, eqx.Module)
+    except Exception:
+        return False
+
+
+class _JAXDenoiserWrapper(nn.Module):
+    """Thin nn.Module wrapper around a JAXLightningModule for eval inference."""
+
+    def __init__(self, task):
+        super().__init__()
+        self._task = task
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        from models.utils.jax.utils import jax_to_tensor
+        jax_out = self._task.forward(x)  # (B, L, 1) JAX array
+        return jax_to_tensor(jax_out)    # (B, L, 1) PyTorch tensor
+
+
+def _load_jax_model(ckpt_path: str, cfg_path: str) -> nn.Module:
+    """Instantiate a JAXLightningModule and restore weights from a Lightning checkpoint."""
+    import equinox as eqx
+
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+
+    task_cfg = cfg['model']
+    task_class_path = task_cfg['class_path']
+    task_init_args = dict(task_cfg.get('init_args', {}))
+
+    # Build inner JAX model
+    inner_cfg = task_init_args.pop('model')
+    inner_module, inner_class = inner_cfg['class_path'].rsplit('.', 1)
+    inner_cls = getattr(importlib.import_module(inner_module), inner_class)
+    inner_model = inner_cls(**inner_cfg.get('init_args', {}))
+
+    # Build task wrapper
+    task_module, task_class = task_class_path.rsplit('.', 1)
+    task_cls = getattr(importlib.import_module(task_module), task_class)
+    task = task_cls(model=inner_model, **task_init_args)
+
+    # Restore JAX weights from Lightning checkpoint
+    ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+    if 'jax_weights' in ckpt:
+        buf = io.BytesIO(ckpt['jax_weights'])
+        task.jax_model, task.jax_model_state = eqx.tree_deserialise_leaves(
+            buf, (task.jax_model, task.jax_model_state)
+        )
+
+    return _JAXDenoiserWrapper(task)
+
+
 def load_model(ckpt_path: str, cfg_path: str, device: torch.device):
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
 
     model_cfg  = cfg['model']['init_args']['model']
     class_path = model_cfg['class_path']
-    init_args  = model_cfg.get('init_args', {})
 
+    if _is_jax_model(class_path):
+        return _load_jax_model(ckpt_path, cfg_path)
+
+    init_args  = model_cfg.get('init_args', {})
     module_name, class_name = class_path.rsplit('.', 1)
     cls   = getattr(importlib.import_module(module_name), class_name)
     model = cls(**init_args)

@@ -1,0 +1,14 @@
+executable     = /home/barmstrong/cluster/htcondor/cuda_wrapper.sh
+arguments      = /home/barmstrong/.local/bin/uv run --no-sync python data/LIGO/download.py --dest /fast/barmstrong/LIGO --merge-only
+initialdir     = /home/barmstrong/TimeSeriesPhysics
+error          = /fast/barmstrong/outputs/$(Cluster).err
+output         = /fast/barmstrong/outputs/$(Cluster).out
+log            = /fast/barmstrong/outputs/$(Cluster).log
+request_memory = 64GB
+request_cpus   = 4
+request_gpus   = 0
+MaxTime = 200000
+periodic_remove = (JobStatus =?= 2) && ((CurrentTime - JobCurrentStartDate) >= $(MaxTime))
+environment = "CONDOR_JOB_ID=$(Cluster).$(Process) HDF5_USE_FILE_LOCKING='FALSE' PYTHONUNBUFFERED=1 HF_HOME=/fast/barmstrong/hf/"
+
+queue

@@ -1,0 +1,34 @@
+executable     = /home/barmstrong/cluster/htcondor/cuda_wrapper.sh
+arguments      = /home/barmstrong/.local/bin/uv run --no-sync python data/LIGO/download.py --dest /fast/barmstrong/LIGO --subdir $(subdir)
+initialdir     = /home/barmstrong/TimeSeriesPhysics
+error          = /fast/barmstrong/outputs/$(Cluster).$(Process).err
+output         = /fast/barmstrong/outputs/$(Cluster).$(Process).out
+log            = /fast/barmstrong/outputs/$(Cluster).log
+request_memory = 8GB
+request_cpus   = 1
+request_gpus   = 0
+MaxTime = 200000
+periodic_remove = (JobStatus =?= 2) && ((CurrentTime - JobCurrentStartDate) >= $(MaxTime))
+environment = "CONDOR_JOB_ID=$(Cluster).$(Process) HDF5_USE_FILE_LOCKING='FALSE' PYTHONUNBUFFERED=1 HF_HOME=/fast/barmstrong/hf/"
+
+queue subdir in (
+    LIGO/train/bns_snr_5_10,
+    LIGO/train/bns_snr_10_15,
+    LIGO/train/bns_snr_15_20,
+    LIGO/train/bns_snr_20_25,
+    LIGO/train/bns_snr_25_30,
+    LIGO/train/bns_snr_30_35,
+    LIGO/train/bns_snr_35_40,
+    LIGO/train/bns_snr_40_45,
+    LIGO/train/bns_snr_45_50,
+    LIGO/val/bns_snr_5_10,
+    LIGO/val/bns_snr_10_15,
+    LIGO/val/bns_snr_15_20,
+    LIGO/val/bns_snr_20_25,
+    LIGO/val/bns_snr_25_30,
+    LIGO/val/bns_snr_30_35,
+    LIGO/val/bns_snr_35_40,
+    LIGO/val/bns_snr_40_45,
+    LIGO/val/bns_snr_45_50,
+    LIGO/test/snr_5_50
+)

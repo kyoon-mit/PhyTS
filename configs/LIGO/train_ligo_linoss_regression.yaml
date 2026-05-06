@@ -31,6 +31,7 @@ model:
   init_args:
     lr: 1e-3
     seed: 0
+    load_from_checkpoint: /home/barmstrong/TimeSeriesPhysics/checkpoints/ligo_linoss_regression/checkpoint_epoch_0008_step_11250_metric_0.008665.eqx
     model:
       class_path: models.linoss.LinOSS
       init_args:
@@ -42,6 +43,7 @@ model:
         task: regression
         output_step: 1
         discretization: damped_IMEX
+        drop_rate: 0.1
         seed: 0
 
 data:
@@ -63,6 +65,6 @@ data:
     train_batch_size: 64
     val_batch_size: 64
     test_batch_size: 64
-    num_workers: 16
+    num_workers: 1
     shuffle: true
     persistent_workers: true

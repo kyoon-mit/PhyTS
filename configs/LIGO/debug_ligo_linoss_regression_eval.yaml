@@ -1,0 +1,48 @@
+# Debug eval config for benchmarks/LIGO/eval_pipeline.py.
+# Usage:
+#   python benchmarks/LIGO/eval_pipeline.py \
+#       --config     configs/LIGO/debug_ligo_linoss_regression_eval.yaml \
+#       --checkpoint /home/barmstrong/TimeSeriesPhysics/checkpoints/ligo_linoss_regression/checkpoint_epoch_0008_step_11250_metric_0.008665.eqx \
+#       --jax_platforms cpu
+
+model:
+  class_path: tasks.LIGO.ligo_regression_jax.LinOSSLIGORegression
+  init_args:
+    lr: 1e-3
+    seed: 0
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 4
+        N: 2
+        ssm_size: 64
+        H: 128
+        output_dim: 1
+        task: regression
+        output_step: 1
+        discretization: damped_IMEX
+        drop_rate: 0.1
+        seed: 0
+
+data:
+  class_path: dataloader.LIGO_dataloader.LIGODataModule
+  init_args:
+    train_file: /fast/barmstrong/LIGO/merged/train.h5
+    val_file: /fast/barmstrong/LIGO/merged/val.h5
+    test_file: /fast/barmstrong/LIGO/merged/test.h5
+    target_variables:
+      - chirp_mass
+    observed_variables:
+      - snr
+    injected_data_key: whitened_injected
+    strain_frequency: 512
+    downsample_factor: 1
+    strain_duration: 32.0
+    window_begin: 28.0
+    window_end: 32.0
+    train_batch_size: 4
+    val_batch_size: 4
+    test_batch_size: 4
+    num_workers: 0
+    shuffle: false
+    persistent_workers: false
