@@ -178,6 +178,7 @@ def build_classification_sweep_task_and_datamodule(
         num_workers=0,
         seq_len=args.seq_len,
         seed=getattr(cfg, "seed", args.seed),
+        normalize_flux=True,
     )
     return task, dm, is_jax
 

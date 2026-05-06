@@ -261,39 +261,83 @@ def _bool_mask_row(n_real: int, seq_len: int) -> torch.Tensor:
     return m
 
 
+def _normalize_flux(arr: np.ndarray) -> np.ndarray:
+    """Per-light-curve z-score (median, nanstd); ``False`` finite mask → zeros like invalid cadences."""
+    arr = np.asarray(arr, dtype=np.float64)
+    center = np.nanmedian(arr)
+    std = np.nanstd(arr)
+    if not np.isfinite(center) or std < 1e-8:
+        return np.zeros(arr.shape[0], dtype=np.float32)
+    normed = (arr - center) / std
+    normed = np.where(np.isfinite(normed), normed, 0.0)
+    return normed.astype(np.float32)
+
+
 class TESSClassificationDataset(Dataset):
     """TESS variability classification; batches match ``TESSClassificationCE``."""
 
     label_names = CLASS_NAMES  # Iterable[str]; retest uses ``list(dm.val.label_names)``.
 
-    def __init__(self, flux: np.ndarray, label: np.ndarray, n_valid: np.ndarray) -> None:
+    def __init__(
+        self,
+        flux: np.ndarray,
+        label: np.ndarray,
+        n_valid: np.ndarray,
+        *,
+        normalize_flux: bool = False,
+    ) -> None:
         self.flux = torch.as_tensor(flux)    # (N, L) float32
         self.label = torch.as_tensor(label)  # (N,) int64
         self.n_valid = np.asarray(n_valid, dtype=np.int32)
+        self.normalize_flux = normalize_flux
 
     def __len__(self) -> int:
         return self.flux.shape[0]
 
     def __getitem__(self, idx):
         L = int(self.flux.shape[1])
-        mask = _bool_mask_row(int(self.n_valid[idx]), L)
+        n = int(self.n_valid[idx])
+        mask = _bool_mask_row(n, L)
+        if self.normalize_flux:
+            seg = self.flux[idx, :n].numpy()
+            normed = _normalize_flux(seg) if n > 0 else np.zeros(0, dtype=np.float32)
+            x = torch.zeros(L, dtype=torch.float32)
+            if n > 0:
+                x[:n] = torch.from_numpy(normed)
+            return x, mask, self.label[idx]
         return self.flux[idx], mask, self.label[idx]
 
 
 class TESSRegressionDataset(Dataset):
     """TESS frot regression; batches match ``TESSRegressionMSE``."""
 
-    def __init__(self, flux: np.ndarray, target: np.ndarray, n_valid: np.ndarray) -> None:
+    def __init__(
+        self,
+        flux: np.ndarray,
+        target: np.ndarray,
+        n_valid: np.ndarray,
+        *,
+        normalize_flux: bool = False,
+    ) -> None:
         self.flux = torch.as_tensor(flux)                                # (N, L) float32
         self.target = torch.as_tensor(target.astype(np.float32))         # (N,) float32
         self.n_valid = np.asarray(n_valid, dtype=np.int32)
+        self.normalize_flux = normalize_flux
 
     def __len__(self) -> int:
         return self.flux.shape[0]
 
     def __getitem__(self, idx):
         L = int(self.flux.shape[1])
-        mask = _bool_mask_row(int(self.n_valid[idx]), L)
+        n = int(self.n_valid[idx])
+        mask = _bool_mask_row(n, L)
+        if self.normalize_flux:
+            seg = self.flux[idx, :n].numpy()
+            normed = _normalize_flux(seg) if n > 0 else np.zeros(0, dtype=np.float32)
+            x = torch.zeros(L, dtype=torch.float32)
+            if n > 0:
+                x[:n] = torch.from_numpy(normed)
+            return x, mask, self.target[idx]
         return self.flux[idx], mask, self.target[idx]
 
 
@@ -328,6 +372,7 @@ def make_loaders_classification(
     prefetch_factor: int | None = None,
     persistent_workers: bool = False,
     pin_memory: bool = False,
+    normalize_flux: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader, dict]:
     d = load_tess("classification", cache_dir=cache_dir)
     flux, label, tic, n_valid = d["flux"], d["label"], d["tic"], d["n_valid"]
@@ -337,7 +382,10 @@ def make_loaders_classification(
     loaders = []
     for split_idx, shuffle in [(tr, True), (va, False), (te, False)]:
         ds = TESSClassificationDataset(
-            flux[split_idx], label[split_idx], n_valid[split_idx],
+            flux[split_idx],
+            label[split_idx],
+            n_valid[split_idx],
+            normalize_flux=normalize_flux,
         )
         loaders.append(DataLoader(ds, batch_size=batch_size, shuffle=shuffle, **loader_kw))
 
@@ -366,6 +414,7 @@ def make_loaders_regression(
     persistent_workers: bool = False,
     pin_memory: bool = False,
     drop_nonpositive_target: bool = True,
+    normalize_flux: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader, dict]:
     d = load_tess("regression", cache_dir=cache_dir)
     flux, target, tic, n_valid = d["flux"], d["target"], d["tic"], d["n_valid"]
@@ -389,7 +438,10 @@ def make_loaders_regression(
     loaders = []
     for split_idx, shuffle in [(tr, True), (va, False), (te, False)]:
         ds = TESSRegressionDataset(
-            flux[split_idx], target[split_idx], n_valid[split_idx],
+            flux[split_idx],
+            target[split_idx],
+            n_valid[split_idx],
+            normalize_flux=normalize_flux,
         )
         loaders.append(DataLoader(ds, batch_size=batch_size, shuffle=shuffle, **loader_kw))
 
@@ -429,6 +481,7 @@ class TESSClassificationDataModule(L.LightningDataModule):
         prefetch_factor: int | None = None,
         persistent_workers: bool = False,
         pin_memory: bool = False,
+        normalize_flux: bool = False,
     ) -> None:
         super().__init__()
         _check_seq_len(seq_len)
@@ -439,6 +492,7 @@ class TESSClassificationDataModule(L.LightningDataModule):
         self.prefetch_factor = prefetch_factor
         self.persistent_workers = persistent_workers
         self.pin_memory = pin_memory
+        self.normalize_flux = normalize_flux
         self.train: TESSClassificationDataset | None = None
         self.val: TESSClassificationDataset | None = None
         self.test: TESSClassificationDataset | None = None
@@ -449,9 +503,16 @@ class TESSClassificationDataModule(L.LightningDataModule):
         d = load_tess("classification", cache_dir=self.data_dir)
         flux, label, tic, n_valid = d["flux"], d["label"], d["tic"], d["n_valid"]
         tr, va, te = group_stratified_split(groups=tic, labels=label, seed=self.seed)
-        self.train = TESSClassificationDataset(flux[tr], label[tr], n_valid[tr])
-        self.val = TESSClassificationDataset(flux[va], label[va], n_valid[va])
-        self.test = TESSClassificationDataset(flux[te], label[te], n_valid[te])
+        nf = self.normalize_flux
+        self.train = TESSClassificationDataset(
+            flux[tr], label[tr], n_valid[tr], normalize_flux=nf,
+        )
+        self.val = TESSClassificationDataset(
+            flux[va], label[va], n_valid[va], normalize_flux=nf,
+        )
+        self.test = TESSClassificationDataset(
+            flux[te], label[te], n_valid[te], normalize_flux=nf,
+        )
 
     def train_dataloader(self) -> DataLoader:
         assert self.train is not None
@@ -504,6 +565,7 @@ class TESSRegressionDataModule(L.LightningDataModule):
         persistent_workers: bool = False,
         pin_memory: bool = False,
         drop_nonpositive_target: bool = True,
+        normalize_flux: bool = False,
     ) -> None:
         super().__init__()
         _check_seq_len(seq_len)
@@ -515,6 +577,7 @@ class TESSRegressionDataModule(L.LightningDataModule):
         self.persistent_workers = persistent_workers
         self.pin_memory = pin_memory
         self.drop_nonpositive_target = drop_nonpositive_target
+        self.normalize_flux = normalize_flux
         self.train: TESSRegressionDataset | None = None
         self.val: TESSRegressionDataset | None = None
         self.test: TESSRegressionDataset | None = None
@@ -531,9 +594,16 @@ class TESSRegressionDataModule(L.LightningDataModule):
                 print(f"[tess-reg] dropping {n_drop} rows with non-positive frot")
             flux, target, tic, n_valid = flux[keep], target[keep], tic[keep], n_valid[keep]
         tr, va, te = group_stratified_split(groups=tic, labels=None, seed=self.seed)
-        self.train = TESSRegressionDataset(flux[tr], target[tr], n_valid[tr])
-        self.val = TESSRegressionDataset(flux[va], target[va], n_valid[va])
-        self.test = TESSRegressionDataset(flux[te], target[te], n_valid[te])
+        nf = self.normalize_flux
+        self.train = TESSRegressionDataset(
+            flux[tr], target[tr], n_valid[tr], normalize_flux=nf,
+        )
+        self.val = TESSRegressionDataset(
+            flux[va], target[va], n_valid[va], normalize_flux=nf,
+        )
+        self.test = TESSRegressionDataset(
+            flux[te], target[te], n_valid[te], normalize_flux=nf,
+        )
 
     def train_dataloader(self) -> DataLoader:
         assert self.train is not None

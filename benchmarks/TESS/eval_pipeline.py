@@ -369,7 +369,11 @@ def main():
     # ── Regression ──────────────────────────────────────────────────────────
     if not args.skip_regression:
         from dataloader.tess_dataloader import TESSRegressionDataModule
-        dm = TESSRegressionDataModule(data_dir=str(data_dir), batch_size=args.batch_size)
+        dm = TESSRegressionDataModule(
+            data_dir=str(data_dir),
+            batch_size=args.batch_size,
+            normalize_flux=True,
+        )
         dm.setup("test")
         loader = dm.test_dataloader()
 
@@ -396,7 +400,11 @@ def main():
     # ── Classification ──────────────────────────────────────────────────────
     if not args.skip_classification:
         from dataloader.tess_dataloader import TESSClassificationDataModule
-        dm = TESSClassificationDataModule(data_dir=str(data_dir), batch_size=args.batch_size)
+        dm = TESSClassificationDataModule(
+            data_dir=str(data_dir),
+            batch_size=args.batch_size,
+            normalize_flux=True,
+        )
         dm.setup("test")
         loader = dm.test_dataloader()
         label_names = dm.test.label_names
