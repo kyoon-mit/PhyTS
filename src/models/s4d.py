@@ -232,7 +232,9 @@ class S4Model(nn.Module):
 
     def forward(self, x, mask=None):
         """
-        Input x is shape (B, L, d_input); mask is (B, L) bool, True = valid cadence.
+        Input x is shape (B, L, d_input)
+        mask: optional (B, L) bool — True for real positions, False for padding.
+              When provided, pooling averages only over real positions.
         """
         x = self.encoder(x)  # (B, L, d_input) -> (B, L, d_model)
         x = x.transpose(-1, -2)  # (B, L, d_model) -> (B, d_model, L)
@@ -258,12 +260,12 @@ class S4Model(nn.Module):
                 # Postnorm
                 x = norm(x.transpose(-1, -2)).transpose(-1, -2)
 
-        x = x.transpose(-1, -2)  # (B, L, d_model)
+        x = x.transpose(-1, -2)  # (B, d_model, L) -> (B, L, d_model)
 
-        # Masked mean pooling: exclude zero-padded positions from the average.
+        # Pooling: masked or full mean over the sequence length
         if mask is not None:
-            valid = mask.float().unsqueeze(-1)           # (B, L, 1)
-            x = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1.0)  # (B, d_model)
+            mask_f = mask.unsqueeze(-1).float()  # (B, L, 1)
+            x = (x * mask_f).sum(dim=1) / mask_f.sum(dim=1).clamp(min=1)
         else:
             x = x.mean(dim=1)
 

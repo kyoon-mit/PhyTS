@@ -1,36 +1,23 @@
-"""Classification tasks for TESS lightcurve data.
+"""Classification task for the TESS variable-star dataset. (taken from Allison's)
 
-TESSClassificationCE — end-to-end: flux → variability class label.
-TESSFrozenBackboneClassificationCE — frozen seq2seq backbone + trainable MLP head.
+The batch convention is:
+    flux  (B, L)
+    mask  (B, L)
+    label (B,)
 
-Batch convention (from TESSClassificationDataset.__getitem__):
-    flux   (B, L)   — z-score normalized, padded to seq_len
-    mask   (B, L)   — True where cadence is valid
-    label  (B,)     — int64 class index
-
-Any model with signature forward(x: (B, L, 1), mask: (B, L)) -> (B, num_classes) works as drop-in.
-
-Usage (LightningCLI YAML):
-    model:
-      class_path: tasks.TESS.tess_classification.TESSClassificationCE
-      init_args:
-        num_classes: 8
-        lr: 1.0e-3
-        lr_decay: 0.99
-        model:
-          class_path: models.mlp.MLPRegressor
-          init_args:
-            seq_len: 1100
-            d_output: 8         # must equal num_classes
+Any model with signature forward(x: (B, L, 1), mask: (B, L)) -> (B, C)
+can be plugged in via the `model` argument.
 """
 
-import importlib
+from __future__ import annotations
 
+import lightning as L
 import torch
 import torch.nn as nn
 from torch import Tensor, optim
 import lightning as L
 import yaml
+import importlib
 
 from tasks.param_count import (
     attach_scalar_hyperparams,
@@ -62,7 +49,7 @@ def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
 # ── End-to-end classification ────────────────────────────────────────────────
 
 class TESSClassificationCE(L.LightningModule):
-    """End-to-end multi-class classification: forward(flux) → label via cross-entropy."""
+    """Multi-class classification via cross-entropy loss."""
 
     def __init__(
         self,
@@ -72,46 +59,32 @@ class TESSClassificationCE(L.LightningModule):
         lr_decay: float = 0.99,
     ):
         super().__init__()
+        self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.num_classes = num_classes
         self.lr = lr
         self.lr_decay = lr_decay
         self.criterion = nn.CrossEntropyLoss()
-        self.save_hyperparameters(ignore=["model"])
-        attach_scalar_hyperparams(self, torch_model_parameter_hyper_dict(model))
 
-    def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
-        # x: (B, L) → (B, L, 1) → model → (B, num_classes)
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
         return self.model(x.unsqueeze(-1), mask=mask)
 
-    def _step(self, batch: tuple) -> tuple[Tensor, Tensor, Tensor]:
+    def _step(self, batch: tuple[Tensor, Tensor, Tensor]) -> tuple[Tensor, Tensor, Tensor]:
         flux, mask, label = batch
         logits = self(flux, mask)
         loss = self.criterion(logits, label)
         return loss, logits.argmax(dim=-1), label
 
-    def on_train_epoch_start(self):
-        self._train_preds: list[Tensor] = []
-        self._train_labels: list[Tensor] = []
-
     def training_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
+        acc = (preds == labels).float().mean()
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self._train_preds.append(preds.cpu())
-        self._train_labels.append(labels.cpu())
+        self.log("train/acc", acc, on_step=False, on_epoch=True)
         return loss
-
-    def on_train_epoch_end(self):
-        preds = torch.cat(self._train_preds)
-        labels = torch.cat(self._train_labels)
-        self.log("train/acc", (preds == labels).float().mean())
-
-    def on_validation_epoch_start(self):
-        self._val_preds: list[Tensor] = []
-        self._val_labels: list[Tensor] = []
 
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
+        acc = (preds == labels).float().mean()
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self._val_preds.append(preds.cpu())
         self._val_labels.append(labels.cpu())
@@ -146,9 +119,11 @@ class TESSClassificationCE(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
+        acc = (preds == labels).float().mean()
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self._test_preds.append(preds.cpu())
-        self._test_labels.append(labels.cpu())
+        self.log("test/acc", acc, on_step=False, on_epoch=True)
+        self._test_preds.append(preds.detach().cpu())
+        self._test_labels.append(labels.detach().cpu())
 
     def on_test_epoch_end(self):
         preds = torch.cat(self._test_preds)
@@ -168,9 +143,9 @@ class TESSClassificationCE(L.LightningModule):
             prefix="test",
         )
         for c in range(self.num_classes):
-            mask_c = labels == c
-            if mask_c.sum() > 0:
-                self.log(f"test/acc_class_{c}", (preds[mask_c] == c).float().mean())
+            mask = labels == c
+            if mask.any():
+                self.log(f"test/acc_class_{c}", (preds[mask] == c).float().mean())
 
     def configure_optimizers(self):
         opt = optim.AdamW(self.parameters(), lr=self.lr)
