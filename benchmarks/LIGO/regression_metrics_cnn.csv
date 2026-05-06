@@ -1,0 +1,2 @@
+model,backend,target,n_test,rmse,r2
+CNN,pt,chirp_mass,100000,0.28019458055496216,-0.06777134537386909

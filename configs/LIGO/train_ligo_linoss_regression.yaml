@@ -6,6 +6,7 @@ trainer:
   max_epochs: 100
   accelerator: cpu # accelerator=cpu: JAX manages GPU memory directly; setting gpu here conflicts with JAX.
   devices: 1
+  # val_check_interval: 100
   enable_progress_bar: false
   callbacks:
     - class_path: models.utils.callbacks.LogProgressCallback
@@ -31,7 +32,6 @@ model:
   init_args:
     lr: 1e-3
     seed: 0
-    load_from_checkpoint: /home/barmstrong/TimeSeriesPhysics/checkpoints/ligo_linoss_regression/checkpoint_epoch_0008_step_11250_metric_0.008665.eqx
     model:
       class_path: models.linoss.LinOSS
       init_args:

@@ -294,7 +294,7 @@ class LinOSSLayer(eqx.Module):
 class LinOSSBlock(eqx.Module):
     """Single LinOSS block with a LinOSS layer, GLU nonlinearity, and residual connection."""
 
-    norm: eqx.nn.BatchNorm
+    norm: eqx.nn.LayerNorm
     ssm: LinOSSLayer
     glu: GLU
     drop: eqx.nn.Dropout
@@ -311,7 +311,8 @@ class LinOSSBlock(eqx.Module):
         key,
     ):
         ssmkey, glukey = jr.split(key, 2)
-        self.norm = eqx.nn.BatchNorm(input_size=H, axis_name="batch", channelwise_affine=False)
+        # self.norm = eqx.nn.BatchNorm(input_size=H, axis_name="batch", channelwise_affine=False)
+        self.norm = eqx.nn.LayerNorm(H)
         self.ssm = LinOSSLayer(
             ssm_size,
             H,
@@ -327,8 +328,9 @@ class LinOSSBlock(eqx.Module):
         """Compute LinOSS block."""
         dropkey1, dropkey2 = jr.split(key, 2)
         skip = x
-        x, state = self.norm(x.T, state)
-        x = x.T
+        # x, state = self.norm(x.T, state)
+        # x = x.T
+        x = jax.vmap(self.norm)(x)
         x = self.ssm(x)
         x = self.drop(jax.nn.gelu(x), key=dropkey1)
         x = jax.vmap(self.glu)(x)
@@ -415,8 +417,8 @@ class LinOSS(eqx.Module):
         """
         # Extract mask channel if appended by the task's _prepare_batch.
         if x.shape[-1] > self.input_dim:
-            mask = x[..., -1]               # (L,) float: 1=valid, 0=padding
-            x = x[..., : self.input_dim]    # (L, N) signal
+            mask = x[..., -1]  # (L,) float: 1=valid, 0=padding
+            x = x[..., : self.input_dim]  # (L, N) signal
         else:
             mask = None
 
