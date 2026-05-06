@@ -20,9 +20,7 @@ CNN, Conv+Attention, Transformer, and JAX LinOSS; see configs and
 | `src/tasks/TESS/tess_reconstruction.py` | `TESSReconstructionMSE` — self-supervised S4D pretraining via denoising                                   |
 | `configs/TESS/other/`                   | LightningCLI training configs (see table below)                                                           |
 | `configs/TESS/sweep/`                   | wandb sweep YAMLs + `all_model_sweep_dims.yaml`                                                           |
-| `data/TESS/download_tess.py`            | Download PhyTS-bench TESS shards from Hugging Face; `--where local` / `--where engaging` or `--cache-dir` |
 | `benchmarks/TESS/setup_data.sh`         | Downloads TESS Parquet files from HuggingFace (run once from login node)                                  |
-| `benchmarks/TESS/run.sh`                | SLURM submission script for MIT Engaging                                                                  |
 | `benchmarks/TESS/eval_pipeline.py`      | Standalone evaluation: metrics, scatter/confusion plots, CSVs                                             |
 
 
@@ -63,16 +61,13 @@ Use `data/TESS/download_tess.py` (requires `uv sync --extra jax`):
 | CLI                       | Cache parent                                                                                        |
 | ------------------------- | --------------------------------------------------------------------------------------------------- |
 | `--where local` (default) | `<repo>/data/TESS/.cache` → Parquets in `data/TESS/.cache/TESS/`                                    |
-| `--where engaging`        | `/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics/data_engaging/TESS/.cache` → `…/TESS/` |
 | `--cache-dir PATH`        | Any directory (overrides `--where`); Parquets end up in `PATH/TESS/`                                |
 
 
 ```bash
 uv run --extra jax python data/TESS/download_tess.py
-uv run --extra jax python data/TESS/download_tess.py --where engaging
 ```
 
-On Engaging, `bash benchmarks/TESS/setup_data.sh` calls the same script with `--cache-dir` under the pool tree (`$TESS_POOL_ROOT/data_engaging/TESS/.cache`). The default `TESS_POOL_ROOT` matches `--where engaging`. If you change `TESS_POOL_ROOT`, keep using `setup_data.sh` or pass `--cache-dir` yourself rather than `--where engaging`.
 
 ---
 
@@ -125,29 +120,23 @@ Writes `*_regression_results.csv`, `*_classification_results.csv`, and `.png` pl
 
 ---
 
-## Running on MIT Engaging
 
-First, sync the repository to Engaging (login node):
 
 ```bash
 rsync -r -av --progress \
     --exclude .git --exclude '.venv' \
     --exclude checkpoints --exclude '*.parquet' --exclude '*.csv' --exclude '*.npz' \
     --exclude '*.wandb' --exclude '*.err' --exclude '*.out' --exclude '*/logs/' --exclude wandb --exclude '*/.cache' \
-    TimeSeriesPhysics allisone@orcd-login001.mit.edu:/home/allisone/documents/UROP_2025_Summer/
 ```
 
-Sync results or code back from Engaging to your local machine (run this on your local machine):
 
 ```bash
 rsync -r -av --progress \
     --exclude .git --exclude '.venv' \
     --exclude checkpoints --exclude '*.parquet' --exclude '*.csv' --exclude '*.npz' \
     --exclude '*.wandb' --exclude '*.err' --exclude '*.out' --exclude '*/logs/' --exclude wandb \
-    allisone@orcd-login001.mit.edu:/home/allisone/documents/UROP_2025_Summer/TimeSeriesPhysics ./
 ```
 
-Then, from the Engaging login node, download the data (only needed once; login nodes have internet, compute nodes do not):
 
 ```bash
 bash benchmarks/TESS/setup_data.sh

@@ -44,9 +44,9 @@ model:
 data:
   class_path: dataloader.LIGO_dataloader.LIGODenoisingDataModule
   init_args:
-    train_file: /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/train/sig_combined_train.h5
-    val_file:   /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/val/sig_combined_val.h5
-    test_file:  /n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K/test/sig_combined_test.h5
+    train_file: data/LIGO/train/sig_combined_train.h5
+    val_file:   data/LIGO/val/sig_combined_val.h5
+    test_file:  data/LIGO/test/sig_combined_test.h5
     injected_data_key: whitened_injected
     signal_data_key:   whitened_signal
     strain_frequency:  256

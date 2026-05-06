@@ -245,7 +245,7 @@ frequency sweeps across each 200-second file, per-file detection was systematica
 | LinOSS MSE checkpoint dir    | `logs/tidmad_linoss_190k/version_0/checkpoints/`                             |
 | LinOSS PSD checkpoint dir    | `logs/tidmad_linoss_190k_psd/version_0/checkpoints/`                         |
 | Official H5 exports          | `benchmarks/TIDMAD/results/h5_export/{conv_l_psd,linoss_190k_psd,...}/`      |
-| SLURM logs                   | `/home/ilay.kamai/athena/logs/`                                              |
+| SLURM logs                   | `<cluster log path>`                                              |
 
 ---
 

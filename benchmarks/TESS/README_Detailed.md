@@ -277,7 +277,6 @@ The two Parquet files (~225 MB total) must be present at `data/TESS/.cache/TESS/
 bash benchmarks/TESS/setup_data.sh
 ```
 
-This calls `data/TESS/download_tess.py` via `uv run --extra jax` (`huggingface_hub` lives in the `jax` extras; `pyarrow` is a core dep). The script fetches both files from the [PhyTS-bench HuggingFace dataset](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench), prints a schema summary and sample row for each file, and is idempotent (HuggingFace Hub skips files already cached). **On Engaging, run this from the login node** — compute nodes do not have outbound internet access.
 
 Verify afterwards:
 ```bash
@@ -331,17 +330,14 @@ uv run python benchmarks/TESS/eval_pipeline.py \
     --out_dir  benchmarks/TESS
 ```
 
-### MIT Engaging cluster (SLURM)
 
 **Step 1 — Sync the repository** (from your local machine):
 ```bash
 rsync -r -av --progress \
     --exclude .git --exclude '.venv' --exclude '.claude' \
     --exclude checkpoints --exclude '*.parquet' --exclude '*.csv' \
-    TimeSeriesPhysics allisone@orcd-login001.mit.edu:/home/allisone/documents/UROP_2025_Summer/
 ```
 
-**Step 2 — Download data** (from the Engaging login node; compute nodes have no internet):
 ```bash
 bash benchmarks/TESS/setup_data.sh
 ```

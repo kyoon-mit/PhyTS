@@ -15,9 +15,7 @@ Dependencies: ``uv sync --extra jax`` (pyarrow, huggingface_hub, matplotlib).
 Example
 -------
     uv run --extra jax python data/TESS/visualize_tess.py
-    uv run --extra jax python data/TESS/visualize_tess.py --where engaging
     uv run --extra jax python data/TESS/visualize_tess.py --cache-dir path/to/cache
-    # Default --out-dir is <…/TESS>/figures next to .cache (pool path when using --where engaging).
 """
 
 from __future__ import annotations
@@ -545,10 +543,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Write TESS exploration figures under --out-dir.")
     parser.add_argument(
         "--where",
-        choices=("local", "engaging"),
+        choices=("local",),
         default="local",
         help="Preset when --data-dir is omitted: local → repo data/TESS/.cache/TESS; "
-        "engaging → ORCD data_engaging/TESS/.cache/TESS. Ignored if --data-dir is set; "
         "overridden by --cache-dir when --data-dir is omitted.",
     )
     parser.add_argument(
@@ -587,7 +584,6 @@ def main() -> None:
         help=(
             "Output directory for figures. Default: "
             "<parent of Hub cache root>/figures — same as data/TESS/figures locally "
-            "and …/data_engaging/TESS/figures when data lives under the ORCD preset."
         ),
     )
     args = parser.parse_args()
@@ -596,11 +592,6 @@ def main() -> None:
         data_dir = args.data_dir.resolve()
     elif args.cache_dir is not None:
         data_dir = Path(args.cache_dir).resolve() / "TESS"
-    elif args.where == "engaging":
-        data_dir = (_ENGAGING_CACHE_PARENT / "TESS").resolve()
-    else:
-        data_dir = _DEFAULT_TESS_DIR.resolve()
-
     tess_data = ensure_tess_splits_downloaded(
         data_dir, hub_cache_parent=args.hub_cache_parent
     )

@@ -2,7 +2,7 @@
 
 Verbatim port of ``LambdaScheduler`` from the original neutrino_project
 ``denoising`` branch
-(https://github.com/chreissel/neutrino_project/blob/denoising/src/models/curriculum_scheduler.py).
+([anonymous repository, available upon acceptance]).
 """
 
 import numpy as np

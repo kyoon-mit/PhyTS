@@ -12,7 +12,7 @@
 
 set -e
 
-WORKDIR=/n/holystore01/LABS/iaifi_lab/Lab/kyoon/TimeSeriesPhysics
+WORKDIR=$(git rev-parse --show-toplevel)
 LOGS=$WORKDIR/slurm_logs/LIGO
 mkdir -p $LOGS
 

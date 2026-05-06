@@ -30,11 +30,6 @@ Batch = tuple[
     Float[Tensor, "B n_obs"],
 ]
 
-_DATA_ROOT = (
-    "/n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA"
-    "/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K"
-)
-
 
 class LIGORegressionMSE(L.LightningModule):
     """MSE regression from 2-channel LIGO strain to physical parameters.

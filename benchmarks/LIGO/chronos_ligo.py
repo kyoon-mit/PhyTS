@@ -29,6 +29,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -50,10 +51,7 @@ from foundation.wrappers.chronos_wrapper import ChronosWrapper  # noqa: E402
 
 
 # ── constants ─────────────────────────────────────────────────────────────────
-DATA_DIR = Path(
-    "/n/holystore01/LABS/iaifi_lab/Lab/kyoon/DATA"
-    "/ai4gw@cern/bns_snr_5_50_powerlaw_256Hz_80K_10K_100K"
-)
+DATA_DIR = Path(os.environ.get("LIGO_DATA_DIR", "data/LIGO"))
 SPLITS = {"train": "train/sig_combined_train.h5",
            "val":   "val/sig_combined_val.h5",
            "test":  "test/sig_combined_test.h5"}

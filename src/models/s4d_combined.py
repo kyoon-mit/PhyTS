@@ -4,7 +4,7 @@ Composes a sequence-to-sequence denoiser with a pooled regressor so that the
 combined module returns ``(x_denoised, y_preds)`` from a single noisy input.
 This mirrors the ``S4DCombinedModel`` encoder used by the reference
 ``LitS4CombinedModel``
-(https://github.com/chreissel/neutrino_project/blob/denoising/src/models/model.py).
+([anonymous repository, available upon acceptance]).
 
 Default sub-modules are :class:`models.s4d_seq2seq.S4ModelSeq2Seq`
 (denoiser, ``(B, L, C) -> (B, L, C)``) and :class:`models.s4d.S4Model`

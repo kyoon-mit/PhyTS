@@ -8,7 +8,7 @@
 #   bash benchmarks/TESS/setup_data.sh
 #
 # Parquet shards from the Hub are saved under the pool tree (default), e.g.:
-#   $TESS_POOL_ROOT/data_engaging/TESS/.cache/TESS/tess_*_{train,val,test}.parquet
+#   $TESS_POOL_ROOT/TESS/tess_*_{train,val,test}.parquet
 #
 # Optional: ``export TESS_POOL_ROOT=...`` when your pool path differs from the default.
 #
@@ -19,8 +19,8 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
-DATA_DIR="$POOL/data_engaging/TESS/.cache"
+POOL="${TESS_POOL_ROOT:-data}"
+DATA_DIR="$POOL/TESS"
 
 # Skip if Hub shards already present
 if [ -f "$DATA_DIR/TESS/tess_regression_train.parquet" ] && [ -f "$DATA_DIR/TESS/tess_classification_train.parquet" ]; then
@@ -29,7 +29,7 @@ if [ -f "$DATA_DIR/TESS/tess_regression_train.parquet" ] && [ -f "$DATA_DIR/TESS
 fi
 
 echo "Downloading TESS PhyTS-bench data to $DATA_DIR ..."
-module load cuda miniforge
+# activate your venv: source .venv/bin/activate
 
 # huggingface_hub is in the jax extra; pyarrow is a core dep
 uv run --extra jax python "$REPO_ROOT/data/TESS/download_tess.py" \

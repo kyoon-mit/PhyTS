@@ -27,11 +27,11 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
-DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
+POOL="${TESS_POOL_ROOT:-data}"
+DATA_DIR=$POOL/TESS
 CKPT_DIR=$POOL/checkpoints/sweeps
 WANDB_ROOT=$POOL
-LOGS=$WORKDIR/logs/engaging_logs/sweeps
+LOGS=$WORKDIR/logs/logs/sweeps
 mkdir -p "$LOGS" "$CKPT_DIR" "$WANDB_ROOT"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ fi
 # ── Venv setup ────────────────────────────────────────────────────────────────
 if [ ! -d "$WORKDIR/.venv" ]; then
     echo "ERROR: $WORKDIR/.venv not found."
-    echo "On the login node: cd $WORKDIR && module load cuda miniforge && uv sync [--extra jax --extra cu13]"
+    echo "On the login node: cd $WORKDIR && # activate your venv: source .venv/bin/activate && uv sync [--extra jax --extra cu13]"
     exit 1
 fi
 
@@ -111,7 +111,7 @@ SBATCH_COMMON="
 
 # Classification + regression sweeps use the same TESS root (Hub shards mirrored
 # into .../.cache/TESS). Override via TESS_DATA_DIR if needed.
-BASE_ENV="module load cuda miniforge &&
+BASE_ENV="# activate your venv: source .venv/bin/activate &&
   export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
     OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
     WANDB_DIR=$WANDB_ROOT TESS_DATA_DIR=$DATA_DIR TESS_CKPT_DIR=$CKPT_DIR"

@@ -11,7 +11,7 @@
 # Before running:
 #   1. Download data (login node only — compute nodes have no internet):
 #        bash benchmarks/TESS/setup_data.sh
-#   2. Materialize the project venv on the login node (module load cuda miniforge, etc.):
+#   2. Materialize the project venv on the login node (# activate your venv: source .venv/bin/activate, etc.):
 #        cd <repo> && uv sync
 #      Batch steps call .venv/bin/python only — not `uv run` on compute nodes — so many
 #      parallel jobs never mutate .venv on NFS (avoids errno 116 Stale file handle).
@@ -33,12 +33,12 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
-DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
+POOL="${TESS_POOL_ROOT:-data}"
+DATA_DIR=$POOL/TESS
 CKPT_DIR=$POOL/checkpoints
 RESULTS_DIR=$POOL/results
 WANDB_ROOT=$POOL
-LOGS=$WORKDIR/logs/engaging_logs/train
+LOGS=$WORKDIR/logs/logs/train
 mkdir -p "$LOGS" "$CKPT_DIR" "$RESULTS_DIR" "$WANDB_ROOT"
 
 # Abort early if data hasn't been downloaded yet
@@ -50,7 +50,7 @@ fi
 
 if [ ! -d "$WORKDIR/.venv" ]; then
     echo "ERROR: $WORKDIR/.venv not found."
-    echo "On the login node: cd $WORKDIR && module load cuda miniforge && uv sync"
+    echo "On the login node: cd $WORKDIR && # activate your venv: source .venv/bin/activate && uv sync"
     exit 1
 fi
 # One sync on the submit host; compute jobs only execute the venv interpreter (no uv on NFS).
@@ -73,7 +73,7 @@ SBATCH_COMMON="
   --chdir=$WORKDIR
 "
 
-ACTIVATE="module load cuda miniforge &&
+ACTIVATE="# activate your venv: source .venv/bin/activate &&
   export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
     OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 WANDB_DIR=$WANDB_ROOT"
 

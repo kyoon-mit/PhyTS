@@ -133,7 +133,7 @@ class JAXLightningModule(L.LightningModule):
         batch_size = jax.tree.leaves(x)[0].shape[0]
         keys = self._batched_keys(step_key, batch_size)
 
-        # TODO: (Benedict) Add async dispatch to speed up training.
+        # TODO: async dispatch could speed up training here.
         new_model, new_state, new_opt_state, loss, model_output = jax_apply_training_step(
             model=self.jax_model,  # type: ignore
             model_filter_spec=self.jax_model_filter_spec,

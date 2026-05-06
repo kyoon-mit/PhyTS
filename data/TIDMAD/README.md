@@ -17,7 +17,7 @@ data/TIDMAD/
 experiment, recording SQUID magnetometer voltage during an axion dark matter search.
 
 - **Paper:** https://arxiv.org/abs/2406.04378 (NeurIPS 2025 Spotlight)
-- **Original Repository:** https://github.com/jessicafry/TIDMAD
+- **Original Repository:** https://github.com/TIDMAD/TIDMAD
 - **PhyTS HuggingFace:** https://huggingface.co/datasets/PhyTS-team/PhyTS-bench/TIDMAD
 
 There are 20 training files and 20 validation files.

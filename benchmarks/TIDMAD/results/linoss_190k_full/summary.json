@@ -11,6 +11,6 @@
   "n_epochs": 10,
   "final_train_loss": 5.684635644299575e+18,
   "benchmark_score": -1.290926,
-  "ckpt_path": "/rg/perets_prj/ilay.kamai/PhyTS/TimeSeriesPhysics/logs/tidmad_linoss_190k_psd/version_0/checkpoints/checkpoint_step_213248.eqx",
+  "ckpt_path": "",
   "error": null
 }

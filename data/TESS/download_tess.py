@@ -7,13 +7,12 @@ and deletes the local ``TESS/split`` directory so ``data_dir`` is only
 
 Uses ``snapshot_download`` for the remote ``TESS/split/*`` paths; the on-disk
 layout matches ``src/dataloader/tess_dataloader.TESSClassificationDataset``.
-Needs ``uv sync --extra jax`` (pyarrow + huggingface_hub).
+Needs ``uv sync`` (pyarrow + huggingface_hub).
 
 Usage
 -----
-    uv run --extra jax python data/TESS/download_tess.py
-    uv run --extra jax python data/TESS/download_tess.py --where engaging
-    uv run --extra jax python data/TESS/download_tess.py --cache-dir path/to/cache
+    python data/TESS/download_tess.py
+    python data/TESS/download_tess.py --cache-dir path/to/cache
 """
 
 from __future__ import annotations
@@ -34,10 +33,6 @@ except ImportError:  # pragma: no cover
 REPO_ID = "PhyTS-team/PhyTS-bench"
 ALLOW_PATTERN = "TESS/split/*"
 _DEFAULT_CACHE_PARENT = Path(__file__).resolve().parent / ".cache"
-# ORCD Engaging: project mirror under data_engaging/TESS/.cache
-_ENGAGING_CACHE_PARENT = Path(
-    "/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics/data_engaging/TESS/.cache"
-)
 
 
 def flatten_hub_split_into_tess_root(tess_root: Path) -> tuple[int, int]:
@@ -98,26 +93,16 @@ def main() -> None:
         description="Download PhyTS-bench TESS shards into cache/TESS/*.parquet (no TESS/split)."
     )
     parser.add_argument(
-        "--where",
-        choices=("local", "engaging"),
-        default="local",
-        help="Preset for --cache-dir: local → repo data/TESS/.cache; "
-        "engaging → ORCD data_engaging/TESS/.cache. Ignored if --cache-dir is set.",
-    )
-    parser.add_argument(
         "--cache-dir",
         type=Path,
         default=None,
-        help="Root directory passed to Hugging Face snapshot_download. "
-        "Final layout: cache_parent/TESS/*.parquet (Hub TESS/split is flattened). "
-        f"Overrides --where. Default from --where: local={_DEFAULT_CACHE_PARENT}, "
-        f"engaging={_ENGAGING_CACHE_PARENT}",
+        help="Root directory for downloaded data. "
+        "Final layout: cache_dir/TESS/*.parquet (Hub TESS/split is flattened). "
+        f"Default: {_DEFAULT_CACHE_PARENT}",
     )
     args = parser.parse_args()
     if args.cache_dir is not None:
         cache_parent = Path(args.cache_dir).resolve()
-    elif args.where == "engaging":
-        cache_parent = _ENGAGING_CACHE_PARENT.resolve()
     else:
         cache_parent = _DEFAULT_CACHE_PARENT.resolve()
     cache_parent.mkdir(parents=True, exist_ok=True)

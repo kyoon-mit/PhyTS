@@ -18,7 +18,7 @@
 # Before running:
 #   1. Download data (login node only — compute nodes have no internet):
 #        bash benchmarks/TESS/setup_data.sh
-#   2. On the login node: ``module load cuda miniforge && uv sync --extra jax --extra cu13``
+#   2. On the login node: ``# activate your venv: source .venv/bin/activate && uv sync --extra jax --extra cu13``
 #      (same extras this script uses by default).  CPU-only JAX: ``LINOSS_JAX_CUDA_EXTRA=none``.
 #      Batch steps call .venv/bin/python only — not `uv run` on compute nodes.
 #   3. Run from the repo root, or from anywhere — WORKDIR is derived from the
@@ -36,12 +36,12 @@ set -e
 # Resolve repo root from this script so WORKDIR is correct no matter where sbatch was invoked from.
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhysics}"
-DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
+POOL="${TESS_POOL_ROOT:-data}"
+DATA_DIR=$POOL/TESS
 CKPT_DIR=$POOL/checkpoints
 RESULTS_DIR=$POOL/results
 WANDB_ROOT=$POOL
-LOGS=$WORKDIR/logs/engaging_logs/train
+LOGS=$WORKDIR/logs/logs/train
 mkdir -p "$LOGS" "$CKPT_DIR" "$RESULTS_DIR" "$WANDB_ROOT"
 
 # Abort early if data hasn't been downloaded yet
@@ -53,7 +53,7 @@ fi
 
 if [ ! -d "$WORKDIR/.venv" ]; then
     echo "ERROR: $WORKDIR/.venv not found."
-    echo "On the login node: cd $WORKDIR && module load cuda miniforge && uv sync --extra jax --extra cu13"
+    echo "On the login node: cd $WORKDIR && # activate your venv: source .venv/bin/activate && uv sync --extra jax --extra cu13"
     exit 1
 fi
 # Sync on the submit host: LinOSS + CUDA 13 JAX (``cu13``; Engaging default ``cuda`` = 13.1.0).
@@ -88,7 +88,7 @@ SBATCH_COMMON="
 # ``module load cuda`` → toolkit 13.1.0 on Engaging.  JAX wheels still bundle their
 # own CUDA; node driver must satisfy JAX’s CUDA-13 requirements.  XLA mem cap vs dataloader:
 # WANDB_DIR keeps wandb/lightning artifacts on the pool (avoids nested ./TimeSeriesPhysics trees on NFS).
-ACTIVATE="module load cuda miniforge &&
+ACTIVATE="# activate your venv: source .venv/bin/activate &&
   export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
     OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
     XLA_PYTHON_CLIENT_MEM_FRACTION=0.7 WANDB_DIR=$WANDB_ROOT"

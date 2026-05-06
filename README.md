@@ -106,12 +106,10 @@ python benchmarks/foundation/run_benchmark.py \
 
 Results are written to `--out_dir/summary.csv` (default: `results/foundation/`).
 
-TIDMAD denoising score — to evaluate a trained denoiser, run inference to produce denoised HDF5 files and then:
+TIDMAD denoising score — after training, evaluate all variants and compute the denoising score:
 
 ```bash
-python src/tasks/TIDMAD/tidmad_denoising.py \
-  --data_dir <path_to_denoised_h5_files> \
-  --output_dir results/TIDMAD/
+PYTHONPATH=src python benchmarks/TIDMAD/evaluate_all.py
 ```
 
 ---

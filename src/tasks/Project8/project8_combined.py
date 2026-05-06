@@ -1,7 +1,7 @@
 """Combined denoising + GaussianNLL-regression task for Project 8.
 
 Mirrors the structure of ``LitS4CombinedModel`` from
-https://github.com/chreissel/neutrino_project/blob/denoising/src/models/model.py:
+[anonymous repository, available upon acceptance]
 the encoder is expected to return ``(x_denoised, y_preds)`` and the total loss
 is a weighted sum of a denoising loss and a regression loss::
 

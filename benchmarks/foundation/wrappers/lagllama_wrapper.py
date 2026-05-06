@@ -64,7 +64,7 @@ class LagLlamaWrapper(BaseFoundationModel):
         if ckpt_path is None:
             candidates = [
                 Path.home() / ".cache" / "huggingface" / "hub" / "models--time-series-foundation-models--Lag-Llama" / "snapshots",
-                Path("/esat/smcdata/users/kkontras/Image_Dataset/no_backup/checkpoints/lag-llama/lag-llama.ckpt"),
+                Path("checkpoints/lag-llama/lag-llama.ckpt"),
                 Path("checkpoints/lag-llama/lag-llama.ckpt"),
                 Path("lag-llama.ckpt"),
             ]

@@ -84,14 +84,11 @@ Matplotlib **colorbar** (tick labels `Sector …`, same idea as `nan_counting.py
 x-axis **Cadence #** (0 … n−1 via `extent`); the PNG uses a **downsampled** grid
 for Matplotlib (caps in the script) to keep RAM low—see the figure subtitle.
 
-By default, PNGs are written to **`data/TESS/figures`**. With **`--where engaging`**
 (or any data layout where Parquets live under `…/TESS/.cache/TESS/`), the default
-output is **`…/data_engaging/TESS/figures`** on the pool (sibling of `.cache`).
 Use **`--out-dir`** to override.
 
 ```bash
 python data/TESS/visualize_tess.py
-python data/TESS/visualize_tess.py --where engaging
 # optional: python data/TESS/visualize_tess.py --out-dir path/to/figures
 # optional: python data/TESS/visualize_tess.py --cache-dir path/to/cache  # uses path/to/cache/TESS
 ```

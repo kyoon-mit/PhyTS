@@ -51,8 +51,7 @@ class StochasticDepth(nn.Module):
     See :func:`stochastic_depth`.
     """
     def __init__(self, p: float, mode: str) -> None:
-        # TODO(karan): need to upgrade to torchvision==0.11.0 to use StochasticDepth directly
-        # from torchvision.ops import StochasticDepth
+        # torchvision.ops.StochasticDepth could replace this in torchvision>=0.11
         super().__init__()
         self.p = p
         self.mode = mode

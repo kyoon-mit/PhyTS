@@ -2,7 +2,7 @@
 
 ``MixtureMSESpectralLoss`` is a verbatim port of the loss in the original
 neutrino_project ``denoising`` branch
-(https://github.com/chreissel/neutrino_project/blob/denoising/src/models/losses.py):
+([anonymous repository, available upon acceptance]):
 a convex mixture of time-domain MSE and the MSE between the magnitudes of
 the real FFT (along the sequence axis ``dim=1``) of prediction and target.
 """
