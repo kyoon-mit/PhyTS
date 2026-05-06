@@ -20,9 +20,10 @@ checkpoints/
 .venv/
 benchmarks/foundation/.venv/
 
-# IDE
+# IDE / tools
 .vscode/
 .idea/
+.claude/
 
 # SLURM
 slurm/
