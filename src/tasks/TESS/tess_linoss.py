@@ -34,7 +34,7 @@ from models.utils.jax.training import jax_inference
 from models.utils.jax.utils import jax_to_tensor, tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
 from tasks.param_count import attach_scalar_hyperparams, jax_equinox_model_hyper_dict
-from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb
 from tasks.TESS.classification_metrics import log_extended_metrics
 
 
@@ -211,12 +211,6 @@ class TESSLinOSSRegressionMSE(JAXLightningModule):
         self.log("val/rmse", rmse)
         self.log("val/mae", mae)
         self.log("val/r2", 1.0 - ss_res / ss_tot)
-        log_validation_plots_to_wandb(
-            self,
-            kind="regression",
-            y_true=y,
-            y_hat=y_hat,
-        )
 
     def on_test_epoch_start(self):
         self._test_preds: list = []
@@ -357,15 +351,13 @@ class TESSLinOSSClassificationCE(JAXLightningModule):
             float(np.mean(preds[labels == c] == c))
             for c in range(self.num_classes) if np.any(labels == c)
         ]
-        if per_class:
-            self.log("val/balanced_acc", sum(per_class) / len(per_class))
-        log_extended_metrics(self, preds, labels, num_classes=self.num_classes, prefix="val")
-        log_validation_plots_to_wandb(
-            self,
-            kind="classification",
-            y_true=labels,
-            y_hat=preds,
+        bal_acc = (
+            sum(per_class) / len(per_class)
+            if per_class
+            else float(np.mean(preds == labels))
         )
+        self.log("val/balanced_acc", bal_acc)
+        log_extended_metrics(self, preds, labels, num_classes=self.num_classes, prefix="val")
 
     def on_test_epoch_start(self):
         self._test_preds: list = []

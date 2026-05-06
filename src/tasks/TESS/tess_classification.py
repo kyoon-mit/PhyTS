@@ -25,7 +25,7 @@ from tasks.param_count import (
     torch_module_bundle_prefixed,
     torch_nn_parameter_count,
 )
-from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb
 from tasks.TESS.classification_metrics import log_extended_metrics
 
 
@@ -82,6 +82,10 @@ class TESSClassificationCE(L.LightningModule):
         self.log("train/acc", acc, on_step=False, on_epoch=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_preds: list[Tensor] = []
+        self._val_labels: list[Tensor] = []
+
     def validation_step(self, batch, batch_idx):
         loss, preds, labels = self._step(batch)
         acc = (preds == labels).float().mean()
@@ -97,20 +101,18 @@ class TESSClassificationCE(L.LightningModule):
             (preds[labels == c] == c).float().mean().item()
             for c in range(self.num_classes) if (labels == c).any()
         ]
-        if per_class:
-            self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        bal_acc = (
+            sum(per_class) / len(per_class)
+            if per_class
+            else (preds == labels).float().mean().item()
+        )
+        self.log("val/balanced_acc", bal_acc)
         log_extended_metrics(
             self,
             preds.numpy(),
             labels.numpy(),
             num_classes=self.num_classes,
             prefix="val",
-        )
-        log_validation_plots_to_wandb(
-            self,
-            kind="classification",
-            y_true=labels.numpy(),
-            y_hat=preds.numpy(),
         )
 
     def on_test_epoch_start(self):
@@ -268,20 +270,18 @@ class TESSFrozenBackboneClassificationCE(L.LightningModule):
             (preds[labels == c] == c).float().mean().item()
             for c in range(self.num_classes) if (labels == c).any()
         ]
-        if per_class:
-            self.log("val/balanced_acc", sum(per_class) / len(per_class))
+        bal_acc = (
+            sum(per_class) / len(per_class)
+            if per_class
+            else (preds == labels).float().mean().item()
+        )
+        self.log("val/balanced_acc", bal_acc)
         log_extended_metrics(
             self,
             preds.numpy(),
             labels.numpy(),
             num_classes=self.num_classes,
             prefix="val",
-        )
-        log_validation_plots_to_wandb(
-            self,
-            kind="classification",
-            y_true=labels.numpy(),
-            y_hat=preds.numpy(),
         )
 
     def on_test_epoch_start(self):

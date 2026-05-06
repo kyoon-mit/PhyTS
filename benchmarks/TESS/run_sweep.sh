@@ -8,6 +8,8 @@
 #      → prints: sweep_id (e.g. abc123def)
 #
 #   2. Optional: export WANDB_ENTITY=... (else default workspace from wandb.Api())
+#      Optional: export WANDB_PROJECT=... (default: TimeSeriesPhysics; must match
+#      the project passed to ``wandb sweep --project``)
 #
 #   3. Submit agents (from the Engaging login node):
 #        bash benchmarks/TESS/run_sweep.sh \
@@ -20,12 +22,22 @@
 #   with ``LINOSS_JAX_CUDA_EXTRA=cu12`` / ``cpu`` / ``none``) so a shared pool
 #   ``.venv`` keeps equinox/jaxlib even for PyTorch-only sweeps.
 #
+#   Paths (defaults; set ``TESS_POOL_ROOT`` to relocate all pool outputs):
+#   ``TESS_POOL_ROOT``  Shared NFS root (default:
+#                       ``.../orcd/pool/UROP_2025_Summer/TimeSeriesPhysics``):
+#                       data, checkpoints, WANDB_DIR, SLURM logs.
+#   ``TESS_SWEEP_LOGS`` SLURM stdout/stderr directory (default:
+#                       ``$TESS_POOL_ROOT/logs/engaging_logs/sweeps``).
+#   ``TESS_DOWNSAMPLE_LONG_LC`` If set to 1/true (or pass --downsample-long-lc),
+#                       long TESS light curves are decimated 3x when building
+#                       the .npz cache (see src/dataloader/tess_dataloader.py).
+#
 # Each agent is one SLURM job that runs trials from the sweep until
 # wandb stops it (sweep exhausted or time limit reached).
 #
 # Monitor:
 #   squeue -u $USER
-#   wandb sweep status <entity>/TimeSeriesPhysics/<sweep_id>
+#   wandb sweep status <entity>/<WANDB_PROJECT>/<sweep_id>
 
 set -e
 
@@ -35,7 +47,8 @@ POOL="${TESS_POOL_ROOT:-/home/allisone/orcd/pool/UROP_2025_Summer/TimeSeriesPhys
 DATA_DIR=$POOL/data_engaging/TESS/.cache/TESS
 CKPT_DIR=$POOL/checkpoints/sweeps
 WANDB_ROOT=$POOL
-LOGS=$WORKDIR/logs/engaging_logs/sweeps
+# SLURM stdout/stderr (default: under shared pool, not the git checkout)
+LOGS="${TESS_SWEEP_LOGS:-$POOL/logs/engaging_logs/sweeps}"
 mkdir -p "$LOGS" "$CKPT_DIR" "$WANDB_ROOT"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
@@ -49,6 +62,7 @@ while [[ $# -gt 0 ]]; do
         --model_type)  MODEL_TYPE="$2"; shift 2 ;;
         --sweep_id)    SWEEP_ID="$2";   shift 2 ;;
         --n_agents)    N_AGENTS="$2";   shift 2 ;;
+        --downsample-long-lc) export TESS_DOWNSAMPLE_LONG_LC=1; shift ;;
         --jax)         JAX_MODE=true;   shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -100,7 +114,8 @@ fi
 
 ENTITY="${WANDB_ENTITY:-$(WANDB_SILENT=true "$PYTHON_EXE" -c 'import wandb; print(wandb.Api().viewer.entity)' 2>/dev/null)}"
 [ -z "$ENTITY" ] && { echo >&2 'Set WANDB_ENTITY or run wandb login'; exit 1; }
-SWEEP_PATH="$ENTITY/TimeSeriesPhysics/$SWEEP_ID"
+WANDB_PROJECT="${WANDB_PROJECT:-TimeSeriesPhysics}"
+SWEEP_PATH="$ENTITY/$WANDB_PROJECT/$SWEEP_ID"
 
 # ── SLURM common ──────────────────────────────────────────────────────────────
 SBATCH_COMMON="
@@ -115,7 +130,13 @@ SBATCH_COMMON="
 
 # Classification + regression sweeps use the same TESS root (Hub shards mirrored
 # into .../.cache/TESS). Override via TESS_DATA_DIR if needed.
-BASE_ENV="module load cuda miniforge &&
+# Force TESS_DOWNSAMPLE_LONG_LC inside the job so sbatch does not inherit a stale login-node value.
+if [[ -n "${TESS_DOWNSAMPLE_LONG_LC:-}" ]]; then
+    DOWNSAMPLE_PREFIX="export TESS_DOWNSAMPLE_LONG_LC=$TESS_DOWNSAMPLE_LONG_LC && "
+else
+    DOWNSAMPLE_PREFIX="unset TESS_DOWNSAMPLE_LONG_LC; "
+fi
+BASE_ENV="module load cuda miniforge && $DOWNSAMPLE_PREFIX
   export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8 \
     OPENBLAS_NUM_THREADS=8 PANDAS_USE_PYARROW=1 \
     WANDB_DIR=$WANDB_ROOT TESS_DATA_DIR=$DATA_DIR TESS_CKPT_DIR=$CKPT_DIR"

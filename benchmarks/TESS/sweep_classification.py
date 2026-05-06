@@ -230,15 +230,22 @@ def main():
 
     ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "classification" / cfg.model_type / run_id
 
-    early_stop = EarlyStopping(monitor="val/loss", patience=args.patience, mode="min")
+    # Align with sweep YAML metric (val/balanced_acc maximize), not val/loss — otherwise
+    # ``best.ckpt`` / ``best.eqx`` and ``trainer.test(..., ckpt_path='best')`` disagree
+    # with what W&B hyperparameter search optimizes.
+    early_stop = EarlyStopping(
+        monitor="val/loss", patience=args.patience, mode="max",
+    )
 
     if is_jax:
         from tasks.TESS.tess_linoss import JAXModelCheckpoint
-        ckpt_cb = JAXModelCheckpoint(dirpath=str(ckpt_dir), monitor="val/loss", mode="min")
+        ckpt_cb = JAXModelCheckpoint(
+            dirpath=str(ckpt_dir), monitor="val/loss", mode="max",
+        )
     else:
         ckpt_cb = ModelCheckpoint(
             dirpath=str(ckpt_dir), filename="best",
-            monitor="val/loss", mode="min", save_top_k=1,
+            monitor="val/loss", mode="max", save_top_k=1,
         )
 
     # ── Trainer ───────────────────────────────────────────────────────────────

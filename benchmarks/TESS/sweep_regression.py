@@ -218,15 +218,16 @@ def main():
     # ── Callbacks ─────────────────────────────────────────────────────────────
     ckpt_dir = Path(os.environ.get("TESS_CKPT_DIR", args.ckpt_dir)) / "regression" / cfg.model_type / run_id
 
-    early_stop = EarlyStopping(monitor="val/loss", patience=args.patience, mode="min")
+    # Match sweep YAML (val/r2 maximize); see sweep_classification.py for rationale.
+    early_stop = EarlyStopping(monitor="val/r2", patience=args.patience, mode="max")
 
     if is_jax:
         from tasks.TESS.tess_linoss import JAXModelCheckpoint
-        ckpt_cb = JAXModelCheckpoint(dirpath=str(ckpt_dir), monitor="val/loss", mode="min")
+        ckpt_cb = JAXModelCheckpoint(dirpath=str(ckpt_dir), monitor="val/r2", mode="max")
     else:
         ckpt_cb = ModelCheckpoint(
             dirpath=str(ckpt_dir), filename="best",
-            monitor="val/loss", mode="min", save_top_k=1,
+            monitor="val/r2", mode="max", save_top_k=1,
         )
 
     # ── Trainer ───────────────────────────────────────────────────────────────

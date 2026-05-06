@@ -37,7 +37,7 @@ from tasks.param_count import (
     torch_module_bundle_prefixed,
     torch_nn_parameter_count,
 )
-from tasks.TESS.eval_plots import log_test_plots_to_wandb, log_validation_plots_to_wandb
+from tasks.TESS.eval_plots import log_test_plots_to_wandb
 
 
 def _load_seq2seq_backbone(ckpt_path: str, cfg_path: str) -> nn.Module:
@@ -120,12 +120,6 @@ class TESSRegressionMSE(L.LightningModule):
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
         self.log("val/mae", (y_hat - y).abs().mean())
-        log_validation_plots_to_wandb(
-            self,
-            kind="regression",
-            y_true=y.numpy(),
-            y_hat=y_hat.numpy(),
-        )
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []
@@ -263,12 +257,6 @@ class TESSFrozenBackboneRegressionMSE(L.LightningModule):
         self.log("val/r2", 1.0 - ss_res / ss_tot)
         self.log("val/rmse", (y_hat - y).pow(2).mean().sqrt())
         self.log("val/mae", (y_hat - y).abs().mean())
-        log_validation_plots_to_wandb(
-            self,
-            kind="regression",
-            y_true=y.numpy(),
-            y_hat=y_hat.numpy(),
-        )
 
     def on_test_epoch_start(self):
         self._test_preds: list[Tensor] = []

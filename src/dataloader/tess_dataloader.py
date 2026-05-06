@@ -18,6 +18,11 @@ split by class label so each split sees every class.
 Light curves vary in length (min 542, median ~1068, max ~3917).  We pad
 or truncate to ``LC_LEN`` (1024) to mirror the Kepler loader and align
 with foundation models that prefer power-of-two windows.
+
+Optional: set env ``TESS_DOWNSAMPLE_LONG_LC`` to a truthy value (e.g. ``1``)
+to decimate flux sequences longer than ``THRESHOLD_FOR_DOWNSAMPLING`` by
+``DOWNSAMPLE_FACTOR`` (10 min → 30 min cadence). Only ``flux`` is cached;
+that stride matches the cadence change. Uses a separate ``.npz`` cache file.
 """
 
 from __future__ import annotations
@@ -40,11 +45,41 @@ CLASS_NAMES = [
 CLASS_TO_IDX = {c: i for i, c in enumerate(CLASS_NAMES)}
 LC_LEN = 1024  # canonical length (pad / truncate)
 
+# Long light curves (TESS 10 min cadence): optional decimation to ~30 min cadence.
+# On/off: env ``TESS_DOWNSAMPLE_LONG_LC`` truthy (see ``benchmarks/TESS/create_sweeps_and_submit.sh``).
+# Uses a separate ``.npz`` cache filename when enabled.
+THRESHOLD_FOR_DOWNSAMPLING = 1500
+DOWNSAMPLE_FACTOR = 3
+
 HF_REPO_ID = "PhyTS-team/PhyTS-bench"
 HF_FILES = {
     "classification": "TESS/tess_classification.parquet",
     "regression":     "TESS/tess_regression.parquet",
 }
+
+
+def _env_downsample_long_lc() -> bool:
+    """True if long light curves should be cadence-decimated (10 min → 30 min)."""
+    v = os.environ.get("TESS_DOWNSAMPLE_LONG_LC", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _maybe_downsample_long(flux_1d: np.ndarray) -> np.ndarray:
+    """Every ``DOWNSAMPLE_FACTOR``-th sample when enabled and length is above threshold."""
+    if not _env_downsample_long_lc():
+        return flux_1d
+    if flux_1d.shape[0] <= THRESHOLD_FOR_DOWNSAMPLING:
+        return flux_1d
+    return flux_1d[::DOWNSAMPLE_FACTOR]
+
+
+def _tess_npz_basename(task: str) -> str:
+    """Base filename (no directory) for the materialised ``.npz`` cache."""
+    if _env_downsample_long_lc():
+        return (
+            f"tess_{task}_gt{THRESHOLD_FOR_DOWNSAMPLING}_ds{DOWNSAMPLE_FACTOR}.npz"
+        )
+    return f"tess_{task}.npz"
 
 
 def _fill_nans(x: np.ndarray) -> np.ndarray:
@@ -96,15 +131,13 @@ def _parse_parquet_to_npz(parquet_path: Path, npz_path: Path, *, task: str) -> N
 
     flux_lists = table["flux"].to_pylist()
     tics = np.asarray(table["TIC"].to_pylist(), dtype=np.int64)
-    n_valid = np.array(
-        [min(len(lst), LC_LEN) for lst in flux_lists],
-        dtype=np.int32,
-    )
-
+    n_valid = np.empty(len(flux_lists), dtype=np.int32)
     fluxes = np.empty((len(flux_lists), LC_LEN), dtype=np.float32)
     for i, lst in enumerate(flux_lists):
         f = np.asarray(lst, dtype=np.float32)
         f = _fill_nans(f)
+        f = _maybe_downsample_long(f)
+        n_valid[i] = min(int(f.shape[0]), LC_LEN)
         fluxes[i] = _pad_or_truncate(f)
 
     npz_path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,11 +176,13 @@ def load_tess(
 
     Legacy ``.npz`` files without ``n_valid`` are still loaded; missing entries
     are treated as full-length valid sequences (all ``LC_LEN`` timesteps).
+
+    Cache path depends on ``TESS_DOWNSAMPLE_LONG_LC`` (see module constants).
     """
     if task not in HF_FILES:
         raise ValueError(f"task must be 'classification' or 'regression', got {task!r}")
     cache_dir = Path(cache_dir)
-    npz_path = cache_dir / f"tess_{task}.npz"
+    npz_path = cache_dir / _tess_npz_basename(task)
     if not npz_path.exists():
         # Match the layout the earlier HF_HOME-based download wrote to
         # (data/.cache/hf/hub/...) so partial downloads resume cleanly.

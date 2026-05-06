@@ -70,3 +70,34 @@ class TransformerModel(nn.Module):
             x = x.mean(dim=1)
 
         return self.decoder(x)
+
+
+class TransformerClassifier(TransformerModel):
+    """Same architecture as :class:`TransformerModel`, Lightning-friendly constructor.
+
+    PyTorch Lightning YAML and sweep code use ``seq_len``, ``nhead``,
+    ``num_layers``, and ``dim_feedforward`` instead of ``max_len``, ``n_heads``,
+    ``n_layers``, and ``d_ff``.
+    """
+
+    def __init__(
+        self,
+        seq_len: int = 4096,
+        d_input: int = 1,
+        d_output: int = 10,
+        d_model: int = 64,
+        nhead: int = 4,
+        num_layers: int = 4,
+        dim_feedforward: int = 256,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__(
+            d_input=d_input,
+            d_output=d_output,
+            d_model=d_model,
+            n_heads=nhead,
+            n_layers=num_layers,
+            d_ff=dim_feedforward,
+            dropout=dropout,
+            max_len=seq_len,
+        )

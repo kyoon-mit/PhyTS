@@ -3,8 +3,8 @@
 Regression: scatter true vs predicted frot + residual histogram.
 Classification: confusion matrix + per-class accuracy bars.
 
-Validation figures log every :const:`VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS`; test figures log once per
-``trainer.test`` when :func:`log_test_plots_to_wandb` is called (W&B active).
+Test figures log once per ``trainer.test`` when :func:`log_test_plots_to_wandb` is called
+(W&B active).
 """
 
 from __future__ import annotations
@@ -19,9 +19,6 @@ import numpy as np
 
 if TYPE_CHECKING:
     import lightning as L
-
-# Log validation figures to wandb only when (epoch index) % N == 0 — i.e. after epochs 0, 10, 20, …
-VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS = 10
 
 
 def regression_results_dict(y_true: np.ndarray, y_hat: np.ndarray) -> dict:
@@ -143,64 +140,6 @@ def _dm_label_names(pl_module, split: Literal["val", "test"]) -> list[str] | Non
         # May be a class attribute (e.g. TESSClassificationDataset) — materialize to list.
         return list(ds.label_names)
     return None
-
-
-def _val_label_names(pl_module) -> list[str] | None:
-    return _dm_label_names(pl_module, "val")
-
-
-def log_validation_plots_to_wandb(
-    pl_module: L.LightningModule,
-    *,
-    kind: Literal["regression", "classification"],
-    y_true: np.ndarray,
-    y_hat: np.ndarray,
-    label_names: list[str] | None = None,
-    model_name: str | None = None,
-) -> None:
-    """If a wandb run is active, log validation figures aligned with Lightning's W&B charts.
-
-    Figures are uploaded only every :attr:`VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS` validation
-    (after epochs 0, 10, 20, … when that constant is 10).
-    """
-    try:
-        import wandb
-    except ImportError:
-        return
-    if wandb.run is None:
-        return
-    tr = getattr(pl_module, "trainer", None)
-    if tr is None or getattr(tr, "sanity_checking", False):
-        return
-
-    ep = int(getattr(pl_module, "current_epoch", getattr(tr, "current_epoch", 0)))
-    if ep % VAL_PLOT_TO_WANDB_EVERY_N_EPOCHS != 0:
-        return
-
-    name = model_name or pl_module.__class__.__name__
-    # Match Lightning's WandbLogger: it logs metrics with keys like trainer/global_step
-    # and does not pass wandb.log(step=...). Raw wandb.log(..., step=epoch) fights wandb's
-    # internal step counter (train + val epoch logs advance it twice per epoch).
-    gs = int(tr.global_step)
-
-    if kind == "regression":
-        results = regression_results_dict(y_true, y_hat)
-        fig = make_regression_figure(results, name)
-        wandb.log({"val/regression_plot": wandb.Image(fig), "trainer/global_step": gs})
-        plt.close(fig)
-        return
-
-    # classification
-    names = label_names or _val_label_names(pl_module)
-    if names is None:
-        n_cls = int(getattr(pl_module, "num_classes", 0))
-        if n_cls <= 0:
-            n_cls = int(max(np.max(y_true), np.max(y_hat))) + 1
-        names = [str(i) for i in range(n_cls)]
-    results = classification_results_dict(y_true, y_hat, names)
-    fig = make_classification_figure(results, name, names)
-    wandb.log({"val/classification_plot": wandb.Image(fig), "trainer/global_step": gs})
-    plt.close(fig)
 
 
 def log_test_plots_to_wandb(
