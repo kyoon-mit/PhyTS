@@ -4,8 +4,7 @@ Shared metric functions for forecasting / denoising / embedding evaluation.
 All functions accept numpy float arrays and return either a scalar or a
 per-sample 1-D array (so downstream code can aggregate however it likes).
 
-SNR convention: power(reference) / power(prediction - reference).  Higher is
-better; matches `benchmarks/toy/eval_pipeline.py::_waveform_snr`.
+SNR convention: power(reference) / power(prediction - reference).  Higher is better.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ def rmse(pred: np.ndarray, true: np.ndarray) -> np.ndarray:
 def waveform_snr(signal: np.ndarray, reference: np.ndarray) -> np.ndarray:
     """Per-sample SNR: power(reference) / power(signal - reference).  Shape (B,).
 
-    Matches `benchmarks/toy/eval_pipeline.py::_waveform_snr`.
+    Higher is better; power(reference) / power(signal - reference).
     """
     ref_power = np.mean(reference ** 2, axis=-1)
     noise_power = np.mean((signal - reference) ** 2, axis=-1)
@@ -56,7 +55,7 @@ def snr_improvement(
 def spectral_mse(pred: np.ndarray, true: np.ndarray) -> np.ndarray:
     """Per-sample MSE between power spectral densities.  Shape (B,).
 
-    Mirrors the `PSDLoss` used in `src/tasks/toy/toy_denoising.py`.
+    Aligned with the PSD-based SNR benchmark metric (TIDMAD Benchmark 1).
     """
     psd_pred = np.abs(np.fft.rfft(pred, axis=-1)) ** 2
     psd_true = np.abs(np.fft.rfft(true, axis=-1)) ** 2
@@ -184,7 +183,7 @@ def bootstrap_ci(
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# SNR-stratified aggregation (mirrors src/tasks/toy/toy_regression.py::SNR_BINS)
+# SNR-stratified aggregation
 # ────────────────────────────────────────────────────────────────────────────
 
 SNR_BINS: dict[str, tuple[float, float]] = {

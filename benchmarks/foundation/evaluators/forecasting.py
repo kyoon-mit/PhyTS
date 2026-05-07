@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
 
-from dataloader.toy_dataloader import Param
+from dataloader.tidmad_dataloader import Param
 
 from .metrics import (
     bootstrap_ci,

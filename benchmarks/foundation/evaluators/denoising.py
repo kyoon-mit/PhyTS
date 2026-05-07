@@ -1,14 +1,10 @@
 """
 Denoising evaluator.
 
-Runs the wrapped foundation model on the full 640-sample noisy signal, passes
-the result through the existing trained regressors (raw-input and clean-input)
-so the output CSV matches the schema produced by
-`benchmarks/toy/eval_pipeline.py` and can be consumed by the existing
-`compare_pipelines.py` without changes.
-
-For MOMENT, `wrapper.denoise(...)` hits the native reconstruction head.
-For all other models it falls back to `denoise_via_forecast` (bidirectional).
+Runs the wrapped foundation model on the noisy signal and passes the result
+through trained regressors (raw-input and clean-input) to measure denoising
+quality. For MOMENT, `wrapper.denoise(...)` hits the native reconstruction head;
+for all other models it falls back to `denoise_via_forecast` (bidirectional).
 """
 
 from __future__ import annotations
@@ -17,7 +13,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from dataloader.toy_dataloader import Param
+from dataloader.tidmad_dataloader import Param
 
 from .metrics import mse as _mse, spectral_mse as _spectral_mse, waveform_snr
 from ..wrappers.base import BaseFoundationModel

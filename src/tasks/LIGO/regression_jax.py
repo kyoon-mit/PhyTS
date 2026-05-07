@@ -1,7 +1,6 @@
 """JAX/LinOSS regression tasks for LIGO gravitational-wave strain data.
 
-Mirrors ``tasks.toy.toy_regression_jax.LinOSSToyRegression`` but targets LIGO
-physical parameters (e.g. ``chirp_mass``) and uses a Gaussian NLL loss.
+Targets LIGO physical parameters (e.g. ``chirp_mass``) using a Gaussian NLL loss.
 
 Batch layout (from ``LIGODataModule.__getitem__``)::
 

@@ -1,12 +1,7 @@
-"""
-Created on Mon June 2 2024
-@author: TIDMAD Team
-This code analyzes pre-processed HDF5 files with pre-chunked time series data
-to produce Benchmark 1: Denoising Score.
+"""Compute TIDMAD Benchmark 1 (Denoising Score) from pre-chunked HDF5 files.
 
 The data is already in one-second chunks with pre-calculated peak frequencies.
-This code is parallelized with python concurrent.futures. With 8 cores, processing
-takes approximately 5-10 minutes depending on file count.
+Parallel processing via concurrent.futures; with 8 cores takes ~5-10 minutes.
 """
 import numpy as np
 import h5py as h5

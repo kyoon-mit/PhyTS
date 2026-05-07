@@ -16,8 +16,8 @@ All outputs land in ``out_dir``.  Plots are saved as PNG at 150 DPI.
 Usage
 -----
     python benchmarks/foundation/results/plotting.py \
-        --summary plots/toy/foundation/summary.csv \
-        --out_dir plots/toy/foundation/plots
+        --summary results/foundation/summary.csv \
+        --out_dir results/foundation/plots
 """
 
 from __future__ import annotations
@@ -304,9 +304,9 @@ def generate_all(summary_csv: Path, out_dir: Path) -> list[Path]:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--summary", default="plots/toy/foundation/summary.csv",
+    p.add_argument("--summary", default="results/foundation/summary.csv",
                    help="Aggregated summary.csv from run_benchmark.py")
-    p.add_argument("--out_dir", default="plots/toy/foundation/plots",
+    p.add_argument("--out_dir", default="results/foundation/plots",
                    help="Directory to write PNG plots")
     args = p.parse_args()
     generate_all(Path(args.summary), Path(args.out_dir))

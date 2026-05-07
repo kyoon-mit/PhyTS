@@ -6,8 +6,8 @@ can load it transparently).
 
 Usage:
     python tools/save_checkpoint.py \
-        --cfg  configs/toy/train_toy_classical_denoising.yaml \
-        --out  checkpoints/toy_classical_denoising/best.ckpt
+        --cfg  configs/TIDMAD/train_tidmad_classical_denoising.yaml \
+        --out  checkpoints/tidmad_classical_denoising/best.ckpt
 """
 
 import argparse

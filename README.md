@@ -190,6 +190,8 @@ Makefile          # Environment setup targets
 
 ## Models
 
+### Supervised (trained per domain)
+
 | Model | Class | Backend |
 |-------|-------|---------|
 | S4D | `models.s4d.S4Model` | PyTorch |
@@ -198,6 +200,19 @@ Makefile          # Environment setup targets
 | 1D CNN | `models.conv1d_regressor.Conv1DRegressor` | PyTorch |
 
 Tasks are organized by domain, not by model. Any model can be swapped into any compatible task by changing the `model.class_path` in the YAML config.
+
+### Foundation models (zero-shot and fine-tuned)
+
+| Model | Reference |
+|-------|-----------|
+| MOMENT | `benchmarks/foundation/wrappers/moment_wrapper.py` |
+| Chronos | `benchmarks/foundation/wrappers/chronos_wrapper.py` |
+| TimesFM | `benchmarks/foundation/wrappers/timesfm_wrapper.py` |
+| Time-MoE | `benchmarks/foundation/wrappers/timemoe_wrapper.py` |
+| MOIRAI | `benchmarks/foundation/wrappers/moirai_wrapper.py` |
+| Granite TTM | `benchmarks/foundation/wrappers/granite_ttm_wrapper.py` |
+
+Foundation models are evaluated zero-shot and with lightweight fine-tuning via `benchmarks/foundation/run_benchmark.py`. Each wrapper exposes a uniform interface (`forecast`, `denoise`, `embed`) so the same evaluators run across all models.
 
 ---
 

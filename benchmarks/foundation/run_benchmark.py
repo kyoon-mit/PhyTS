@@ -3,17 +3,11 @@ Unified foundation-model benchmarking pipeline.
 
 Usage
 -----
-  # Zero-shot: MOMENT, all 3 tasks
+  # Zero-shot: MOMENT, all 3 tasks on TIDMAD
   python benchmarks/foundation/run_benchmark.py \
-      --data_dir data/toy/sinusoidal_signal_white_noise \
-      --out_dir  plots/toy/foundation \
       --models   moment \
       --tasks    forecasting denoising embedding \
-      --mode     zero_shot \
-      --baseline_regressor_raw_ckpt   checkpoints/toy_mlp_regression_raw/best.ckpt \
-      --baseline_regressor_raw_cfg    configs/toy/train_toy_mlp_regression_raw.yaml \
-      --baseline_regressor_clean_ckpt checkpoints/toy_mlp_regression_clean/best.ckpt \
-      --baseline_regressor_clean_cfg  configs/toy/train_toy_mlp_regression_clean.yaml
+      --mode     zero_shot
 
   # Smoke test: only 2 batches
   python benchmarks/foundation/run_benchmark.py \
@@ -38,7 +32,7 @@ for p in (str(_REPO), str(_HERE.parent), str(_REPO / "src")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from dataloader.toy_dataloader import ToyDataModule, Param
+from dataloader.tidmad_dataloader import TIDMADDataModule, Param
 from foundation.evaluators.forecasting import evaluate_forecasting
 from foundation.evaluators.denoising import evaluate_denoising
 from foundation.evaluators.embedding_regression import evaluate_embedding_regression
@@ -86,7 +80,7 @@ def _get_wrapper(name: str):
 # ────────────────────────────────────────────────────────────────────────────
 
 def _load_trained_model(ckpt_path: str, cfg_path: str, device: torch.device):
-    """Mirror of `benchmarks/toy/eval_pipeline.py::load_model`."""
+    """Load a trained Lightning task's inner model from a checkpoint."""
     import importlib
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
@@ -110,8 +104,8 @@ def _load_trained_model(ckpt_path: str, cfg_path: str, device: torch.device):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_dir", default="data/toy/sinusoidal_signal_white_noise")
-    p.add_argument("--out_dir",  default="plots/toy/foundation")
+    p.add_argument("--data_dir", default="data/TIDMAD/preprocessed")
+    p.add_argument("--out_dir",  default="results/foundation")
     p.add_argument("--models",   nargs="+", required=True,
                    help="One or more of: moment chronos timesfm timemoe moirai lagllama granite_ttm")
     p.add_argument("--tasks",    nargs="+", default=["forecasting"],
@@ -132,7 +126,7 @@ def main():
     p.add_argument("--head_epochs", type=int, default=50,
                    help="Epochs to train the MLP head on frozen embeddings")
     p.add_argument("--target_params", nargs="+",
-                   default=["amplitude", "frequency_hz", "phase_rad"])
+                   default=["frequency_hz", "amplitude", "snr"])
 
     # Fine-tuning
     p.add_argument("--finetune_epochs", type=int, default=20)
@@ -180,7 +174,7 @@ def main():
     # Append to existing summary.csv so concurrent Condor jobs don't clobber
     # each other.  If you want a fresh run, delete the file manually first.
 
-    dm = ToyDataModule(
+    dm = TIDMADDataModule(
         data_dir=args.data_dir,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -309,9 +303,7 @@ def main():
                         target_idx=target_idx, device=args.device,
                         max_batches=args.max_test_batches,
                     )
-                    # Write to plots/toy/{model}_{mode}/results.csv so
-                    # compare_pipelines.py picks it up.
-                    compare_dir = Path("plots/toy") / f"{model_name}_{mode}"
+                    compare_dir = Path(args.out_dir) / f"{model_name}_{mode}"
                     save_denoise_csv(
                         compare_dir,
                         y_true=res["y_true"],

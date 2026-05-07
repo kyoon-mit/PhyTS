@@ -7,13 +7,9 @@ Flow
    `wrapper.embed()`.  Cache them to avoid recomputing for the regression
    head's training loop.
 2. Train a lightweight MLP on the frozen embeddings to predict the physical
-   parameters [amplitude, frequency_hz, phase_rad].  Mirrors the architecture
-   of `src/models/mlp.py::MLPRegressor` but takes d_embed as input.
-3. Evaluate on the test set with the same metrics the existing regression
-   task logs (`src/tasks/toy/toy_regression.py`):
-       - per-parameter RMSE
-       - SNR-stratified RMSE using the same SNR_BINS
-4. Also fit a Ridge regressor as a "linear probe" baseline -- a high linear-probe
+   parameters (e.g. [frequency_hz, amplitude, snr] for TIDMAD).
+3. Evaluate on the test set: per-parameter RMSE and SNR-stratified RMSE.
+4. Also fit a Ridge regressor as a "linear probe" baseline — a high linear-probe
    R² means the embedding has linearly-accessible physical information.
 """
 
@@ -27,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from dataloader.toy_dataloader import Param
+from dataloader.tidmad_dataloader import Param
 
 from .metrics import SNR_BINS, stratified_rmse
 from ..wrappers.base import BaseFoundationModel

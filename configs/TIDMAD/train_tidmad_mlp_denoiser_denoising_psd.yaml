@@ -26,7 +26,7 @@ trainer:
       name: tidmad_mlp_denoiser_denoising_psd
 
 model:
-  class_path: tasks.toy.toy_denoising.DenoisingPSD
+  class_path: tasks.TIDMAD.pytorch_denoising.TIDMADDenoisingPSD
   init_args:
     lr: 1.0e-3
     lr_decay: 0.99

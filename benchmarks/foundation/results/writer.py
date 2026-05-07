@@ -1,16 +1,11 @@
-"""
-CSV output for the foundation-model benchmark.
-
-The denoising writer produces a file that is column-compatible with the
-existing `benchmarks/toy/eval_pipeline.py::save_results_csv` output, so the
-existing `compare_pipelines.py` auto-discovers it without modification.
+"""CSV output for the foundation-model benchmark.
 
 Output directories
 ------------------
-plots/toy/{model}_{mode}/results.csv                        -- denoising (compare-compatible)
-{out_dir}/{model}/forecast_results.csv                      -- forecasting
-{out_dir}/{model}/embedding_results.csv                     -- embedding+regression
-{out_dir}/summary.csv                                       -- aggregated comparison table
+{out_dir}/{model}_{mode}/results.csv   -- denoising
+{out_dir}/{model}/forecast_results.csv -- forecasting
+{out_dir}/{model}/embedding_results.csv -- embedding+regression
+{out_dir}/summary.csv                  -- aggregated comparison table
 """
 
 from __future__ import annotations
@@ -43,8 +38,7 @@ def save_denoise_csv(
     The column order is: snr_gt, snr_raw, snr_denoised,
     then per-parameter {name}_true, {name}_raw, {name}_denoised, {name}_signal.
 
-    This lets the existing `benchmarks/toy/compare_pipelines.py` pick up the
-    file automatically when placed at `plots/toy/*/results.csv`.
+    Writes to `{out_dir}/results.csv`.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

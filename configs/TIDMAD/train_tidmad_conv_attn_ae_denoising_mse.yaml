@@ -25,7 +25,7 @@ trainer:
       name: tidmad_conv_attn_ae_denoising_mse
 
 model:
-  class_path: tasks.toy.toy_denoising.DenoisingMSE
+  class_path: tasks.TIDMAD.pytorch_denoising.TIDMADDenoisingMSE
   init_args:
     lr: 1.0e-3
     lr_decay: 0.99
