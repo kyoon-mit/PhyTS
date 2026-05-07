@@ -33,15 +33,15 @@ def torch_model_parameter_hyper_dict(module: nn.Module) -> dict[str, Any]:
     """Totals to attach with :func:`attach_scalar_hyperparams` onto ``LightningModule.hparams``.
 
     Includes optional ``model_s4_analytic_num_parameters_nn`` when ``module``
-    stacks :class:`~models.s4d.S4Model` / :class:`~models.s4d_seq2seq.S4ModelSeq2Seq`
-    kernels (matches :func:`~models.s4d.count_s4model_nn_parameters`).
+    is an :class:`~models.s4d.S4Model`
+    (matches :func:`~models.s4d.count_s4model_nn_parameters`).
     """
     out: dict[str, Any] = {
         "model_num_parameters_nn": torch_nn_parameter_count(module),
         "model_trainable_parameters_nn": torch_nn_trainable_parameter_count(module),
     }
     name = type(module).__name__
-    if name in ("S4Model", "S4ModelSeq2Seq"):
+    if name == "S4Model":
         layer0 = module.s4_layers[0]
         from models.s4d import count_s4model_nn_parameters
 

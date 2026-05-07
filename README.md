@@ -195,11 +195,13 @@ Makefile          # Environment setup targets
 | Model | Class | Backend |
 |-------|-------|---------|
 | S4D | `models.s4d.S4Model` | PyTorch |
-| S4D Seq2Seq | `models.s4d_seq2seq.S4ModelSeq2Seq` | PyTorch |
 | LinOSS | `models.linoss.LinOSS` | JAX / Equinox |
-| 1D CNN | `models.conv1d_regressor.Conv1DRegressor` | PyTorch |
+| 1D CNN (LIGO) | `models.conv1d_regressor.ResNet1DRegressor` | PyTorch |
+| 1D CNN (TESS) | `models.conv.ConvClassifier` | PyTorch |
+| Conv-AE (TIDMAD) | `models.conv_ae.ConvAE` | PyTorch |
+| 1D CNN (Project 8) | `models.conv_regressor.Conv1DRegressor` | PyTorch |
 
-Tasks are organized by domain, not by model. Any model can be swapped into any compatible task by changing the `model.class_path` in the YAML config.
+Tasks are organized by domain; configs live in `configs/<domain>/`. Any model can be swapped into any compatible task by changing `model.class_path` in the YAML.
 
 ### Foundation models (zero-shot and fine-tuned)
 
