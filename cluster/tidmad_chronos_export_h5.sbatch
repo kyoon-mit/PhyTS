@@ -23,8 +23,10 @@
 #
 # Optional env vars:
 #   MODEL_SIZE  — Chronos model size: tiny/small/base/large (default: tiny)
-#   STRIDE      — export every Nth chunk (default: 10, matches --coarse)
+#   STRIDE      — export every Nth chunk (default: 50)
 #   BATCH_SIZE  — sub-window batch size (default: 8)
+#   SUB_BATCH   — inner chunk sub-batch for Chronos predict (default: 512 for tiny, 8 for base)
+#   NUM_SAMPLES — forecast samples; effective GPU batch = SUB_BATCH × NUM_SAMPLES (default: 20 tiny, 5 base)
 
 set -euo pipefail
 
@@ -52,5 +54,7 @@ srun --ntasks=1 \
       --scale_path  data/TIDMAD/preprocessed/scale.npy \
       --out_dir     benchmarks/TIDMAD/results/h5_export/chronos_${MODEL_SIZE} \
       --batch_size  ${BATCH_SIZE:-8} \
+      ${SUB_BATCH:+--sub_batch ${SUB_BATCH}} \
+      ${NUM_SAMPLES:+--num_samples ${NUM_SAMPLES}} \
       --stride      ${STRIDE:-50}
   "

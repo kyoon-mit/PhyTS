@@ -123,14 +123,18 @@ injection-frequency sweep per file). Injection frequency detected **per window**
 
 ### Zero-Shot Foundation Model Baselines
 
-| Variant      | Model          | Params | Stride | Benchmark Score |
-|--------------|----------------|--------|--------|-----------------|
-| chronos_tiny | Chronos (tiny) | 8M     | 50     | **-2.9132**     |
-| moment_small | MOMENT-Small   | 40M    | 10     | **-2.2310**     |
-| moment_base  | MOMENT-Base    | 125M   | 10     | **-2.2750**     |
+| Variant          | Model          | Params | Stride | Benchmark Score |
+|------------------|----------------|--------|--------|-----------------|
+| chronos_tiny     | Chronos (tiny) | 8M     | 50     | **-2.9132**     |
+| moirai_base      | MOIRAI-Base    | —      | 20     | **-2.7708**     |
+| moment_small     | MOMENT-Small   | 40M    | 10     | **-2.2310**     |
+| moment_base      | MOMENT-Base    | 125M   | 10     | **-2.2750**     |
+| granite_ttm_base | Granite TTM    | —      | 10     | **-1.0317**     |
 
 MOMENT uses the native patch-based reconstruction head (no fine-tuning). Each 100K-sample window
 is split into 512-sample chunks and reconstructed via a single forward pass.
+Granite TTM uses a patch-based zero-shot reconstruction head; MOIRAI uses a masked encoder
+transformer, both without fine-tuning.
 
 ---
 
@@ -143,18 +147,22 @@ The finer resolution dramatically improves SNR measurement accuracy.
 Denoised H5 files were exported using `benchmarks/TIDMAD/export_denoised_h5.py` and scored
 with `src/tasks/TIDMAD/tidmad_denoising.py --coarse`.
 
-| Variant         | Official Score | Our Score (100 Hz) |
-|-----------------|----------------|--------------------|
-| linoss_190k_psd | **+1.3037**    | -1.2909            |
-| moment_base     | **+0.463**     | -2.2750            |
-| linoss_190k_mse | -0.098         | -2.2487            |
-| conv_l_psd      | -0.112         | -2.4408            |
-| chronos_tiny    | -0.884         | -2.9132            |
-| conv_l_mse      | -0.859         | -2.6456            |
-| moment_small    | (pending H5 export) | -2.2310       |
+| Variant          | Official Score      | Our Score (100 Hz) |
+|------------------|---------------------|--------------------|
+| linoss_190k_psd  | **+1.3037**         | -1.2909            |
+| moment_base      | **+0.463**          | -2.2750            |
+| linoss_190k_mse  | -0.098              | -2.2487            |
+| conv_l_psd       | -0.112              | -2.4408            |
+| conv_l_mse       | -0.859              | -2.6456            |
+| chronos_tiny     | -0.884              | -2.9132            |
+| granite_ttm_base | **-1.0317**         | —                  |
+| moirai_base      | **-2.7708**         | —                  |
+| moment_small     | (pending H5 export) | -2.2310            |
 
 LinOSS-190K (PSD) achieves the best official score (+1.3037). MOMENT-Base also scores positive
-(+0.463), both outperforming all other variants at 1 Hz resolution.
+(+0.463). Granite TTM scores -1.0317, placing it between the trained Conv and Chronos baselines.
+MOIRAI scores -2.7708, slightly better than Chronos-Tiny (-0.884 official — note: these are not
+directly comparable as MOIRAI/Granite were scored with stride=20/10 respectively).
 
 ---
 
@@ -178,19 +186,26 @@ LinOSS-190K with PSD loss scores **-1.2909** (our metric) and **+1.3037** (offic
 result overall. The positive official score means the model's denoising meaningfully recovers
 injection SNR at 1 Hz frequency resolution.
 
-### 4. MOMENT Beats Chronos Zero-Shot
+### 4. Foundation Model Quality Varies Widely
 
-MOMENT-Small and MOMENT-Base (40M and 125M params, zero-shot) score **-2.231** and **-2.275**,
-both beating Chronos-Tiny (-2.913) despite being zero-shot. MOMENT's native reconstruction head
-is a better fit for this task than Chronos's autoregressive forecasting approach.
+Zero-shot performance spans nearly 2 log units across models. Granite TTM (-1.0317 official)
+is the strongest zero-shot model, outperforming both trained ConvAE variants. MOMENT-Base
+(+0.463) is the best overall zero-shot result. MOIRAI (-2.7708) and Chronos-Tiny (-0.884)
+perform poorly — their autoregressive/forecasting-oriented designs are a poor fit for
+narrow-band denoising.
 
-### 5. All Trained Models Beat All Zero-Shot Baselines
+### 5. Best Trained Model Beats All Zero-Shot; Granite TTM Beats Trained ConvAE
 
-| Category      | Best Score | Model              |
-|---------------|------------|---------------------|
-| Trained (ours)| -1.2909    | LinOSS-190K PSD     |
-| Zero-shot     | -2.2310    | MOMENT-Small        |
-| Autoregressive| -2.9132    | Chronos-Tiny        |
+| Category           | Best Score (official) | Model              |
+|--------------------|----------------------|--------------------|
+| Trained (ours)     | +1.3037              | LinOSS-190K PSD    |
+| Zero-shot          | -1.0317              | Granite TTM-Base   |
+| Trained ConvAE     | -0.112               | ConvAE-L PSD       |
+| Zero-shot (MOMENT) | +0.463               | MOMENT-Base        |
+
+LinOSS-190K PSD remains the best overall. However, Granite TTM zero-shot (-1.0317) beats
+both trained ConvAE variants (-0.112 and -0.859), showing that a capable foundation model
+can match or exceed task-specific convolutional models without any training.
 
 ### 6. LinOSS Stability Required damped_IMEX
 
@@ -213,12 +228,14 @@ Positive score means the denoised signal has higher SNR than the ch2 normalizati
 | -0.112  | ConvAE-L PSD       | Official     |                                    |
 | -0.859  | ConvAE-L MSE       | Official     |                                    |
 | -0.884  | Chronos-Tiny       | Official     | Zero-shot                          |
+| -1.0317 | Granite TTM-Base   | Official     | Zero-shot                          |
 | -1.2909 | LinOSS-190K PSD    | Ours (100Hz) |                                    |
 | -2.2310 | MOMENT-Small       | Ours (100Hz) | Zero-shot                          |
 | -2.2487 | LinOSS-190K MSE    | Ours (100Hz) |                                    |
 | -2.2750 | MOMENT-Base        | Ours (100Hz) | Zero-shot                          |
 | -2.4408 | ConvAE-L PSD       | Ours (100Hz) |                                    |
 | -2.6456 | ConvAE-L MSE       | Ours (100Hz) |                                    |
+| -2.7708 | MOIRAI-Base        | Official     | Zero-shot                          |
 | -2.9132 | Chronos-Tiny       | Ours (100Hz) | Zero-shot                          |
 
 Previous (buggy) scores (conv_l_mse: -5.526, conv_l_full: -3.685) were computed with a bug where

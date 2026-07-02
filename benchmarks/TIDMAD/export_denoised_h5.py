@@ -72,6 +72,10 @@ from run_inference import (
     load_linoss_denoiser,
     load_chronos_denoiser,
     load_moment_denoiser,
+    load_granite_ttm_denoiser,
+    load_timemoe_denoiser,
+    load_timesfm_denoiser,
+    load_moirai_denoiser,
 )
 
 CHUNK_SIZE = 10_000_000          # 1 second at 10 MHz — official benchmark chunk size
@@ -156,24 +160,30 @@ def export_file(h5_path: str, denoise_fn, scaling: float,
 
 def main():
     parser = argparse.ArgumentParser(description='Export denoised H5 files for official scoring')
-    parser.add_argument('--model_type', choices=['conv', 'linoss', 'chronos', 'moment'], required=True)
+    parser.add_argument('--model_type', choices=['conv', 'linoss', 'chronos', 'moment',
+                                                 'granite_ttm', 'timemoe', 'timesfm', 'moirai'],
+                        required=True)
     parser.add_argument('--ckpt',       default=None,
                         help='Checkpoint path (.ckpt for conv, .eqx for linoss)')
     parser.add_argument('--cfg',        default=None, help='Training config YAML')
-    parser.add_argument('--model_size', default='tiny',
-                        help='Chronos model size: tiny/small/base/large (default: tiny)')
+    parser.add_argument('--model_size', default='base',
+                        help='Model size: tiny/small/base/large (default: base)')
     parser.add_argument('--data_dir',   default='data/TIDMAD/original')
     parser.add_argument('--scale_path', default='data/TIDMAD/preprocessed/scale.npy')
     parser.add_argument('--out_dir',    required=True,
                         help='Output directory for denoised H5 files')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='Sub-window batch size for inference (default: 64)')
+    parser.add_argument('--sub_batch',  type=int, default=None,
+                        help='Inner chunk sub-batch for foundation models (overrides per-model default)')
+    parser.add_argument('--num_samples', type=int, default=None,
+                        help='Number of forecast samples for probabilistic models like Chronos (default: 20)')
     parser.add_argument('--stride',     type=int, default=10,
                         help='Export every Nth chunk (default: 10, matches --coarse)')
     parser.add_argument('--device',     default='cuda' if torch.cuda.is_available() else 'cpu')
     args = parser.parse_args()
 
-    _zero_shot = args.model_type in ('chronos', 'moment')
+    _zero_shot = args.model_type in ('chronos', 'moment', 'granite_ttm', 'timemoe', 'timesfm', 'moirai')
     if not _zero_shot and args.ckpt is None:
         parser.error('--ckpt is required for conv and linoss models')
     if not _zero_shot and args.cfg is None:
@@ -182,6 +192,8 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
     scaling = float(np.load(args.scale_path))
     device  = torch.device(args.device)
+    sb_kw   = {} if args.sub_batch is None else {'sub_batch': args.sub_batch}
+    ns_kw   = {} if args.num_samples is None else {'num_samples': args.num_samples}
 
     print(f'Loading {args.model_type} model...')
     if args.model_type == 'conv':
@@ -189,9 +201,17 @@ def main():
     elif args.model_type == 'linoss':
         denoise_fn = load_linoss_denoiser(args.ckpt, args.cfg)
     elif args.model_type == 'chronos':
-        denoise_fn = load_chronos_denoiser(args.model_size, device)
-    else:  # moment
-        denoise_fn = load_moment_denoiser(args.model_size, device)
+        denoise_fn = load_chronos_denoiser(args.model_size, device, **sb_kw, **ns_kw)
+    elif args.model_type == 'moment':
+        denoise_fn = load_moment_denoiser(args.model_size, device, **sb_kw)
+    elif args.model_type == 'granite_ttm':
+        denoise_fn = load_granite_ttm_denoiser(args.model_size, device, **sb_kw)
+    elif args.model_type == 'timemoe':
+        denoise_fn = load_timemoe_denoiser(args.model_size, device, **sb_kw)
+    elif args.model_type == 'timesfm':
+        denoise_fn = load_timesfm_denoiser(args.model_size, device, **sb_kw)
+    else:  # moirai
+        denoise_fn = load_moirai_denoiser(args.model_size, device, **sb_kw)
 
     for fname in TEST_FILES:
         fpath = os.path.join(args.data_dir, fname)

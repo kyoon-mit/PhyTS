@@ -211,7 +211,7 @@ def load_linoss_denoiser(ckpt_path: str, cfg_path: str):
 
 
 def load_chronos_denoiser(model_size: str, device: torch.device, chunk_size: int = 128,
-                          sub_batch: int = 512):
+                          sub_batch: int = 512, num_samples: int = 20):
     """Zero-shot Chronos denoiser via batched bidirectional forecast on chunks.
 
     Each 100k-sample window is split into non-overlapping chunks of `chunk_size`
@@ -219,11 +219,14 @@ def load_chronos_denoiser(model_size: str, device: torch.device, chunk_size: int
     All chunks from a batch of windows are stacked into a single Chronos call
     (avoiding slow sequential calls). `sub_batch` limits the max batch size
     per Chronos call to avoid OOM.
+
+    Note: effective GPU batch = sub_batch × num_samples (Chronos expands internally).
+    For larger models use fewer samples and a smaller sub_batch to avoid OOM.
     """
     from foundation.wrappers.chronos_wrapper import ChronosWrapper
     wrapper = ChronosWrapper()
-    wrapper.load(device=str(device), model_size=model_size)
-    print(f'Chronos ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+    wrapper.load(device=str(device), model_size=model_size, num_samples=num_samples)
+    print(f'Chronos ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}, num_samples={num_samples}')
 
     def denoise(x: np.ndarray) -> np.ndarray:
         # x: (B, L) float32
@@ -286,6 +289,85 @@ def load_moment_denoiser(model_size: str, device: torch.device, chunk_size: int 
         return out
 
     return denoise
+
+
+def _make_chunk_denoiser(wrapper, chunk_size: int, sub_batch: int):
+    """Generic chunk-based denoiser for any BaseFoundationModel wrapper.
+
+    Each 100k-sample window is split into non-overlapping chunks of `chunk_size`,
+    denoised via wrapper.denoise() in sub-batches, then reassembled.
+    """
+    def denoise(x: np.ndarray) -> np.ndarray:
+        B, L = x.shape
+        n_chunks = L // chunk_size
+        remainder = L % chunk_size
+        x_chunks = x[:, :n_chunks * chunk_size].reshape(B * n_chunks, chunk_size)
+        denoised_chunks = np.zeros_like(x_chunks)
+        for i in range(0, len(x_chunks), sub_batch):
+            batch = x_chunks[i:i + sub_batch]
+            denoised_chunks[i:i + sub_batch] = wrapper.denoise(batch).denoised
+        out = np.zeros_like(x)
+        out[:, :n_chunks * chunk_size] = denoised_chunks.reshape(B, n_chunks * chunk_size)
+        if remainder > 0:
+            out[:, n_chunks * chunk_size:] = x[:, n_chunks * chunk_size:]
+        return out
+    return denoise
+
+
+def load_granite_ttm_denoiser(model_size: str, device: torch.device, chunk_size: int = 512,
+                               sub_batch: int = 512):
+    """Zero-shot Granite TTM denoiser via forecast-based reconstruction.
+
+    Fast MLP-mixer, single forward pass per chunk; stride=10 recommended.
+    """
+    from foundation.wrappers.granite_ttm_wrapper import GraniteTTMWrapper
+    wrapper = GraniteTTMWrapper()
+    wrapper.load(device=str(device), model_size=model_size)
+    print(f'Granite TTM ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+    return _make_chunk_denoiser(wrapper, chunk_size, sub_batch)
+
+
+def load_timemoe_denoiser(model_size: str, device: torch.device, chunk_size: int = 512,
+                          sub_batch: int = 32):
+    """Zero-shot Time-MoE denoiser via autoregressive forecast-based denoising.
+
+    Autoregressive sparse-MoE; stride=20 recommended.
+    """
+    from foundation.wrappers.timemoe_wrapper import TimeMoEWrapper
+    wrapper = TimeMoEWrapper()
+    wrapper.load(device=str(device), model_size=model_size)
+    print(f'Time-MoE ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+    return _make_chunk_denoiser(wrapper, chunk_size, sub_batch)
+
+
+def load_timesfm_denoiser(model_size: str, device: torch.device, chunk_size: int = 512,
+                          sub_batch: int = 128):
+    """Zero-shot TimesFM denoiser via forecast-based denoising.
+
+    Patch-based decoder, non-autoregressive; stride=20 recommended.
+    context_len and horizon are each chunk_size//2 to match denoise_via_forecast split.
+    """
+    from foundation.wrappers.timesfm_wrapper import TimesFMWrapper
+    wrapper = TimesFMWrapper()
+    wrapper.load(device=str(device), model_size=model_size,
+                 context_len=chunk_size // 2, horizon=chunk_size // 2)
+    print(f'TimesFM ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+    return _make_chunk_denoiser(wrapper, chunk_size, sub_batch)
+
+
+def load_moirai_denoiser(model_size: str, device: torch.device, chunk_size: int = 512,
+                         sub_batch: int = 64):
+    """Zero-shot MOIRAI denoiser via forecast-based denoising.
+
+    Patch-based probabilistic encoder; stride=20 recommended.
+    context_len and horizon are each chunk_size//2 to match denoise_via_forecast split.
+    """
+    from foundation.wrappers.moirai_wrapper import MoiraiWrapper
+    wrapper = MoiraiWrapper()
+    wrapper.load(device=str(device), model_size=model_size,
+                 context_len=chunk_size // 2, horizon=chunk_size // 2)
+    print(f'MOIRAI ({model_size}) loaded, chunk_size={chunk_size}, sub_batch={sub_batch}')
+    return _make_chunk_denoiser(wrapper, chunk_size, sub_batch)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +463,8 @@ def find_best_eqx(ckpt_dir: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description='TIDMAD Denoising Benchmark Inference')
-    parser.add_argument('--model_type', choices=['conv', 'linoss', 's4d', 'chronos', 'moment'], required=True)
+    parser.add_argument('--model_type', choices=['conv', 'linoss', 's4d', 'chronos', 'moment',
+                                                 'granite_ttm', 'timemoe', 'timesfm', 'moirai'], required=True)
     parser.add_argument('--ckpt',      default=None,
                         help='Checkpoint path (.ckpt or .eqx). Use --ckpt_dir for LinOSS.')
     parser.add_argument('--ckpt_dir',  default=None,
@@ -402,7 +485,7 @@ def main():
     parser.add_argument('--device',     default='cuda' if torch.cuda.is_available() else 'cpu')
     args = parser.parse_args()
 
-    _zero_shot = args.model_type in ('chronos', 'moment')
+    _zero_shot = args.model_type in ('chronos', 'moment', 'granite_ttm', 'timemoe', 'timesfm', 'moirai')
     if not _zero_shot and args.ckpt is None and args.ckpt_dir is None:
         parser.error('one of --ckpt or --ckpt_dir is required for non-zero-shot models')
     if not _zero_shot and args.cfg is None:
@@ -417,6 +500,14 @@ def main():
         denoise_fn = load_chronos_denoiser(args.model_size, device, args.chunk_size)
     elif args.model_type == 'moment':
         denoise_fn = load_moment_denoiser(args.model_size, device)
+    elif args.model_type == 'granite_ttm':
+        denoise_fn = load_granite_ttm_denoiser(args.model_size, device)
+    elif args.model_type == 'timemoe':
+        denoise_fn = load_timemoe_denoiser(args.model_size, device)
+    elif args.model_type == 'timesfm':
+        denoise_fn = load_timesfm_denoiser(args.model_size, device)
+    elif args.model_type == 'moirai':
+        denoise_fn = load_moirai_denoiser(args.model_size, device)
     elif args.model_type == 'linoss':
         ckpt_path = args.ckpt or find_best_eqx(args.ckpt_dir)
         denoise_fn = load_linoss_denoiser(ckpt_path, args.cfg)
