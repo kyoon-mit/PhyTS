@@ -21,7 +21,7 @@ PhyTS addresses these gaps across four dimensions:
 
 | Experiment | Domain | Task | Sampling rate | Seq. length | SNR |
 |-----------|--------|------|:-------------:|:-----------:|:---:|
-| LIGO | Gravitational waves | Chirp-mass regression | 256 Hz | 1,024 (4 s) | 5–50 |
+| LIGO | Gravitational waves | Chirp-mass regression | 2048 Hz | 8,192 (4 s) | 5–50 |
 | ABRACADABRA | Axion dark matter | Time-series denoising | 10 MHz | 100,000 (1 s) | 0.02–200 |
 | TESS | Stellar variability | 8-class classification | 0.56–1.67 mHz | 1,300–3,670 | 0.3–140 |
 | Project 8 | Neutrino mass | Energy regression | 403 MHz | 24,576 (61 μs) | 3–25 |
@@ -68,7 +68,9 @@ To download a full dataset:
 
 ```bash
 python data/download.py --domain tess        # 194 MB
-python data/download.py --domain ligo        # ~157 GB
+python data/download.py --domain ligo        # ~3.5 TB; then run:
+python data/LIGO/extract_window.py \
+    --src LIGO_2048Hz --dest data/LIGO/2048Hz
 python data/download.py --domain project8    # ~44 GB
 python data/download.py --domain tidmad      # ~163 GB; then run:
 python data/TIDMAD/preprocess_tidmad.py \

@@ -4,7 +4,7 @@ Targets LIGO physical parameters (e.g. ``chirp_mass``) using a Gaussian NLL loss
 
 Batch layout (from ``LIGODataModule.__getitem__``)::
 
-    X_injected  (B, n_ifos, L)   noisy strain      shape e.g. (B, 2, 1024)
+    X_injected  (B, n_ifos, L)   noisy strain      shape e.g. (B, 2, 8192)
     y_targets   (B, n_targets)   physical params   e.g. chirp_mass
     z_observed  (B, n_obs)       auxiliary scalars  e.g. snr
 
