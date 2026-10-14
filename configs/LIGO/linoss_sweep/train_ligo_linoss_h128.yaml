@@ -7,7 +7,7 @@
 # accelerator: cpu — JAX manages its own GPU device via XLA.
 # module load cudnn/9.10.2.21_cuda12-fasrc01 required before running.
 # Size sweep, H=128. Training matched to S4D: dropout 0.1, LR x0.99 per epoch,
-# no gradient clipping, early-stopping patience 30.
+# AdamW weight decay 0.01, no gradient clipping, early-stopping patience 30.
 
 trainer:
   max_epochs: 1000
@@ -40,6 +40,7 @@ model:
     n_targets: 1
     lr: 1.0e-3
     lr_decay: 0.99
+    weight_decay: 0.01
     clip_grad_norm: null
     seed: 42
     target_names:

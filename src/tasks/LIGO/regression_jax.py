@@ -77,6 +77,7 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         n_targets: int = 1,
         lr: float = 1e-3,
         lr_decay: float | None = None,
+        weight_decay: float = 1e-4,
         clip_grad_norm: float | None = 1.0,
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
@@ -87,7 +88,7 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         super().__init__(
             model=model,
             loss_fn=gaussian_nll_loss,
-            optimizer=optax.adamw(lr),
+            optimizer=optax.adamw(lr, weight_decay=weight_decay),
             clip_grad_norm=clip_grad_norm,
             load_from_checkpoint=load_from_checkpoint,
             seed=seed,
@@ -95,6 +96,7 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         self.n_targets = n_targets
         self.lr = lr
         self.lr_decay = lr_decay
+        self.weight_decay = weight_decay
         self.target_names = list(target_names)
         self.observed_names = list(observed_names)
         self.csv_out = csv_out
@@ -106,7 +108,7 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
             schedule = optax.exponential_decay(
                 self.lr, transition_steps=steps_per_epoch, decay_rate=self.lr_decay, staircase=True
             )
-            self.jax_optimizer = optax.adamw(schedule)
+            self.jax_optimizer = optax.adamw(schedule, weight_decay=self.weight_decay)
         return super().configure_optimizers()
 
     def on_train_epoch_start(self):
