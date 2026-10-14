@@ -76,6 +76,7 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         model: eqx.Module,
         n_targets: int = 1,
         lr: float = 1e-3,
+        lr_decay: float | None = None,
         clip_grad_norm: float | None = 1.0,
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
@@ -92,9 +93,25 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
             seed=seed,
         )
         self.n_targets = n_targets
+        self.lr = lr
+        self.lr_decay = lr_decay
         self.target_names = list(target_names)
         self.observed_names = list(observed_names)
         self.csv_out = csv_out
+
+    def configure_optimizers(self):
+        """Optionally decay the LR by ``lr_decay`` once per epoch (as ExponentialLR in torch)."""
+        if self.lr_decay is not None:
+            steps_per_epoch = max(1, self.trainer.estimated_stepping_batches // self.trainer.max_epochs)
+            schedule = optax.exponential_decay(
+                self.lr, transition_steps=steps_per_epoch, decay_rate=self.lr_decay, staircase=True
+            )
+            self.jax_optimizer = optax.adamw(schedule)
+        return super().configure_optimizers()
+
+    def on_train_epoch_start(self):
+        if self.lr_decay is not None:
+            self.log("lr", self.lr * self.lr_decay**self.current_epoch, on_step=False, on_epoch=True)
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
         """Transpose X to (B, L, n_ifos) and select target parameters."""
