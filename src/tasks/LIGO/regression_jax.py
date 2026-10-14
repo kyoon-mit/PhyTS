@@ -122,6 +122,39 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         x = jnp.swapaxes(X, 1, 2)
         return x, y_targets
 
+    # ── validation: loss + per-target RMSE over the full split ─────────────────
+
+    def on_validation_epoch_start(self):
+        self._val_sq_err = np.zeros(self.n_targets)
+        self._val_n = 0
+
+    def validation_step(self, batch, batch_idx: int):
+        batch_jax = tensor_to_jax(batch)
+        x, y_targets = self._prepare_batch(batch_jax)
+        batch_size = jax.tree.leaves(x)[0].shape[0]
+        keys = self._batched_keys(self.key, batch_size)
+
+        y_hat = jax_inference(
+            model=self.jax_model,
+            x=x,
+            state=self.jax_model_state,
+            key=keys,
+        )
+        loss = jax.jit(self.loss_fn)(y_hat, y_targets)
+        self.log(
+            "val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True,
+            batch_size=batch_size,
+        )
+
+        err = np.array(y_hat[:, : self.n_targets]) - np.array(y_targets)
+        self._val_sq_err += (err**2).sum(axis=0)
+        self._val_n += batch_size
+
+    def on_validation_epoch_end(self):
+        rmse = np.sqrt(self._val_sq_err / self._val_n)
+        for name, value in zip(self.target_names, rmse):
+            self.log(f"val/rmse_{name}", float(value))
+
     # ── test step: collect predictions and write CSV ───────────────────────────
 
     def on_test_epoch_start(self):
