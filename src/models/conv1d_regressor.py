@@ -2,8 +2,8 @@
 
 Architecture (default ResNet18-like with layers=[2,2,2,2]):
   - Stem: Conv1d(d_input, 64, 7, stride=2) + GroupNorm + ReLU + MaxPool(3, stride=2)
-  - Residual stages: channels [64, 128, 256, 512], N blocks each, stride-2 downsampling
-  - Head: AdaptiveAvgPool1d(1) + Linear(512, d_output)
+  - Residual stages: channels [64, 128, 256, 512] by default (``channels``), N blocks each, stride-2 downsampling
+  - Head: AdaptiveAvgPool1d(1) + Dropout(dropout) + Linear(512, d_output)
 
 Interface: (B, L, d_input) -> (B, d_output)
 
@@ -59,20 +59,24 @@ class ResNet1DRegressor(nn.Module):
         d_output: int = 2,
         layers: list[int] = (2, 2, 2, 2),
         kernel_size: int = 7,
+        dropout: float = 0.0,
+        channels: list[int] = (64, 128, 256, 512),
     ):
         super().__init__()
+        c0, c1, c2, c3 = channels
         self.stem = nn.Sequential(
-            nn.Conv1d(d_input, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.GroupNorm(min(32, 64), 64),
+            nn.Conv1d(d_input, c0, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.GroupNorm(min(32, c0), c0),
             nn.ReLU(inplace=True),
             nn.MaxPool1d(kernel_size=3, stride=2, padding=1),
         )
-        self.layer0 = nn.Sequential(*[_BasicBlock(64, 64, kernel_size) for _ in range(layers[0])])
-        self.layer1 = _make_stage(64, 128, layers[1], kernel_size)
-        self.layer2 = _make_stage(128, 256, layers[2], kernel_size)
-        self.layer3 = _make_stage(256, 512, layers[3], kernel_size)
+        self.layer0 = nn.Sequential(*[_BasicBlock(c0, c0, kernel_size) for _ in range(layers[0])])
+        self.layer1 = _make_stage(c0, c1, layers[1], kernel_size)
+        self.layer2 = _make_stage(c1, c2, layers[2], kernel_size)
+        self.layer3 = _make_stage(c2, c3, layers[3], kernel_size)
         self.pool = nn.AdaptiveAvgPool1d(1)
-        self.head = nn.Linear(512, d_output)
+        self.drop = nn.Dropout(dropout)
+        self.head = nn.Linear(c3, d_output)
 
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
@@ -87,7 +91,7 @@ class ResNet1DRegressor(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.pool(x).squeeze(-1)
-        return self.head(x)
+        return self.head(self.drop(x))
 
 
 # Keep the original simple stacked conv as a lighter alternative
