@@ -1,4 +1,5 @@
 import h5py
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 import lightning as L
@@ -23,6 +24,8 @@ class LIGODataset(Dataset):
         window_begin: float = 0.0,
         window_end: float = 64.0,
         downsample_factor: int = 1,
+        jitter: float = 0.0,
+        jitter_seed: int = 0,
         dtype: torch.dtype = torch.float32,
     ):
         self.injected_data_key = injected_data_key
@@ -45,6 +48,14 @@ class LIGODataset(Dataset):
         self.start_idx = int(start_f)
         self.end_idx = int(end_f)
 
+        # Timing jitter: shift the [window_begin, window_end) crop by up to +-jitter seconds.
+        # Train draws a fresh shift per item; val/test use a fixed per-sample shift (seeded).
+        jitter_f = jitter * strain_frequency
+        if not float(jitter_f).is_integer():
+            raise ValueError(f'jitter must produce an integer number of samples; got {jitter_f}.')
+        self.max_shift = int(jitter_f)
+        self.random_shift = stage == 'train'
+
         with h5py.File(self.file_path, 'r') as f:
             self.n_samples, self.n_ifos, self.full_len = f[injected_data_key].shape
 
@@ -54,6 +65,13 @@ class LIGODataset(Dataset):
                 f'Dataset length {self.full_len} does not match '
                 f'strain_duration ({strain_duration}) * strain_frequency ({strain_frequency}) = {expected_len}.'
             )
+        if self.start_idx - self.max_shift < 0 or self.end_idx + self.max_shift > self.full_len:
+            raise ValueError(
+                f'Window [{window_begin}, {window_end}) s +- jitter {jitter} s exceeds the stored '
+                f'{strain_duration} s segment.'
+            )
+        rng = np.random.default_rng(jitter_seed + {'train': 0, 'val': 1, 'test': 2}[stage])
+        self.fixed_shifts = rng.integers(-self.max_shift, self.max_shift + 1, size=self.n_samples)
 
     def _get_file(self):
         if self._f is None:
@@ -63,12 +81,21 @@ class LIGODataset(Dataset):
     def __len__(self):
         return self.n_samples
 
+    def _shift(self, idx) -> int:
+        if self.max_shift == 0:
+            return 0
+        if self.random_shift:
+            return int(torch.randint(-self.max_shift, self.max_shift + 1, ()))
+        return int(self.fixed_shifts[idx])
+
     def __getitem__(self, idx):
         f = self._get_file()
-        seq = f[self.injected_data_key][idx, :, self.start_idx:self.end_idx:self.downsample_factor]
+        shift = self._shift(idx)
+        start, end = self.start_idx + shift, self.end_idx + shift
+        seq = f[self.injected_data_key][idx, :, start:end:self.downsample_factor]
         X = torch.as_tensor(seq, dtype=self.dtype)
         if self.clean_data_key is not None:
-            clean = f[self.clean_data_key][idx, :, self.start_idx:self.end_idx:self.downsample_factor]
+            clean = f[self.clean_data_key][idx, :, start:end:self.downsample_factor]
             y = torch.as_tensor(clean, dtype=self.dtype)
         else:
             y = self._get_vars(f, self.target_variables, idx)
@@ -96,6 +123,8 @@ class LIGODataModule(L.LightningDataModule):
         window_begin: float = 0.0,
         window_end: float = 64.0,
         downsample_factor: int = 1,
+        jitter: float = 0.0,
+        jitter_seed: int = 0,
         dtype: torch.dtype = torch.float32,
         train_batch_size: int = 32,
         val_batch_size: int = 32,
@@ -119,6 +148,8 @@ class LIGODataModule(L.LightningDataModule):
             window_begin=window_begin,
             window_end=window_end,
             downsample_factor=downsample_factor,
+            jitter=jitter,
+            jitter_seed=jitter_seed,
             dtype=dtype,
         )
         self._loader_kwargs = dict(

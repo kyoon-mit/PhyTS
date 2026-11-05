@@ -1,17 +1,29 @@
 """Merge LIGO_2048Hz shards into one windowed HDF5 file per split.
 
 The full 2048 Hz dataset stores 64 s segments (131072 samples per channel) across
-thousands of shards.  Training only uses a 4 s window ending at coalescence, so
-this script cuts that window out of every shard and concatenates all SNR bins
+thousands of shards.  Training only uses a short window around coalescence (~63 s),
+so this script cuts that window out of every shard and concatenates all SNR bins
 into a single file per split that ``LIGODataModule`` can read directly.
+
+The default window (58.75-63.25 s) is 0.25 s wider on each side than the 4 s
+(59-63 s) the models see, so ``LIGODataModule(jitter=0.25)`` can shift the crop.
+
+Shard layout (PhyTS-bench rev a0064e5c)::
+
+    train/bns_snr_<lo>_<hi>/train_*.h5
+    val/snr_5_50/val_*.h5
+    test/snr_5_50/<row-range>/test_*.h5
+
+Shards store ``whitened_bkg`` and ``whitened_signal`` but no ``whitened_injected``;
+since whitening is linear, ``whitened_injected`` is written as their sum.
 
 Usage:
     python data/LIGO/extract_window.py \
-        --src /path/to/PhyTS-bench/LIGO_2048Hz --dest data/LIGO_2048Hz --split train
+        --src /path/to/PhyTS-bench/LIGO_2048Hz --dest data/LIGO/2048Hz_v2 --split train
 
 Output (per split): ``<dest>/<split>.h5`` with
     whitened_injected  (N, 2, (window_end - window_begin) * sample_rate)  float32
-    <param>            (N,)                                                float32
+    <param>            (N, ...)                                            float32
 and attrs ``sample_rate``, ``window_begin``, ``window_end``.
 """
 
@@ -23,10 +35,20 @@ import numpy as np
 
 SPLIT_GLOBS = {
     "train": "train/bns_snr_*/*.h5",
-    "val": "val/bns_snr_*/*.h5",
-    "test": "test/snr_5_50/*.h5",
+    "val": "val/*/*.h5",
+    "test": "test/snr_5_50/**/*.h5",
 }
 STRAIN_KEYS = {"whitened_injected", "whitened_signal", "whitened_bkg"}
+DERIVED = {"whitened_injected": ("whitened_bkg", "whitened_signal")}
+
+
+def read_strain(f: h5py.File, key: str, start: int, end: int) -> np.ndarray:
+    """Read ``key[:, :, start:end]``, summing its components if it is not stored."""
+    if key in f:
+        return f[key][:, :, start:end].astype(np.float32)
+    if key in DERIVED:
+        return sum(f[k][:, :, start:end].astype(np.float32) for k in DERIVED[key])
+    raise KeyError(f"{key} not in {f.filename}")
 
 
 def extract(
@@ -45,14 +67,15 @@ def extract(
 
     start, end = int(window_begin * sample_rate), int(window_end * sample_rate)
     with h5py.File(shards[0], "r") as f:
-        param_keys = [k for k in f if k not in STRAIN_KEYS]
-        n_ifos = f[strain_keys[0]].shape[1]
+        param_shapes = {k: f[k].shape[1:] for k in f if k not in STRAIN_KEYS}
+        ref = strain_keys[0] if strain_keys[0] in f else DERIVED[strain_keys[0]][0]
+        n_ifos = f[ref].shape[1]
     sizes = []
     for p in shards:
         with h5py.File(p, "r") as f:
-            sizes.append(f[strain_keys[0]].shape[0])
+            sizes.append(f["snr"].shape[0])
     n_total = sum(sizes)
-    print(f"{split}: {len(shards)} shards, {n_total} samples, window [{start}:{end}]")
+    print(f"{split}: {len(shards)} shards, {n_total} samples, window [{start}:{end}]", flush=True)
 
     dest.mkdir(parents=True, exist_ok=True)
     out_path = dest / f"{split}.h5"
@@ -63,15 +86,15 @@ def extract(
             out.create_dataset(
                 k, (n_total, n_ifos, end - start), dtype="float32", chunks=(1, n_ifos, end - start)
             )
-        for k in param_keys:
-            out.create_dataset(k, (n_total,), dtype="float32")
+        for k, shape in param_shapes.items():
+            out.create_dataset(k, (n_total, *shape), dtype="float32")
 
         offset = 0
         for i, (p, n) in enumerate(zip(shards, sizes)):
             with h5py.File(p, "r") as f:
                 for k in strain_keys:
-                    out[k][offset : offset + n] = f[k][:, :, start:end].astype(np.float32)
-                for k in param_keys:
+                    out[k][offset : offset + n] = read_strain(f, k, start, end)
+                for k in param_shapes:
                     out[k][offset : offset + n] = f[k][:]
             offset += n
             if i % 100 == 0 or i == len(shards) - 1:
@@ -87,8 +110,8 @@ def main() -> None:
     parser.add_argument("--split", choices=list(SPLIT_GLOBS) + ["all"], default="all")
     parser.add_argument("--strain_keys", nargs="+", default=["whitened_injected"])
     parser.add_argument("--sample_rate", type=int, default=2048)
-    parser.add_argument("--window_begin", type=float, default=59.0)
-    parser.add_argument("--window_end", type=float, default=63.0)
+    parser.add_argument("--window_begin", type=float, default=58.75)
+    parser.add_argument("--window_end", type=float, default=63.25)
     args = parser.parse_args()
 
     splits = list(SPLIT_GLOBS) if args.split == "all" else [args.split]
