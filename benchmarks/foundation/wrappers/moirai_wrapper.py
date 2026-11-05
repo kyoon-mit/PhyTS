@@ -23,6 +23,7 @@ import torch
 
 from .base import (
     BaseFoundationModel,
+    EmbeddingResult,
     ForecastResult,
 )
 
@@ -38,7 +39,7 @@ class MoiraiWrapper(BaseFoundationModel):
     name = "moirai"
     supports_forecast = True
     supports_denoise = False
-    supports_embed = False
+    supports_embed = True
 
     def __init__(self) -> None:
         super().__init__()
@@ -108,3 +109,41 @@ class MoiraiWrapper(BaseFoundationModel):
         samples = samples[:, :, :horizon]
         point = np.median(samples, axis=1).astype(np.float32)  # (B, H)
         return ForecastResult(point_forecast=point, samples=samples)
+
+    # ── Embedding (encoder representations) ───────────────────────────────
+
+    @torch.no_grad()
+    def embed(self, signal: np.ndarray, patch_size: int = 32) -> EmbeddingResult:
+        """(B, L) -> (B, d_model): mean over patch tokens of the encoder output.
+
+        Mirrors MoiraiModule.forward up to the encoder (scaler -> in_proj ->
+        encoder) for a single fully observed variate, no prediction window.
+        L must be a multiple of `patch_size` (one of module.patch_sizes).
+        """
+        from uni2ts.common.torch_util import packed_attention_mask
+
+        mod = self._module
+        if mod is None:
+            raise RuntimeError("Call .load() before embed().")
+        if patch_size not in tuple(mod.patch_sizes):
+            raise ValueError(f"patch_size {patch_size} not in {tuple(mod.patch_sizes)}")
+        dev = next(mod.parameters()).device
+        B, L = signal.shape
+        if L % patch_size:
+            raise ValueError(f"length {L} is not a multiple of patch_size {patch_size}")
+        n, max_p = L // patch_size, max(mod.patch_sizes)
+        x = torch.from_numpy(np.ascontiguousarray(signal, dtype=np.float32)).to(dev)
+        target = torch.zeros(B, n, max_p, device=dev)
+        target[..., :patch_size] = x.view(B, n, patch_size)
+        observed = torch.zeros(B, n, max_p, dtype=torch.bool, device=dev)
+        observed[..., :patch_size] = True
+        sample_id = torch.ones(B, n, dtype=torch.long, device=dev)
+        time_id = torch.arange(n, device=dev).expand(B, n)
+        variate_id = torch.zeros(B, n, dtype=torch.long, device=dev)
+        pred_mask = torch.zeros(B, n, dtype=torch.bool, device=dev)
+        psize = torch.full((B, n), patch_size, dtype=torch.long, device=dev)
+        loc, scale = mod.scaler(target, observed * ~pred_mask.unsqueeze(-1), sample_id, variate_id)
+        reprs = mod.in_proj((target - loc) / scale, psize)
+        reprs = mod.encoder(reprs, packed_attention_mask(sample_id), time_id=time_id, var_id=variate_id)
+        return EmbeddingResult(embeddings=reprs.mean(dim=1).float().cpu().numpy())
+

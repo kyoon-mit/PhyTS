@@ -144,7 +144,10 @@ class TimeMoEWrapper(BaseFoundationModel):
             raise RuntimeError("Call .load() before embed().")
         normed, _, _ = self._instance_normalize(signal.astype(np.float32))
         x = torch.from_numpy(normed).to(self.device)
-        out = self.model(x, output_hidden_states=True)
-        hs = out.hidden_states[-1]          # (B, T, d_model)
+        # Backbone only (skip the forecast heads and KV cache); last_hidden_state is the
+        # final-norm output, identical to the full model's hidden_states[-1].
+        out = self.model.model(input_ids=x, use_cache=False, output_hidden_states=False,
+                               return_dict=True)
+        hs = out.last_hidden_state          # (B, T, d_model)
         emb = hs.mean(dim=1)                # (B, d_model)
         return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))

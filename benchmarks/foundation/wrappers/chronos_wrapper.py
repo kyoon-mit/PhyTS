@@ -116,14 +116,16 @@ class ChronosWrapper(BaseFoundationModel):
         if self.pipeline is None:
             raise RuntimeError("Call .load() before embed().")
         ctx = torch.from_numpy(signal.astype(np.float32))
-        # pipeline.embed returns (embeddings, tokenizer_state) where
-        # embeddings is (B, T, d_model).
-        out = self.pipeline.embed(ctx)
-        if isinstance(out, tuple):
-            emb = out[0]
-        else:
-            emb = out
-        # Mean-pool over time axis to get (B, d_model)
+        # Same as pipeline.embed (encoder states, (B, T[+EOS], d_model)) followed by a
+        # mean over time, but pooled on the device: copying the full (B, T, d) tensor to
+        # the CPU first dominated the runtime for long batches.
+        pipe = self.pipeline
+        ctx = pipe._prepare_and_validate_context(context=ctx)
+        token_ids, attention_mask, _ = pipe.tokenizer.context_input_transform(ctx)
+        emb = pipe.model.encode(
+            input_ids=token_ids.to(pipe.model.device),
+            attention_mask=attention_mask.to(pipe.model.device),
+        )
         if emb.dim() == 3:
             emb = emb.mean(dim=1)
-        return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))
+        return EmbeddingResult(embeddings=emb.float().cpu().numpy())

@@ -52,7 +52,7 @@ class TimesFMWrapper(BaseFoundationModel):
     name = "timesfm"
     supports_forecast = True
     supports_denoise = False
-    supports_embed = False   # no native embed; could fall back via hooks
+    supports_embed = True    # hidden-state mean pool (PyTorch backend)
 
     def __init__(self) -> None:
         super().__init__()
@@ -142,5 +142,22 @@ class TimesFMWrapper(BaseFoundationModel):
                 samples = np.transpose(quants, (0, 2, 1))[:, :, :horizon]
         return ForecastResult(point_forecast=point, samples=samples)
 
-    # Embedding: default raises NotImplementedError; users can wire up
-    # embed_via_hidden_states() per model revision if needed.
+    # ── Embedding (hidden states of the stacked transformer) ──────────────
+
+    @torch.no_grad()
+    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+        """(B, L) -> (B, hidden_size): mean over patches of the last transformer
+        layer's output.  Needs the PyTorch backend (TimesFmTorch._model);
+        L must be a multiple of the patch length (32) and <= context_len.
+        """
+        decoder = getattr(self.model, "_model", None)
+        if decoder is None:
+            raise RuntimeError("TimesFM embed() needs the PyTorch backend; call .load() first.")
+        dev = next(decoder.parameters()).device
+        x = torch.from_numpy(np.ascontiguousarray(signal, dtype=np.float32)).to(dev)
+        pad = torch.zeros_like(x)
+        model_input, patched_padding, _, _ = decoder._preprocess_input(x, pad)
+        freq = torch.zeros(x.shape[0], 1, dtype=torch.long, device=dev)
+        model_input = model_input + decoder.freq_emb(freq)
+        h = decoder.stacked_transformer(model_input, patched_padding)   # (B, N, d)
+        return EmbeddingResult(embeddings=h.mean(dim=1).float().cpu().numpy())
