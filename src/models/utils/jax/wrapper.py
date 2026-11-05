@@ -3,6 +3,7 @@
 Convert tensors to JAX arrays using DLpack and handle JAX optimizer.
 """
 
+import io
 import logging
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from .print_params import (
     count_inexact_array_elements,
     print_param_tree,
 )
-from .training import LossFunction, jax_apply_training_step, jax_inference
+from .training import LossFunction, jax_apply_training_step, jax_inference, jax_tree_finite
 from .utils import tensor_to_jax
 
 # Define a type for batches of PyTorch tensors
@@ -53,8 +54,13 @@ class JAXLightningModule(L.LightningModule):
         model_filter_spec: PyTree[bool] | None = None,
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
+        skip_nonfinite: bool = False,
     ):
         super().__init__()
+        # If True, a training step with non-finite loss or gradients is dropped: model,
+        # model state (e.g. BatchNorm statistics) and optimizer state keep their old values.
+        self.skip_nonfinite = skip_nonfinite
+        self.n_skipped_steps = 0
 
         # We disable automatic optimization to handle JAX optimizer manually.
         self.automatic_optimization = False
@@ -95,6 +101,30 @@ class JAXLightningModule(L.LightningModule):
         print(summary, flush=True)
         logger.info("%s", summary)
         print_param_tree(self.jax_model, 3)
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        """Store the equinox model and its state; Lightning only checkpoints torch parameters."""
+        buf = io.BytesIO()
+        eqx.tree_serialise_leaves(buf, (self.jax_model, self.jax_model_state))
+        checkpoint["jax_model"] = buf.getvalue()
+        if getattr(self, "opt_state", None) is not None:
+            buf = io.BytesIO()
+            eqx.tree_serialise_leaves(buf, self.opt_state)
+            checkpoint["jax_opt_state"] = buf.getvalue()
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        """Restore the equinox model and its state saved by :meth:`on_save_checkpoint`.
+
+        The optax state is applied in :meth:`configure_optimizers`: when resuming a fit,
+        Lightning loads the checkpoint before it sets up the optimizer.
+        """
+        if "jax_model" not in checkpoint:
+            logger.warning("Checkpoint has no 'jax_model' entry; keeping the current (untrained) JAX weights.")
+            return
+        self.jax_model, self.jax_model_state = eqx.tree_deserialise_leaves(
+            io.BytesIO(checkpoint["jax_model"]), (self.jax_model, self.jax_model_state)
+        )
+        self._pending_opt_state = checkpoint.get("jax_opt_state")
 
     def _prepare_batch(self, batch: Batch) -> tuple[PyTree[jax.Array], PyTree[jax.Array]]:
         """Return (x, y) from a JAX-converted batch. Override for dataset-specific layouts."""
@@ -146,13 +176,20 @@ class JAXLightningModule(L.LightningModule):
             key=keys,
         )
 
-        self.jax_model = new_model
-        self.jax_model_state = new_state
-        self.opt_state = new_opt_state
+        loss_value = loss.item()
+        if self.skip_nonfinite and not jax_tree_finite(loss, new_model, new_opt_state):
+            self.n_skipped_steps += 1
+            logger.warning("Skipping non-finite training step %d (total skipped: %d)", batch_idx, self.n_skipped_steps)
+        else:
+            self.jax_model = new_model
+            self.jax_model_state = new_state
+            self.opt_state = new_opt_state
+        if self.skip_nonfinite:
+            self.log("train/skipped_steps", float(self.n_skipped_steps), on_step=True, on_epoch=False)
 
         self.log(
             "train/loss",
-            loss.item(),
+            loss_value,
             on_step=True,
             on_epoch=True,
             prog_bar=True,
@@ -233,6 +270,11 @@ class JAXLightningModule(L.LightningModule):
         # separate trainable and non-trainable parameters for optimizer state initialization
         diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
         self.opt_state = self.jax_optimizer.init(diff_model)
+        pending = getattr(self, "_pending_opt_state", None)
+        if pending is not None:  # resuming: restore optimizer moments and step count (LR schedule)
+            self.opt_state = eqx.tree_deserialise_leaves(io.BytesIO(pending), self.opt_state)
+            self._pending_opt_state = None
+            logger.info("Restored JAX optimizer state from checkpoint.")
         # Lightning still expects a torch.nn optimizer when ``automatic_optimization`` is
         # False; real updates are optax in ``training_step``.  A noop SGD silences
         # "configure_optimizers returned None" and keeps ``self.optimizers()`` valid.

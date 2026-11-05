@@ -4,6 +4,8 @@ from abc import ABC
 from typing import Callable
 
 import equinox as eqx
+import jax
+import jax.numpy as jnp
 import optax
 from jaxtyping import Array, PRNGKeyArray, PyTree, Scalar
 
@@ -70,6 +72,17 @@ def jax_apply_training_step(
     updates, new_opt_state = opt_update(grads, opt_state, diff_model)
     new_model = eqx.combine(eqx.apply_updates(diff_model, updates), static_model)
     return new_model, new_state, new_opt_state, loss, model_output
+
+
+@eqx.filter_jit
+def _all_finite(*trees) -> Array:
+    leaves = [x for x in jax.tree_util.tree_leaves(eqx.filter(trees, eqx.is_inexact_array)) if x is not None]
+    return jnp.all(jnp.stack([jnp.all(jnp.isfinite(x)) for x in leaves]))
+
+
+def jax_tree_finite(*trees) -> bool:
+    """True if every floating-point array in ``trees`` is finite (one device sync)."""
+    return bool(_all_finite(*trees))
 
 
 @eqx.filter_jit

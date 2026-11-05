@@ -35,6 +35,9 @@ from models.utils.jax.utils import tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
 
 
+SSM_PARAMS = {"A_diag", "G_diag", "steps"}  # LinOSS dynamics parameters (see LinOSSLayer)
+
+
 def _soft_clamp_lv(lv_raw: Array) -> Array:
     """Soft clamp log-variance to (-5, 5) via tanh; gradient flows at all values."""
     return 5.0 * jnp.tanh(lv_raw / 5.0)
@@ -79,12 +82,25 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         lr_decay: float | None = None,
         weight_decay: float = 1e-4,
         clip_grad_norm: float | None = 1.0,
+        ssm_lr_factor: float = 1.0,
+        ssm_weight_decay: float | None = None,
+        skip_nonfinite: bool = False,
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
         target_names: Sequence[str] = ("chirp_mass",),
         observed_names: Sequence[str] = ("snr",),
         csv_out: str = "results/LIGO/linoss_gaussnll_regression/test_predictions.csv",
     ):
+        """
+        Args:
+            ssm_lr_factor: LR multiplier for the SSM dynamics parameters (``A_diag``,
+                ``G_diag``, ``steps``), as in S4/S5/LRU training.
+            ssm_weight_decay: weight decay for those parameters (``None``: same as
+                ``weight_decay``). Decay pulls damping and stiffness toward 0, i.e. toward
+                undamped / double-integrator modes that blow up on long sequences.
+            skip_nonfinite: drop any update whose loss or gradient is non-finite (and keep
+                the previous BatchNorm state), instead of letting one bad batch NaN the model.
+        """
         super().__init__(
             model=model,
             loss_fn=gaussian_nll_loss,
@@ -92,23 +108,42 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
             clip_grad_norm=clip_grad_norm,
             load_from_checkpoint=load_from_checkpoint,
             seed=seed,
+            skip_nonfinite=skip_nonfinite,
         )
         self.n_targets = n_targets
         self.lr = lr
         self.lr_decay = lr_decay
         self.weight_decay = weight_decay
+        self.ssm_lr_factor = ssm_lr_factor
+        self.ssm_weight_decay = weight_decay if ssm_weight_decay is None else ssm_weight_decay
         self.target_names = list(target_names)
         self.observed_names = list(observed_names)
         self.csv_out = csv_out
 
     def configure_optimizers(self):
-        """Optionally decay the LR by ``lr_decay`` once per epoch (as ExponentialLR in torch)."""
-        if self.lr_decay is not None:
+        """AdamW, optionally decaying the LR by ``lr_decay`` once per epoch (as ExponentialLR in
+        torch), with a separate LR / weight decay for the SSM dynamics parameters."""
+
+        def lr_schedule(base):
+            if self.lr_decay is None:
+                return base
             steps_per_epoch = max(1, self.trainer.estimated_stepping_batches // self.trainer.max_epochs)
-            schedule = optax.exponential_decay(
-                self.lr, transition_steps=steps_per_epoch, decay_rate=self.lr_decay, staircase=True
+            return optax.exponential_decay(
+                base, transition_steps=steps_per_epoch, decay_rate=self.lr_decay, staircase=True
             )
-            self.jax_optimizer = optax.adamw(schedule, weight_decay=self.weight_decay)
+
+        regular = optax.adamw(lr_schedule(self.lr), weight_decay=self.weight_decay)
+        if self.ssm_lr_factor == 1.0 and self.ssm_weight_decay == self.weight_decay:
+            self.jax_optimizer = regular
+        else:
+            diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
+            labels = jax.tree_util.tree_map_with_path(
+                lambda path, _: "ssm" if any(getattr(k, "name", None) in SSM_PARAMS for k in path) else "regular",
+                diff_model,
+            )
+            ssm = optax.adamw(lr_schedule(self.lr * self.ssm_lr_factor), weight_decay=self.ssm_weight_decay)
+            # labels is an eqx.Module (callable), so pass it through a function
+            self.jax_optimizer = optax.multi_transform({"regular": regular, "ssm": ssm}, lambda _: labels)
         return super().configure_optimizers()
 
     def on_train_epoch_start(self):

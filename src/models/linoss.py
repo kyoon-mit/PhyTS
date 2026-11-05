@@ -20,20 +20,31 @@ def _simple_uniform_init(rng, shape, std=1.0):
     return weights
 
 
+def _dense(x, w, matmul_dtype=None):
+    """``x @ w``; if ``matmul_dtype`` is set (e.g. ``"bfloat16"``), cast the operands and accumulate in float32."""
+    if matmul_dtype is None:
+        return x @ w
+    return jnp.matmul(x.astype(matmul_dtype), w.astype(matmul_dtype), preferred_element_type=jnp.float32)
+
+
 class GLU(eqx.Module):
     """Gated Linear Unit (GLU) for nonlinearity in LinOSS blocks."""
 
     w1: eqx.nn.Linear
     w2: eqx.nn.Linear
+    matmul_dtype: Optional[str] = eqx.field(static=True, default=None)
 
-    def __init__(self, input_dim, output_dim, key):
+    def __init__(self, input_dim, output_dim, key, matmul_dtype=None):
         w1_key, w2_key = jr.split(key, 2)
         self.w1 = eqx.nn.Linear(input_dim, output_dim, use_bias=True, key=w1_key)
         self.w2 = eqx.nn.Linear(input_dim, output_dim, use_bias=True, key=w2_key)
+        self.matmul_dtype = matmul_dtype
 
     def __call__(self, x):
-        """GLU forward pass."""
-        return self.w1(x) * jax.nn.sigmoid(self.w2(x))
+        """GLU forward pass on ``(..., input_dim)``."""
+        a = _dense(x, self.w1.weight.T, self.matmul_dtype) + self.w1.bias
+        b = _dense(x, self.w2.weight.T, self.matmul_dtype) + self.w2.bias
+        return a * jax.nn.sigmoid(b)
 
 
 # Parallel scan operations
@@ -76,20 +87,18 @@ def binary_operator(q_i, q_j):
     return Anew, new_b + b_j
 
 
-def _apply_damped_linoss_imex(A_diag, G_diag, B, x, step):  # noqa: N802
+def _apply_damped_linoss_imex(A_diag, G_diag, Bu_elements, step):  # noqa: N802
     """Compute the Damped LinOSS-IMEX recurrence.
 
     Args:
         A_diag: Diagonal state matrix.
         G_diag: Diagonal damping matrix.
-        B: Input matrix.
-        x: Input sequence of features.
+        Bu_elements: Projected input sequence B @ u, shape (timesteps, state_dim).
         step: Discretization time-step.
 
     Returns:
         Hidden state sequence, shape (timesteps, state_dim).
     """
-    Bu_elements = jax.vmap(lambda u: B @ u)(x)
 
     Identity = jnp.ones_like(A_diag)
     S = Identity + step * G_diag
@@ -99,7 +108,7 @@ def _apply_damped_linoss_imex(A_diag, G_diag, B, x, step):  # noqa: N802
     M_22 = Identity - step**2 / S * A_diag
 
     M = jnp.concatenate([M_11, M_12, M_21, M_22])
-    M_elements = M * jnp.ones((x.shape[0], 4 * A_diag.shape[0]))
+    M_elements = M * jnp.ones((Bu_elements.shape[0], 4 * A_diag.shape[0]))
 
     F1 = step * (1.0 / S) * Bu_elements
     F2 = step**2 * (1.0 / S) * Bu_elements
@@ -147,20 +156,17 @@ def _map_theta_to_A(thetas, G_diag, steps):  # noqa: N802
     return jnp.where(thetas > jnp.pi / 2, A_plus, A_minus)
 
 
-def apply_linoss_im(A_diag, B, C_tilde, input_sequence, step):
-    r"""Compute the LxH output of LinOSS-IM given an LxH input.
+def apply_linoss_im(A_diag, Bu_elements, step):
+    r"""Compute the LxP hidden states of LinOSS-IM given the LxP projected input.
 
     Args:
         A_diag  (float32):   diagonal state matrix   (P,)
-        B       (complex64): input matrix            (P, H)
-        C_tilde (complex64): output matrix           (H, P)
-        input_sequence (float32): input sequence of features    (L, H)
+        Bu_elements (complex64): projected input sequence B @ u    (L, P)
         step    (float):     discretization time-step $\Delta_t$  (P,)
 
     Returns:
-        outputs (float32): the SSM outputs (LinOSS_IMEX layer preactivations)      (L, H)
+        ys (complex64): hidden states      (L, P)
     """
-    Bu_elements = jax.vmap(lambda u: B @ u)(input_sequence)
 
     schur_comp = 1.0 / (1.0 + step**2.0 * A_diag)
     M_IM_11 = 1.0 - step**2.0 * A_diag * schur_comp
@@ -170,32 +176,27 @@ def apply_linoss_im(A_diag, B, C_tilde, input_sequence, step):
 
     M_IM = jnp.concatenate([M_IM_11, M_IM_12, M_IM_21, M_IM_22])
 
-    M_IM_elements = M_IM * jnp.ones((input_sequence.shape[0], 4 * A_diag.shape[0]))
+    M_IM_elements = M_IM * jnp.ones((Bu_elements.shape[0], 4 * A_diag.shape[0]))
 
     F1 = M_IM_11 * Bu_elements * step
     F2 = M_IM_21 * Bu_elements * step
     F = jnp.hstack((F1, F2))
 
     _, xs = jax.lax.associative_scan(binary_operator, (M_IM_elements, F))
-    ys = xs[:, A_diag.shape[0] :]
-
-    return jax.vmap(lambda x: (C_tilde @ x).real)(ys)
+    return xs[:, A_diag.shape[0] :]
 
 
-def apply_linoss_imex(A_diag, B, C, input_sequence, step):
-    r"""Compute the LxH output of of LinOSS-IMEX given an LxH input.
+def apply_linoss_imex(A_diag, Bu_elements, step):
+    r"""Compute the LxP hidden states of LinOSS-IMEX given the LxP projected input.
 
     Args:
         A_diag  (float32):   diagonal state matrix   (P,)
-        B       (complex64): input matrix            (P, H)
-        C       (complex64): output matrix           (H, P)
-        input_sequence (float32): input sequence of features    (L, H)
+        Bu_elements (complex64): projected input sequence B @ u    (L, P)
         step    (float):     discretization time-step $\Delta_t$  (P,)
 
     Returns:
-        outputs (float32): the SSM outputs (LinOSS_IMEX layer preactivations)      (L, H)
+        ys (complex64): hidden states      (L, P)
     """
-    Bu_elements = jax.vmap(lambda u: B @ u)(input_sequence)
 
     A_ = jnp.ones_like(A_diag)
     B_ = -1.0 * step * A_diag
@@ -204,16 +205,14 @@ def apply_linoss_imex(A_diag, B, C, input_sequence, step):
 
     M_IMEX = jnp.concatenate([A_, B_, C_, D_])
 
-    M_IMEX_elements = M_IMEX * jnp.ones((input_sequence.shape[0], 4 * A_diag.shape[0]))
+    M_IMEX_elements = M_IMEX * jnp.ones((Bu_elements.shape[0], 4 * A_diag.shape[0]))
 
     F1 = Bu_elements * step
     F2 = Bu_elements * (step**2.0)
     F = jnp.hstack((F1, F2))
 
     _, xs = jax.lax.associative_scan(binary_operator, (M_IMEX_elements, F))
-    ys = xs[:, A_diag.shape[0] :]
-
-    return jax.vmap(lambda x: (C @ x).real)(ys)
+    return xs[:, A_diag.shape[0] :]
 
 
 class LinOSSLayer(eqx.Module):
@@ -226,6 +225,7 @@ class LinOSSLayer(eqx.Module):
     D: jax.Array
     steps: jax.Array
     discretization: str
+    matmul_dtype: Optional[str] = eqx.field(static=True, default=None)
 
     def __init__(
         self,
@@ -234,6 +234,7 @@ class LinOSSLayer(eqx.Module):
         discretization,
         r_min=0.0,
         theta_max=math.pi,
+        matmul_dtype=None,
         *,
         key,
     ):
@@ -257,11 +258,16 @@ class LinOSSLayer(eqx.Module):
         self.C = _simple_uniform_init(C_key, shape=(H, ssm_size, 2), std=1.0 / math.sqrt(ssm_size))
         self.D = nn.initializers.normal(stddev=1.0)(D_key, (H,))
         self.discretization = discretization
+        self.matmul_dtype = matmul_dtype
 
     def __call__(self, input_sequence):
         """LinOSS layer forward pass."""
-        B_complex = self.B[..., 0] + 1j * self.B[..., 1]
-        C_complex = self.C[..., 0] + 1j * self.C[..., 1]
+        # B/C projections in real arithmetic: a complex (L, H) copy of the input costs 2x the
+        # memory and 4x the FLOPs, and dominated the layer's runtime. Only the (L, P) state is complex.
+        P = self.B.shape[0]
+        B_cat = jnp.concatenate([self.B[..., 0], self.B[..., 1]], axis=0)  # (2P, H)
+        Bu = _dense(input_sequence, B_cat.T, self.matmul_dtype)
+        Bu_elements = Bu[:, :P] + 1j * Bu[:, P:]
         steps = nn.sigmoid(self.steps)
 
         if self.discretization == "damped_IMEX":
@@ -273,22 +279,23 @@ class LinOSSLayer(eqx.Module):
                 + nn.relu(self.A_diag - A_boundary_low)
                 - nn.relu(self.A_diag - A_boundary_high)
             )
-            ys = _apply_damped_linoss_imex(A_diag, G_diag, B_complex, input_sequence, steps)
-            ys = jax.vmap(lambda y: (C_complex @ y).real)(ys)
+            ys = _apply_damped_linoss_imex(A_diag, G_diag, Bu_elements, steps)
         elif self.discretization == "IMEX":
             A_diag = nn.relu(self.A_diag)
-            ys = apply_linoss_imex(A_diag, B_complex, C_complex, input_sequence, steps)
+            ys = apply_linoss_imex(A_diag, Bu_elements, steps)
         elif self.discretization == "IM":
             A_diag = nn.relu(self.A_diag)
-            ys = apply_linoss_im(A_diag, B_complex, C_complex, input_sequence, steps)
+            ys = apply_linoss_im(A_diag, Bu_elements, steps)
         else:
             raise NotImplementedError(
                 f"Discretization {self.discretization!r} not implemented. "
                 "Choose from 'IMEX', 'IM', 'damped_IMEX'."
             )
 
-        Du = jax.vmap(lambda u: self.D * u)(input_sequence)
-        return ys + Du
+        # Re(C y) = C_re y_re - C_im y_im
+        C_cat = jnp.concatenate([self.C[..., 0], -self.C[..., 1]], axis=1)  # (H, 2P)
+        out = _dense(jnp.concatenate([ys.real, ys.imag], axis=-1), C_cat.T, self.matmul_dtype)
+        return out + self.D * input_sequence
 
 
 class LinOSSBlock(eqx.Module):
@@ -307,6 +314,7 @@ class LinOSSBlock(eqx.Module):
         drop_rate=0.05,
         r_min=0.0,
         theta_max=math.pi,
+        matmul_dtype=None,
         *,
         key,
     ):
@@ -318,9 +326,10 @@ class LinOSSBlock(eqx.Module):
             discretization,
             r_min=r_min,
             theta_max=theta_max,
+            matmul_dtype=matmul_dtype,
             key=ssmkey,
         )
-        self.glu = GLU(H, H, key=glukey)
+        self.glu = GLU(H, H, key=glukey, matmul_dtype=matmul_dtype)
         self.drop = eqx.nn.Dropout(p=drop_rate)
 
     def __call__(self, x, state, *, key):
@@ -331,10 +340,35 @@ class LinOSSBlock(eqx.Module):
         x = x.T
         x = self.ssm(x)
         x = self.drop(jax.nn.gelu(x), key=dropkey1)
-        x = jax.vmap(self.glu)(x)
+        x = self.glu(x)
         x = self.drop(x, key=dropkey2)
         x = skip + x
         return x, state
+
+
+class ConvStem(eqx.Module):
+    """Strided conv downsampler: log2(downsample) conv layers (kernel 7, stride 2), GroupNorm + GELU between."""
+
+    convs: List[eqx.nn.Conv1d]
+    norms: List[eqx.nn.GroupNorm]
+
+    def __init__(self, in_channels, out_channels, downsample, channels=64, kernel_size=7, *, key):
+        n_layers = int(math.log2(downsample))
+        if n_layers < 1 or 2**n_layers != downsample:
+            raise ValueError(f"conv stem needs a power-of-two downsample >= 2; got {downsample}")
+        dims = [in_channels] + [channels] * (n_layers - 1) + [out_channels]
+        self.convs = [
+            eqx.nn.Conv1d(c_in, c_out, kernel_size, stride=2, padding=kernel_size // 2, key=k)
+            for c_in, c_out, k in zip(dims[:-1], dims[1:], jr.split(key, n_layers))
+        ]
+        self.norms = [eqx.nn.GroupNorm(min(32, c), c) for c in dims[1:-1]]
+
+    def __call__(self, x):
+        """(L, in_channels) -> (L // downsample, out_channels)."""
+        x = x.T
+        for conv, norm in zip(self.convs[:-1], self.norms):
+            x = jax.nn.gelu(norm(conv(x)))
+        return self.convs[-1](x).T
 
 
 class LinOSS(eqx.Module):
@@ -345,6 +379,18 @@ class LinOSS(eqx.Module):
       * ``"regression"``:    mean-pool over time, linear (no activation).
       * ``"forecasting"``:   per-step subsample + linear + tanh.
 
+    ``patch_size > 1`` downsamples the input before the LinOSS blocks: non-overlapping
+    patches of ``patch_size`` steps are flattened and linearly embedded (a strided conv
+    with kernel = stride = ``patch_size``), so every block runs on ``L // patch_size``
+    steps. Trailing steps that do not fill a patch are dropped. Only supported for the
+    pooled heads (classification / regression).
+
+    ``stem="conv"`` replaces that linear patch embedding with a :class:`ConvStem`
+    (``patch_size`` must be a power of two; ``stem_channels`` sets its hidden width).
+
+    ``matmul_dtype`` (e.g. ``"bfloat16"``) runs the B/C projections and GLU matmuls in
+    that dtype with float32 accumulation; parameters and the recurrence stay float32.
+
     Masked pooling: if the input passed to ``__call__`` has one more channel than
     ``input_dim`` (i.e. shape ``(L, N+1)``), the last channel is treated as a
     float validity mask (1 = valid, 0 = padding) and used for masked mean pooling
@@ -353,12 +399,14 @@ class LinOSS(eqx.Module):
     changing the JAX training infrastructure.
     """
 
-    linear_encoder: eqx.nn.Linear
+    linear_encoder: Optional[eqx.nn.Linear]
     blocks: List[LinOSSBlock]
     linear_layer: eqx.nn.Linear
     task: str
     output_step: int
     input_dim: int
+    patch_size: int = eqx.field(static=True, default=1)
+    conv_stem: Optional[ConvStem] = None
     stateful: bool = True
     nondeterministic: bool = True
     lip2: bool = False
@@ -376,6 +424,10 @@ class LinOSS(eqx.Module):
         r_min=0.0,
         theta_max=math.pi,
         drop_rate=0.05,
+        patch_size=1,
+        stem="linear",
+        stem_channels=64,
+        matmul_dtype=None,
         *,
         key=None,
         seed=0,
@@ -384,7 +436,13 @@ class LinOSS(eqx.Module):
             key = jr.key(seed)
 
         linear_encoder_key, *block_keys, linear_layer_key, weightkey = jr.split(key, num_blocks + 3)
-        self.linear_encoder = eqx.nn.Linear(N, H, key=linear_encoder_key)
+        if stem == "conv":
+            self.linear_encoder = None
+            self.conv_stem = ConvStem(N, H, patch_size, channels=stem_channels, key=linear_encoder_key)
+        elif stem == "linear":
+            self.linear_encoder = eqx.nn.Linear(N * patch_size, H, key=linear_encoder_key)
+        else:
+            raise ValueError(f"stem must be 'linear' or 'conv'; got {stem!r}")
         self.blocks = [
             LinOSSBlock(
                 ssm_size,
@@ -393,6 +451,7 @@ class LinOSS(eqx.Module):
                 drop_rate=drop_rate,
                 r_min=r_min,
                 theta_max=theta_max,
+                matmul_dtype=matmul_dtype,
                 key=key,
             )
             for key in block_keys
@@ -402,9 +461,12 @@ class LinOSS(eqx.Module):
             raise ValueError(
                 f"task must be one of 'classification', 'regression', 'forecasting', 'denoising'; got {task!r}"
             )
+        if patch_size > 1 and task not in ("classification", "regression"):
+            raise ValueError(f"patch_size > 1 is only supported for pooled tasks; got task={task!r}")
         self.task = task
         self.output_step = output_step
         self.input_dim = N
+        self.patch_size = patch_size
 
     def __call__(self, x, state, key):
         """Compute LinOSS.
@@ -420,8 +482,15 @@ class LinOSS(eqx.Module):
         else:
             mask = None
 
+        if self.conv_stem is not None:
+            x = self.conv_stem(x)
+        else:
+            if self.patch_size > 1:
+                n_patches = x.shape[0] // self.patch_size
+                x = x[: n_patches * self.patch_size].reshape(n_patches, self.patch_size * self.input_dim)
+            x = jax.vmap(self.linear_encoder)(x)
+
         dropkeys = jr.split(key, len(self.blocks))
-        x = jax.vmap(self.linear_encoder)(x)
         for block, key in zip(self.blocks, dropkeys):
             x, state = block(x, state, key=key)
         if self.task == "classification":
