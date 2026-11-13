@@ -1,26 +1,30 @@
 #!/bin/bash
-# LIGO benchmark — train all models and run evaluation.
+# LIGO benchmark (paper Table 2): train S4D / LinOSS / CNN, evaluate the six zero-shot
+# foundation models, and score everything on the test split.
 #
 # Prerequisites:
-#   source .venv/bin/activate          # make env (PyTorch) or make env-jax (LinOSS)
-#   python data/download.py --domain ligo --sample   # or full dataset
+#   python data/download.py --domain ligo                                   # ~4 TB of 64 s shards
+#   python data/LIGO/extract_window.py --src LIGO_2048Hz --dest data/LIGO/2048Hz
+#   make env       # PyTorch env (S4D, CNN); make env-jax for LinOSS
+#   benchmarks/foundation/.venv for the foundation models
 #
-# Usage:
-#   bash benchmarks/LIGO/run.sh
+# Every model trains for 60 epochs (seed 42); test uses the best-validation checkpoint.
+# Approximate cost on one A100: S4D / LinOSS ~35 h, CNN ~6 h.
+#
+# Usage: bash benchmarks/LIGO/run.sh
 
 set -e
 
-# S4D — GaussNLL chirp-mass regression
-python main.py fit  --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml
-python main.py test --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml \
-    --ckpt_path checkpoints/ligo_s4d_gaussnll_regression/best.ckpt
+for model in s4d conv1d linoss; do
+    cfg=configs/LIGO/train_ligo_${model}_gaussnll_regression.yaml
+    python main.py fit  --config $cfg
+    python main.py test --config $cfg --ckpt_path checkpoints/ligo_${model}_gaussnll_regression/best.ckpt
+done
 
-# 1D CNN — GaussNLL chirp-mass regression
-python main.py fit  --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
-python main.py test --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
-    --ckpt_path checkpoints/ligo_conv1d_gaussnll_regression/best.ckpt
+# Zero-shot foundation models: frozen embeddings + ridge probe fitted on val, scored on test.
+# Chronos / Time-MoE take ~40 GPU-hours each; split them with --worker i --num_workers k.
+for model in moment chronos timesfm timemoe moirai granite_ttm; do
+    benchmarks/foundation/.venv/bin/python benchmarks/LIGO/fm_zeroshot_ligo.py --model $model
+done
 
-# LinOSS (JAX) — GaussNLL chirp-mass regression
-python main.py fit  --config configs/LIGO/train_ligo_linoss_gaussnll_regression.yaml
-python main.py test --config configs/LIGO/train_ligo_linoss_gaussnll_regression.yaml \
-    --ckpt_path checkpoints/ligo_linoss_gaussnll_regression/best.ckpt
+python benchmarks/LIGO/score.py

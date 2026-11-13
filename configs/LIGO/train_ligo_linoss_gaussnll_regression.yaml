@@ -5,11 +5,16 @@
 #
 # LinOSS (JAX/equinox) Gaussian NLL regression: 2-channel strain 59-63 s at 2048 Hz (8192 steps) -> chirp_mass.
 # accelerator: cpu — JAX manages its own GPU device via XLA.
-# module load cudnn/9.10.2.21_cuda12-fasrc01 required before running.
-# ~3.2M parameters (H=512, ssm_size=32, num_blocks=4).
+# Original (unpatched) LinOSS, H=128, ssm_size=128 (~0.40M params): every block runs on all 8192 steps.
+# AdamW weight decay 0.01, grad-norm clip 1.0, lr 3e-4, early-stopping patience 30.
+# SSM dynamics params (A, G, dt): lr x0.1, no weight decay; non-finite steps skipped.
+# Without these, weight decay drives oscillators undamped and ~1% background glitches
+# (|x| up to ~3000 sigma) blow up the 8192-step recurrence (lr 1e-3 went NaN in epoch 0).
+
+seed_everything: 42
 
 trainer:
-  max_epochs: 1000
+  max_epochs: 60   # fixed 60-epoch budget for every model; test uses the best-val checkpoint
   accelerator: cpu          # JAX handles GPU directly; Lightning orchestrates on CPU
   devices: 1
   log_every_n_steps: 10
@@ -18,7 +23,7 @@ trainer:
       init_args:
         monitor: val/loss
         mode: min
-        patience: 200
+        patience: 30
         min_delta: 1.0e-5
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
@@ -37,8 +42,13 @@ model:
   class_path: tasks.LIGO.regression_jax.LinOSSLIGOGaussNLL
   init_args:
     n_targets: 1
-    lr: 1.0e-3
+    lr: 3.0e-4
+    lr_decay: 0.99
+    weight_decay: 0.01
     clip_grad_norm: 1.0
+    ssm_lr_factor: 0.1      # A_diag, G_diag, steps: 0.1x LR ...
+    ssm_weight_decay: 0.0   # ... and no weight decay (keeps oscillators damped)
+    skip_nonfinite: true    # drop updates from batches that give NaN/inf (glitches)
     seed: 42
     target_names:
       - chirp_mass
@@ -50,18 +60,20 @@ model:
       init_args:
         num_blocks: 4
         N: 2              # n_ifos (H1 + L1)
-        ssm_size: 32
-        H: 512
+        ssm_size: 128
+        H: 128
         output_dim: 2     # 2 * n_targets (mean + log-var for chirp_mass)
         task: regression
         output_step: 1
         discretization: damped_IMEX
+        drop_rate: 0.1
         seed: 42
 
 data:
   class_path: dataloader.LIGO_dataloader.LIGODataModule
   init_args:
-    # Pre-cut 59-63 s window at 2048 Hz (see data/LIGO/extract_window.py).
+    # Pre-cut 58.75-63.25 s window at 2048 Hz (data/LIGO/extract_window.py).
+    # Models see 4 s (59-63 s) shifted by up to +-0.25 s: random per item in train, fixed per sample in val/test.
     train_file: data/LIGO/2048Hz/train.h5
     val_file:   data/LIGO/2048Hz/val.h5
     test_file:  data/LIGO/2048Hz/test.h5
@@ -71,9 +83,10 @@ data:
     observed_variables:
       - snr
     strain_frequency:  2048
-    strain_duration:   4.0
-    window_begin:      0.0
-    window_end:        4.0
+    strain_duration:   4.5
+    window_begin:      0.25
+    window_end:        4.25
+    jitter:            0.25
     train_batch_size:  64
     val_batch_size:    64
     test_batch_size:   128

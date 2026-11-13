@@ -19,7 +19,7 @@ since whitening is linear, ``whitened_injected`` is written as their sum.
 
 Usage:
     python data/LIGO/extract_window.py \
-        --src /path/to/PhyTS-bench/LIGO_2048Hz --dest data/LIGO/2048Hz_v2 --split train
+        --src /path/to/PhyTS-bench/LIGO_2048Hz --dest data/LIGO/2048Hz --split train
 
 Output (per split): ``<dest>/<split>.h5`` with
     whitened_injected  (N, 2, (window_end - window_begin) * sample_rate)  float32
