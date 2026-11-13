@@ -145,10 +145,12 @@ class TimesFMWrapper(BaseFoundationModel):
     # ── Embedding (hidden states of the stacked transformer) ──────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
-        """(B, L) -> (B, hidden_size): mean over patches of the last transformer
-        layer's output.  Needs the PyTorch backend (TimesFmTorch._model);
-        L must be a multiple of the patch length (32) and <= context_len.
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
+        """(B, L) -> (B, hidden_size): last transformer layer's output, pooled over patches
+        (pool="mean") or taken at the last patch (pool="last", the only position that has
+        seen the whole causal context; the Kepler / TESS / Project 8 FM runs' default).
+        Needs the PyTorch backend (TimesFmTorch._model); L must be a multiple of the patch
+        length (32) and <= context_len.
         """
         decoder = getattr(self.model, "_model", None)
         if decoder is None:
@@ -160,4 +162,5 @@ class TimesFMWrapper(BaseFoundationModel):
         freq = torch.zeros(x.shape[0], 1, dtype=torch.long, device=dev)
         model_input = model_input + decoder.freq_emb(freq)
         h = decoder.stacked_transformer(model_input, patched_padding)   # (B, N, d)
-        return EmbeddingResult(embeddings=h.mean(dim=1).float().cpu().numpy())
+        emb = h[:, -1] if pool == "last" else h.mean(dim=1)
+        return EmbeddingResult(embeddings=emb.float().cpu().numpy())

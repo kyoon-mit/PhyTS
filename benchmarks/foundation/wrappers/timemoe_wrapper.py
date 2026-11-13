@@ -139,7 +139,9 @@ class TimeMoEWrapper(BaseFoundationModel):
     # ── Embedding via final hidden state ──────────────────────────────────
 
     @torch.no_grad()
-    def embed(self, signal: np.ndarray) -> EmbeddingResult:
+    def embed(self, signal: np.ndarray, *, pool: str = "mean") -> EmbeddingResult:
+        """pool="last": final token (causal decoder; the Kepler / TESS / Project 8 FM runs'
+        default), "mean": average over tokens."""
         if self.model is None:
             raise RuntimeError("Call .load() before embed().")
         normed, _, _ = self._instance_normalize(signal.astype(np.float32))
@@ -149,5 +151,5 @@ class TimeMoEWrapper(BaseFoundationModel):
         out = self.model.model(input_ids=x, use_cache=False, output_hidden_states=False,
                                return_dict=True)
         hs = out.last_hidden_state          # (B, T, d_model)
-        emb = hs.mean(dim=1)                # (B, d_model)
+        emb = hs[:, -1] if pool == "last" else hs.mean(dim=1)   # (B, d_model)
         return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))

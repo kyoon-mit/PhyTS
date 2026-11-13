@@ -1,0 +1,11 @@
+executable = /home/barmstrong/phyts/cluster/download_phyts.sh
+error = /fast/barmstrong/outputs/$(Cluster).$(Process).err
+output = /fast/barmstrong/outputs/$(Cluster).$(Process).out
+log = /fast/barmstrong/outputs/$(Cluster).log
+request_memory = 16000
+request_cpus = 8
+request_gpus = 0
+MaxTime = 259200
+periodic_remove = (JobStatus =?= 2) && ((CurrentTime - JobCurrentStartDate) >= $(MaxTime))
+
+queue

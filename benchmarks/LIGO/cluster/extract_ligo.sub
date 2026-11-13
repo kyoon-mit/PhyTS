@@ -1,0 +1,13 @@
+# Cut the 58.75-63.25 s window (4 s + 0.25 s jitter margin) from LIGO_2048Hz shards -> one file per split.
+executable = /home/barmstrong/.local/bin/uv
+arguments = run --no-sync python data/LIGO/extract_window.py --src /fast/barmstrong/PhyTS-bench/LIGO_2048Hz --dest /fast/barmstrong/LIGO_2048Hz_v2 --split $(split)
+initialdir = /home/barmstrong/TimeSeriesPhysics
+error = /fast/barmstrong/outputs/extract_$(split).$(Cluster).err
+output = /fast/barmstrong/outputs/extract_$(split).$(Cluster).out
+log = /fast/barmstrong/outputs/extract.$(Cluster).log
+environment = "HOME=/home/barmstrong HDF5_USE_FILE_LOCKING=FALSE PYTHONUNBUFFERED=1"
+request_memory = 16000
+request_cpus = 2
+request_gpus = 0
+
+queue split in (train, val, test)
