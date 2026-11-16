@@ -166,6 +166,8 @@ class LIGODataModule(L.LightningDataModule):
         if stage == 'fit':
             self.train_dataset = LIGODataset('train', **self._dataset_kwargs)
             self.val_dataset = LIGODataset('val', **self._dataset_kwargs)
+        elif stage == 'validate':
+            self.val_dataset = LIGODataset('val', **self._dataset_kwargs)
         elif stage in ('test', 'predict'):
             self.test_dataset = LIGODataset('test', **self._dataset_kwargs)
 
