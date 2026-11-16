@@ -158,18 +158,6 @@ class LIGORegressionGaussNLL(L.LightningModule):
     def _gaussnll(mu: Tensor, lv: Tensor, y: Tensor) -> Tensor:
         return 0.5 * (lv + (y - mu) ** 2 / torch.exp(lv)).mean()
 
-    @staticmethod
-    def _beta_nll(mu: Tensor, lv: Tensor, y: Tensor, beta: float = 0.5) -> Tensor:
-        """Beta-NLL loss (Seitzer et al. 2022).
-
-        Stops gradient through the variance weight to prevent variance collapse:
-        overconfident predictions (small var) get down-weighted, so the optimizer
-        can't drive lv to -inf by memorising training targets.
-        """
-        var = torch.exp(lv)
-        mse = (y - mu) ** 2
-        return 0.5 * (var.detach() ** beta * (mse / var + lv)).mean()
-
     def training_step(self, batch: Batch, batch_idx: int):
         X, y, _ = batch
         y_hat = self(X)

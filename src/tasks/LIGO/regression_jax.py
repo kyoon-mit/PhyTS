@@ -44,25 +44,11 @@ def _soft_clamp_lv(lv_raw: Array) -> Array:
 
 
 def gaussian_nll_loss(y_hat: Array, y: Array) -> Array:
-    """Gaussian NLL averaged over batch and targets (used for validation/test)."""
+    """Gaussian NLL averaged over batch and targets (training, validation and test loss)."""
     n = y.shape[-1]
     mu = y_hat[:, :n]
     lv = _soft_clamp_lv(y_hat[:, n:])
     return jnp.mean(0.5 * (lv + (y - mu) ** 2 / jnp.exp(lv)))
-
-
-def beta_nll_loss(y_hat: Array, y: Array, beta: float = 0.5) -> Array:
-    """Beta-NLL loss (Seitzer et al. 2022) used for training.
-
-    Stops gradient through the variance weight to prevent variance collapse.
-    """
-    n = y.shape[-1]
-    mu = y_hat[:, :n]
-    lv = _soft_clamp_lv(y_hat[:, n:])
-    var = jnp.exp(lv)
-    mse = (y - mu) ** 2
-    weight = jax.lax.stop_gradient(var ** beta)
-    return jnp.mean(0.5 * (weight * (mse / var + lv)))
 
 
 class LinOSSLIGOGaussNLL(JAXLightningModule):
