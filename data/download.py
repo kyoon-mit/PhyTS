@@ -143,15 +143,16 @@ def full_project8() -> None:
 
 
 def full_ligo() -> None:
-    print("  downloading LIGO_2048Hz/ (~3.5 TB) …")
+    print("  downloading LIGO/ (~4 TB) …")
     snapshot_download(
         repo_id=REPO_ID, repo_type="dataset",
-        allow_patterns=["LIGO_2048Hz/**"],
-        local_dir=str(DATA.parent),
+        allow_patterns=["LIGO/**"],
+        local_dir=str(DATA),
     )
-    print("  LIGO shards are in LIGO_2048Hz/{train,val}/bns_snr_*/ and LIGO_2048Hz/test/snr_5_50/")
+    print("  LIGO shards are in data/LIGO/train/bns_snr_*/, data/LIGO/val/snr_5_50/ "
+          "and data/LIGO/test/snr_5_50/")
     print("  Next step: python data/LIGO/extract_window.py "
-          "--src LIGO_2048Hz --dest data/LIGO/2048Hz")
+          "--src data/LIGO --dest data/LIGO/2048Hz")
 
 
 def full_tidmad() -> None:
