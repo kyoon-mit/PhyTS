@@ -1,4 +1,4 @@
-"""Merge LIGO_2048Hz shards into one windowed HDF5 file per split.
+"""Merge the LIGO shards into one windowed HDF5 file per split.
 
 The full 2048 Hz dataset stores 64 s segments (131072 samples per channel) across
 thousands of shards.  Training only uses a short window around coalescence (~63 s),
@@ -8,7 +8,7 @@ into a single file per split that ``LIGODataModule`` can read directly.
 The default window (58.75-63.25 s) is 0.25 s wider on each side than the 4 s
 (59-63 s) the models see, so ``LIGODataModule(jitter=0.25)`` can shift the crop.
 
-Shard layout (PhyTS-bench rev a0064e5c)::
+Shard layout (as downloaded by data/download.py)::
 
     train/bns_snr_<lo>_<hi>/train_*.h5
     val/snr_5_50/val_*.h5
@@ -19,7 +19,7 @@ since whitening is linear, ``whitened_injected`` is written as their sum.
 
 Usage:
     python data/LIGO/extract_window.py \
-        --src /path/to/PhyTS-bench/LIGO_2048Hz --dest data/LIGO/2048Hz --split train
+        --src data/LIGO --dest data/LIGO --split train
 
 Output (per split): ``<dest>/<split>.h5`` with
     whitened_injected  (N, 2, (window_end - window_begin) * sample_rate)  float32
@@ -105,7 +105,7 @@ def extract(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--src", type=Path, required=True, help="LIGO_2048Hz download directory")
+    parser.add_argument("--src", type=Path, required=True, help="Directory holding the downloaded LIGO shards")
     parser.add_argument("--dest", type=Path, required=True, help="Output directory")
     parser.add_argument("--split", choices=list(SPLIT_GLOBS) + ["all"], default="all")
     parser.add_argument("--strain_keys", nargs="+", default=["whitened_injected"])

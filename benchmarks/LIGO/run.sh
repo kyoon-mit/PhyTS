@@ -4,7 +4,7 @@
 #
 # Prerequisites:
 #   python data/download.py --domain ligo                                   # ~4 TB of 64 s shards
-#   python data/LIGO/extract_window.py --src LIGO_2048Hz --dest data/LIGO/2048Hz
+#   python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
 #   make env       # PyTorch env (S4D, CNN); make env-jax for LinOSS
 #   benchmarks/foundation/.venv for the foundation models
 #

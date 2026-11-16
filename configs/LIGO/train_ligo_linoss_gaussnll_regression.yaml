@@ -74,9 +74,9 @@ data:
   init_args:
     # Pre-cut 58.75-63.25 s window at 2048 Hz (data/LIGO/extract_window.py).
     # Models see 4 s (59-63 s) shifted by up to +-0.25 s: random per item in train, fixed per sample in val/test.
-    train_file: data/LIGO/2048Hz/train.h5
-    val_file:   data/LIGO/2048Hz/val.h5
-    test_file:  data/LIGO/2048Hz/test.h5
+    train_file: data/LIGO/train.h5
+    val_file:   data/LIGO/val.h5
+    test_file:  data/LIGO/test.h5
     injected_data_key: whitened_injected
     target_variables:
       - chirp_mass

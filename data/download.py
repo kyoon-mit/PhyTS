@@ -3,7 +3,7 @@ Download PhyTS-bench datasets from Hugging Face (PhyTS-team/PhyTS-bench).
 
 Sample files (~few GB total) are enough to verify the full pipeline and
 satisfy NeurIPS reproducibility requirements.  Full datasets are large
-(LIGO ~3.5 TB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~194 MB).
+(LIGO ~4 TB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~194 MB).
 
 Usage
 -----
@@ -23,7 +23,7 @@ Notes
 -----
 LIGO   full: 64 s segments at 2048 Hz, sharded by split and SNR bin.  After
              download, run:
-             python data/LIGO/extract_window.py --src LIGO_2048Hz --dest data/LIGO/2048Hz
+             python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
              to cut the 59-63 s window into one file per split.
 TIDMAD full: after download, run:
              python data/TIDMAD/preprocess_tidmad.py
@@ -152,7 +152,7 @@ def full_ligo() -> None:
     print("  LIGO shards are in data/LIGO/train/bns_snr_*/, data/LIGO/val/snr_5_50/ "
           "and data/LIGO/test/snr_5_50/")
     print("  Next step: python data/LIGO/extract_window.py "
-          "--src data/LIGO --dest data/LIGO/2048Hz")
+          "--src data/LIGO --dest data/LIGO")
 
 
 def full_tidmad() -> None:

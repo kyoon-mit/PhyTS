@@ -68,9 +68,9 @@ To download a full dataset:
 
 ```bash
 python data/download.py --domain tess        # 194 MB
-python data/download.py --domain ligo        # ~3.5 TB; then run:
+python data/download.py --domain ligo        # ~4 TB; then run:
 python data/LIGO/extract_window.py \
-    --src LIGO_2048Hz --dest data/LIGO/2048Hz
+    --src data/LIGO --dest data/LIGO
 python data/download.py --domain project8    # ~44 GB
 python data/download.py --domain tidmad      # ~163 GB; then run:
 python data/TIDMAD/preprocess_tidmad.py \

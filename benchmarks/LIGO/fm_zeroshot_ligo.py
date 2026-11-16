@@ -295,7 +295,7 @@ def fit_and_eval_probe(args, out: Path, res_dir: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--model", required=True, choices=MODELS)
-    ap.add_argument("--data_dir", default="data/LIGO/2048Hz")
+    ap.add_argument("--data_dir", default="data/LIGO")
     ap.add_argument("--out_root", default="outputs/LIGO/fm_embeddings", help="embedding cache")
     ap.add_argument("--results_root", default="results/LIGO")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
