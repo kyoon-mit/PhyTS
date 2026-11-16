@@ -1,15 +1,13 @@
 """1D ResNet regression model, mirroring ml4gw ResNet1D (aframe/LIGO community standard).
 
-Architecture (default ResNet18-like with layers=[2,2,2,2]):
-  - Stem: Conv1d(d_input, 64, 7, stride=2) + GroupNorm + ReLU + MaxPool(3, stride=2)
-  - Residual stages: channels [64, 128, 256, 512] by default (``channels``), N blocks each, stride-2 downsampling
-  - Head: AdaptiveAvgPool1d(1) + Dropout(dropout) + Linear(512, d_output)
+Architecture (channels = [c0, c1, c2, c3], default [64, 128, 256, 512]):
+  - Stem: Conv1d(d_input, c0, 7, stride=2) + GroupNorm + ReLU + MaxPool(3, stride=2)
+  - Residual stages with c0..c3 channels, layers[i] blocks each, stride-2 downsampling
+  - Head: AdaptiveAvgPool1d(1) + Dropout(dropout) + Linear(c3, d_output)
 
 Interface: (B, L, d_input) -> (B, d_output)
 
-Comparable to S4D(d_model=512, n_layers=4):
-  ResNet1DRegressor(d_input=2, layers=[2,2,2,2]) ≈ 11M params  (similar capacity)
-  ResNet1DRegressor(d_input=2, layers=[1,1,1,1]) ≈ 2.7M params (lighter)
+The LIGO config uses layers=[1, 1, 1, 1] and channels=[32, 64, 96, 128] (388,674 parameters).
 """
 
 import torch
