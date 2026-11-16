@@ -178,15 +178,24 @@ class LIGORegressionGaussNLL(L.LightningModule):
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
+    def on_validation_epoch_start(self):
+        self._val_sq_err = torch.zeros(len(self.target_names), dtype=torch.float64, device=self.device)
+        self._val_n = 0
+
     def validation_step(self, batch: Batch, batch_idx: int):
         X, y, _ = batch
         y_hat = self(X)
         mu, lv = self._split_output(y_hat, y.shape[-1])
         loss = self._gaussnll(mu, lv, y)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        for i, name in enumerate(self.target_names):
-            rmse = torch.sqrt(F.mse_loss(mu[:, i], y[:, i]))
-            self.log(f"val/rmse_{name}", rmse, on_step=False, on_epoch=True)
+        self._val_sq_err += ((mu - y) ** 2).sum(dim=0).double()
+        self._val_n += y.shape[0]
+
+    def on_validation_epoch_end(self):
+        # RMSE over the full split, the same formula benchmarks/LIGO/score.py uses on test
+        rmse = torch.sqrt(self._val_sq_err / self._val_n)
+        for name, value in zip(self.target_names, rmse):
+            self.log(f"val/rmse_{name}", value.float())
 
     def on_test_epoch_start(self):
         self._mus: list[Tensor] = []
