@@ -68,16 +68,16 @@ def _hf_get(filename: str, dest: Path) -> None:
 
 def sample_ligo() -> None:
     """
-    Downloads sample_LIGO.h5 and places it as all three splits so the
-    LIGO dataloader (which expects one file per split) works out of the box.
+    Downloads sample_LIGO.h5 (one training shard) and copies it into the
+    train, val and test shard layout that data/LIGO/extract_window.py reads.
     """
     src = "sample/sample_LIGO.h5"
-    for split, name in [
-        ("train", "sig_combined_train.h5"),
-        ("val",   "sig_combined_val.h5"),
-        ("test",  "sig_combined_test.h5"),
+    for shard in [
+        "train/bns_snr_5_10/train_000000-000099.h5",
+        "val/snr_5_50/val_000000-000099.h5",
+        "test/snr_5_50/0000000-0099999/test_0000000-0000099.h5",
     ]:
-        _hf_get(src, DATA / "LIGO" / split / name)
+        _hf_get(src, DATA / "LIGO" / shard)
 
 
 def sample_tess() -> None:
