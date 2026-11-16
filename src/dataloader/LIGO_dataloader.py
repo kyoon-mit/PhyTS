@@ -58,6 +58,21 @@ class LIGODataset(Dataset):
 
         with h5py.File(self.file_path, 'r') as f:
             self.n_samples, self.n_ifos, self.full_len = f[injected_data_key].shape
+            attrs = dict(f.attrs)
+
+        # extract_window.py records the cut it made; check the config agrees with it
+        if 'sample_rate' in attrs and attrs['sample_rate'] != strain_frequency:
+            raise ValueError(
+                f"{self.file_path} is at {attrs['sample_rate']} Hz, "
+                f"config says strain_frequency={strain_frequency}"
+            )
+        if 'window_begin' in attrs:
+            stored = attrs['window_end'] - attrs['window_begin']
+            if abs(stored - strain_duration) > 1e-9:
+                raise ValueError(
+                    f"{self.file_path} holds a {stored} s cut, "
+                    f"config says strain_duration={strain_duration}"
+                )
 
         expected_len = int(strain_duration * strain_frequency)
         if self.full_len != expected_len:
