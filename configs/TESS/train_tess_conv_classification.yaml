@@ -1,17 +1,25 @@
-# Usage: python main.py fit --config configs/TESS/train_tess_conv_classification.yaml
+# Usage:
+#   python main.py fit  --config configs/TESS/train_tess_conv_classification.yaml
+#   python main.py test --config configs/TESS/train_tess_conv_classification.yaml \
+#                       --ckpt_path checkpoints/tess_conv_classification/best.ckpt
+#
+# CNN variability classification: z-scored light curve -> 8 classes.
+# Loss: cross-entropy.
+# ~298K parameters (4 conv blocks of 140 channels, kernel 5), the ~300K size reported in Table 2.
+
+seed_everything: 0
 
 trainer:
-  max_epochs: 100
+  max_epochs: 200
   accelerator: gpu
   devices: 1
-  log_every_n_steps: 1
-  gradient_clip_val: 1.0
+  log_every_n_steps: 10
   callbacks:
     - class_path: lightning.pytorch.callbacks.EarlyStopping
       init_args:
         monitor: val/loss
         mode: min
-        patience: 15
+        patience: 20
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         dirpath: checkpoints/tess_conv_classification
@@ -29,25 +37,23 @@ model:
   class_path: tasks.TESS.classification.TESSClassification
   init_args:
     lr: 1.0e-4
-    lr_decay: 0.995
+    lr_decay: 0.99
     weight_decay: 1.0e-4
-    use_mask: true
+    csv_out: results/TESS/conv_classification/test_predictions.csv
     model:
-      class_path: models.conv.ConvClassifier
+      class_path: models.conv_ae.ConvAE   # encoder + masked mean pool + linear head
       init_args:
-        d_input: 1
-        d_output: 8
-        channels: [64, 64, 128, 128, 256]
-        kernel_size: 15
+        n_layers: 4
+        latent_channels: 140
+        kernel_size: 5
+        pool_stride: 2
+        num_classes: 8
         dropout: 0.4
 
 data:
-  class_path: dataloader.tess_dataloader.TESSDataModule
+  class_path: dataloader.tess_dataloader.TESSClassificationDataModule
   init_args:
-    data_path: data/TESS/tess_classification.parquet
-    seq_len: 3917
-    batch_size: 64
+    data_dir: data/TESS/split
+    seq_len: 1100
+    batch_size: 128
     num_workers: 4
-    train_frac: 0.7
-    val_frac: 0.15
-    seed: 42

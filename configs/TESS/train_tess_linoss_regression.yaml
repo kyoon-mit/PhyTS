@@ -1,0 +1,64 @@
+# Usage:
+#   python main.py fit  --config configs/TESS/train_tess_linoss_regression.yaml
+#   python main.py test --config configs/TESS/train_tess_linoss_regression.yaml \
+#                       --ckpt_path checkpoints/tess_linoss_regression/best.ckpt
+#
+# LinOSS rotation regression: z-scored light curve -> frot (1/day) of GDOR_SPB stars.
+# Loss: MSE.
+# ~305K parameters (4 damped-IMEX blocks, H=ssm_size=112), the ~300K size reported in Table 2.
+
+seed_everything: 0
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 10
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_linoss_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: logs
+      name: tess_linoss_regression
+
+model:
+  class_path: tasks.TESS.linoss.LinOSSTESSRegression
+  init_args:
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+    clip_grad_norm: 1.0
+    seed: 0
+    csv_out: results/TESS/linoss_regression/test_predictions.csv
+    model:
+      class_path: models.linoss.LinOSS
+      init_args:
+        num_blocks: 4
+        N: 1                # flux; the padding mask is appended as a second channel
+        ssm_size: 112
+        H: 112
+        output_dim: 1
+        task: regression    # raw outputs; the loss is applied in the task
+        output_step: 1
+        discretization: damped_IMEX
+        drop_rate: 0.05
+        seed: 0
+
+data:
+  class_path: dataloader.tess_dataloader.TESSRegressionDataModule
+  init_args:
+    data_dir: data/TESS/split
+    seq_len: 1100
+    batch_size: 128
+    num_workers: 4

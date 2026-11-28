@@ -1,0 +1,59 @@
+# Usage:
+#   python main.py fit  --config configs/TESS/train_tess_conv_regression.yaml
+#   python main.py test --config configs/TESS/train_tess_conv_regression.yaml \
+#                       --ckpt_path checkpoints/tess_conv_regression/best.ckpt
+#
+# CNN rotation regression: z-scored light curve -> frot (1/day) of GDOR_SPB stars.
+# Loss: MSE.
+# ~291K parameters (4 conv blocks of 140 channels, kernel 5), the ~300K size reported in Table 2.
+
+seed_everything: 0
+
+trainer:
+  max_epochs: 200
+  accelerator: gpu
+  devices: 1
+  log_every_n_steps: 10
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        mode: min
+        patience: 20
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/tess_conv_regression
+        filename: best
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: logs
+      name: tess_conv_regression
+
+model:
+  class_path: tasks.TESS.regression.TESSRegression
+  init_args:
+    lr: 1.0e-4
+    lr_decay: 0.99
+    weight_decay: 1.0e-4
+    csv_out: results/TESS/conv_regression/test_predictions.csv
+    model:
+      class_path: models.conv_ae.ConvAE   # encoder + masked mean pool + linear head
+      init_args:
+        n_layers: 4
+        latent_channels: 140
+        kernel_size: 5
+        pool_stride: 2
+        num_classes: 1
+        dropout: 0.4
+
+data:
+  class_path: dataloader.tess_dataloader.TESSRegressionDataModule
+  init_args:
+    data_dir: data/TESS/split
+    seq_len: 1100
+    batch_size: 128
+    num_workers: 4

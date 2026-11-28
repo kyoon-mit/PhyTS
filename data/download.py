@@ -3,7 +3,7 @@ Download PhyTS-bench datasets from Hugging Face (PhyTS-team/PhyTS-bench).
 
 Sample files (~few GB total) are enough to verify the full pipeline and
 satisfy NeurIPS reproducibility requirements.  Full datasets are large
-(LIGO ~4 TB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~194 MB).
+(LIGO ~4 TB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~250 MB).
 
 Usage
 -----
@@ -81,10 +81,15 @@ def sample_ligo() -> None:
 
 
 def sample_tess() -> None:
-    _hf_get(
-        "sample/sample_tess_classification.parquet",
-        DATA / "TESS" / "tess_classification.parquet",
-    )
+    """
+    Downloads the classification and regression sample files (the training
+    splits) and copies each into the train, val and test file names that the
+    TESS dataloader reads.
+    """
+    for task in ("classification", "regression"):
+        for split in ("train", "val", "test"):
+            _hf_get(f"sample/sample_tess_{task}.parquet",
+                    DATA / "TESS" / "split" / f"tess_{task}_{split}.parquet")
 
 
 def sample_tidmad() -> None:
@@ -114,17 +119,13 @@ def sample_project8() -> None:
 # ---------------------------------------------------------------------------
 
 def full_tess() -> None:
-    dest = DATA / "TESS"
-    dest.mkdir(parents=True, exist_ok=True)
-    print(f"  downloading TESS/tess_classification.parquet …")
-    tmp = hf_hub_download(
+    print("  downloading TESS/split/ (~250 MB) …")
+    snapshot_download(
         repo_id=REPO_ID, repo_type="dataset",
-        filename="TESS/tess_classification.parquet",
+        allow_patterns=["TESS/split/*"],
+        local_dir=str(DATA),
     )
-    out = dest / "tess_classification.parquet"
-    if not out.exists():
-        shutil.copy2(tmp, out)
-    print(f"  → {out.relative_to(DATA.parent)}")
+    print("  → data/TESS/split/")
 
 
 def full_project8() -> None:

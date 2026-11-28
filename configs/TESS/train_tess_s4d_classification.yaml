@@ -1,17 +1,25 @@
-# Usage: python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
-# Multi-class classification of TESS stellar variability light curves using S4D.
+# Usage:
+#   python main.py fit  --config configs/TESS/train_tess_s4d_classification.yaml
+#   python main.py test --config configs/TESS/train_tess_s4d_classification.yaml \
+#                       --ckpt_path checkpoints/tess_s4d_classification/best.ckpt
+#
+# S4D variability classification: z-scored light curve -> 8 classes.
+# Loss: cross-entropy.
+# ~292K parameters (d_model=160, d_state=64, 4 layers), the ~300K size reported in Table 2.
+
+seed_everything: 0
 
 trainer:
-  max_epochs: 100
+  max_epochs: 200
   accelerator: gpu
   devices: 1
-  log_every_n_steps: 1
+  log_every_n_steps: 10
   callbacks:
     - class_path: lightning.pytorch.callbacks.EarlyStopping
       init_args:
         monitor: val/loss
         mode: min
-        patience: 10
+        patience: 20
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         dirpath: checkpoints/tess_s4d_classification
@@ -31,26 +39,21 @@ model:
     lr: 1.0e-3
     lr_decay: 0.99
     weight_decay: 1.0e-4
-    use_mask: true
+    csv_out: results/TESS/s4d_classification/test_predictions.csv
     model:
       class_path: models.s4d.S4Model
       init_args:
         d_input: 1
-        d_output: 8       # 8 variability classes
-        d_model: 64
-        d_state: 16
+        d_output: 8
+        d_model: 160
+        d_state: 64
         n_layers: 4
         dropout: 0.2
-        dt_min: 0.001
-        dt_max: 0.1
 
 data:
-  class_path: dataloader.tess_dataloader.TESSDataModule
+  class_path: dataloader.tess_dataloader.TESSClassificationDataModule
   init_args:
-    data_path: data/TESS/tess_classification.parquet
-    seq_len: 3917
-    batch_size: 64
+    data_dir: data/TESS/split
+    seq_len: 1100
+    batch_size: 128
     num_workers: 4
-    train_frac: 0.7
-    val_frac: 0.15
-    seed: 42

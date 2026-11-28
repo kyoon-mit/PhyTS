@@ -1,16 +1,13 @@
-# LinOSS end-to-end classification: flux → variability label (8 classes).
-#
-# Stage 1 of the LinOSS TESS benchmark — no pretraining required.
-# Checkpoint saved to $CKPT_DIR/tess_linoss_classification/best.eqx (Equinox format).
-#
-# The LinOSS model uses task="regression" to output raw logits (no softmax);
-# cross-entropy is applied inside TESSLinOSSClassificationCE._ce_loss.
-#
 # Usage:
-#   python main.py fit --config configs/TESS/other/train_tess_linoss_classification.yaml \
-#     --data.init_args.data_dir <path>
-# Optional checkpoint dir (see JAXModelCheckpoint in tess_linoss.py):
-#   TESS_LINOSS_CKPT_DIR=<ckpt_dir>/tess_linoss_classification
+#   python main.py fit  --config configs/TESS/train_tess_linoss_classification.yaml
+#   python main.py test --config configs/TESS/train_tess_linoss_classification.yaml \
+#                       --ckpt_path checkpoints/tess_linoss_classification/best.ckpt
+#
+# LinOSS variability classification: z-scored light curve -> 8 classes.
+# Loss: cross-entropy.
+# ~306K parameters (4 damped-IMEX blocks, H=ssm_size=112), the ~300K size reported in Table 2.
+
+seed_everything: 0
 
 trainer:
   max_epochs: 200
@@ -23,41 +20,45 @@ trainer:
         monitor: val/loss
         mode: min
         patience: 20
-    - class_path: tasks.TESS.tess_linoss.JAXModelCheckpoint
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         dirpath: checkpoints/tess_linoss_classification
+        filename: best
         monitor: val/loss
         mode: min
+        save_top_k: 1
   logger:
-    class_path: lightning.pytorch.loggers.WandbLogger
+    class_path: lightning.pytorch.loggers.CSVLogger
     init_args:
-      project: TimeSeriesPhysics
+      save_dir: logs
       name: tess_linoss_classification
 
 model:
-  class_path: tasks.TESS.tess_linoss.TESSLinOSSClassificationCE
+  class_path: tasks.TESS.linoss.LinOSSTESSClassification
   init_args:
-    num_classes: 8
     lr: 1.0e-3
+    weight_decay: 1.0e-4
     clip_grad_norm: 1.0
     seed: 0
+    csv_out: results/TESS/linoss_classification/test_predictions.csv
     model:
       class_path: models.linoss.LinOSS
       init_args:
         num_blocks: 4
-        N: 1          # single flux channel: (B, L, 1)
-        ssm_size: 100  # ~265K params for ssm_size=64, H=128; set to 100 (with H=200) to match S4D's ~662K
-        H: 200
-        output_dim: 8  # must equal num_classes
-        task: regression  # raw logits; softmax_cross_entropy applied in loss fn
+        N: 1                # flux; the padding mask is appended as a second channel
+        ssm_size: 112
+        H: 112
+        output_dim: 8
+        task: regression    # raw outputs; the loss is applied in the task
         output_step: 1
-        discretization: IM
+        discretization: damped_IMEX
+        drop_rate: 0.05
         seed: 0
 
 data:
   class_path: dataloader.tess_dataloader.TESSClassificationDataModule
   init_args:
-    data_dir: data/TESS/.cache/TESS
-    batch_size: 64
-    num_workers: 8
+    data_dir: data/TESS/split
     seq_len: 1100
+    batch_size: 128
+    num_workers: 4

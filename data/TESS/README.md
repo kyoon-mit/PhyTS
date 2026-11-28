@@ -1,48 +1,27 @@
-# TESS (PhyTS-bench) Data
+# TESS data
 
-Parquet files are downloaded from HuggingFace and placed here for the dataloader.
-
-**Dataset:** [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench)
+Single-sector TESS light curves from the TESS-Gaia Light Curve pipeline, labelled with a stellar variability class and, for g-mode pulsators, a near-core rotation frequency (paper Section 3.2). Hosted in `TESS/` of [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench).
 
 ## Download
 
 ```bash
-python data/download.py --domain tess        # full dataset (~194 MB)
-python data/download.py --domain tess --sample   # sample file only
+python data/download.py --domain tess            # full dataset (~250 MB)
+python data/download.py --domain tess --sample   # training splits only, copied to train, val and test
 ```
 
-## Directory layout after download
+## Files
 
-```
-data/TESS/
-  tess_classification.parquet   # 25,935 light curves, 8-class labels
-  tess_regression.parquet       # 4,183 light curves, rotation freq targets
-```
+`data/TESS/split/tess_{classification,regression}_{train,val,test}.parquet`: fixed 80/10/10 splits, with no Gaia DR3 source in more than one split. The dataloader reads them directly.
 
-## Dataset schema
+## Format
 
-### `tess_classification.parquet`
+One row per light curve:
 
-| Column   | Type                   | Description                        |
-| -------- | ---------------------- | ---------------------------------- |
-| `GaiaID` | int64                  | Gaia source id                     |
-| `TIC`    | int64                  | TESS Input Catalog id              |
-| `sector` | int64                  | TESS sector index                  |
-| `label`  | string                 | Variability class (8 classes)      |
-| `time`   | `large_list` of double | Time samples (aligned with `flux`) |
-| `flux`   | `large_list` of double | Flux values (aligned with `time`)  |
+| Column | Description |
+|---|---|
+| `GaiaID`, `TIC`, `sector` | Gaia DR3 and TESS Input Catalog identifiers, observing sector |
+| `label` | variability class (classification files) |
+| `frot`, `frot_err` | near-core rotation frequency and its error, 1/day (regression files) |
+| `time`, `flux` | time stamps (BTJD) and normalized flux |
 
-### `tess_regression.parquet`
-
-| Column     | Type                   | Description                                      |
-| ---------- | ---------------------- | ------------------------------------------------ |
-| `GaiaID`   | int64                  | Gaia source id                                   |
-| `TIC`      | int64                  | TESS Input Catalog id                            |
-| `sector`   | int64                  | TESS sector index                                |
-| `frot`     | float64                | Rotation frequency target                        |
-| `frot_err` | float64                | Uncertainty for `frot`                           |
-| `time`     | `large_list` of double | Time samples (aligned with `flux`)               |
-| `flux`     | `large_list` of double | Normalized flux (aligned with `time`)            |
-
-Light-curve length varies per row (542–3,917 samples); the dataloader pads or
-crops as needed. See `src/dataloader/tess_dataloader.py` for details.
+The 8 classes are APERIODIC, CONTACT_ROT, DSCT_BCEP, ECLIPSE, GDOR_SPB, INSTRUMENT/JUNK, RRLYR_CEPH and SOLARLIKE.

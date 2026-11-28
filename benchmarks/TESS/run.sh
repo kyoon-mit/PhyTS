@@ -1,32 +1,31 @@
 #!/bin/bash
-# TESS benchmark — train all models and run evaluation.
+# TESS benchmark (paper Table 2): train CNN / S4D / LinOSS on variability classification and on
+# rotation (frot) regression, evaluate the six zero-shot foundation models, and score everything
+# on the test split.
 #
 # Prerequisites:
-#   source .venv/bin/activate          # make env (PyTorch) or make env-jax (LinOSS)
-#   python data/download.py --domain tess --sample   # or full dataset
+#   python data/download.py --domain tess          # ~250 MB
+#   make env-jax                                   # PyTorch + JAX env (S4D, CNN, LinOSS)
+#   make env-fm                                    # foundation-model env
 #
-# Usage:
-#   bash benchmarks/TESS/run.sh
+# Each model trains for up to 200 epochs (early stopping on val loss, patience 20); test uses the
+# best-validation checkpoint. Table 2 reports the ~300K-parameter models; the configs use that size.
+#
+# Usage: bash benchmarks/TESS/run.sh
 
 set -e
 
-# S4D — 8-class stellar variability classification
-python main.py fit  --config configs/TESS/train_tess_s4d_classification.yaml
-python main.py test --config configs/TESS/train_tess_s4d_classification.yaml \
-    --ckpt_path checkpoints/tess_s4d_classification/best.ckpt
+for task in classification regression; do
+    for model in conv s4d linoss; do
+        cfg=configs/TESS/train_tess_${model}_${task}.yaml
+        python main.py fit  --config $cfg
+        python main.py test --config $cfg --ckpt_path checkpoints/tess_${model}_${task}/best.ckpt
+    done
+done
 
-# 1D CNN — classification
-python main.py fit  --config configs/TESS/train_tess_conv_classification.yaml
-python main.py test --config configs/TESS/train_tess_conv_classification.yaml \
-    --ckpt_path checkpoints/tess_conv_classification/best.ckpt
+# Zero-shot foundation models: frozen embeddings + linear probe fitted on train, scored on test.
+for model in moment chronos timesfm timemoe moirai granite_ttm; do
+    benchmarks/foundation/.venv/bin/python benchmarks/TESS/fm_zeroshot_tess.py --model $model
+done
 
-# LinOSS (JAX) — classification
-python main.py fit  --config configs/TESS/train_tess_linoss_classification.yaml
-python main.py test --config configs/TESS/train_tess_linoss_classification.yaml \
-    --ckpt_path checkpoints/tess_linoss_classification/best.eqx
-
-# Evaluate all models
-python benchmarks/TESS/eval_pipeline.py \
-    --data_dir data/TESS \
-    --ckpt_dir checkpoints \
-    --out_dir  results/TESS
+python benchmarks/TESS/score.py
