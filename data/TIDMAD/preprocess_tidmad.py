@@ -1,25 +1,31 @@
 """
 Preprocesses TIDMAD H5 files into memory-mappable .npy arrays.
 
-Reads abra_training_*.h5 and abra_validation_*.h5 from --data_dir (which should
-point to the directory containing the original H5 files), extracts random
-non-overlapping 0.01-second windows at full 10 MHz resolution (100,000 samples),
-computes FFT-based labels, snaps frequencies to KNOWN_FREQS_HZ, and saves
-train / val / test splits.
+Reads tidmad_training_*.h5, tidmad_validation_*.h5 and tidmad_test_file.h5 from
+--data_dir (which should point to the directory containing the Hugging Face H5
+files), extracts random non-overlapping 0.01-second windows at full 10 MHz
+resolution (100,000 samples), computes FFT-based labels, snaps frequencies to
+KNOWN_FREQS_HZ, and saves train / val / test splits.
 
-Split: files are shuffled with --seed, then split 80/10/10 by file count:
-  48 train files / 6 val files / 6 test files  (out of 60 total)
+Each H5 file holds 200 one-second chunks of integer DAQ counts:
+  time_series_ch1  float32  (200, 10_000_000)  noisy SQUID channel
+  time_series_ch2  float32  (200, 10_000_000)  clean injected reference
+
+Split: follows the Hugging Face file names:
+  20 train files / 20 val files / 1 test file
 
 Output files in --out_dir:
   {split}_ch1.npy     int8     (N, 100_000)  noisy SQUID channel
   {split}_ch2.npy     int8     (N, 100_000)  clean injected reference
   {split}_params.npy  float32  (N, 3)        [frequency_hz, amplitude, snr]
-  scale.npy           float32  scalar        voltage_range_mV / 256.0
+  scale.npy           float32  scalar        DAQ counts to mV (40 mV / 128)
 
 Labels:
   frequency_hz  FFT peak frequency, snapped to KNOWN_FREQS_HZ grid
   amplitude     peak amplitude in mV  (2 * |FFT peak| / N)
   snr           signal power / noise power (±1 vs ±50 PSD bins around peak)
+Labels are per chunk. About 20% of chunks have no injection; there the peak is a
+noise line of ~0.02 mV rather than a signal.
 
 Usage:
   python data/TIDMAD/preprocess_tidmad.py \\
@@ -51,14 +57,20 @@ KNOWN_FREQS_HZ = np.array(
 
 FS          = 10_000_000   # native sampling rate (Hz)
 WINDOW_SIZE = 100_000      # 0.01 s × 10 MHz
-LABEL_WINDOW = 10_000_000  # 1 s — used for high-resolution FFT label computation
+SCALE_MV    = 40.0 / 128   # DAQ counts to mV
+
+SPLIT_FILES = {
+    'train': 'tidmad_training_[0-9][0-9][0-9][0-9].h5',
+    'val':   'tidmad_validation_[0-9][0-9][0-9][0-9].h5',
+    'test':  'tidmad_test_file.h5',
+}
 
 
 def _compute_labels(ch2_1s: np.ndarray, scaling: float) -> np.ndarray:
-    """Compute (frequency_hz, amplitude, snr) from 1-second channel0002 segment.
+    """Compute (frequency_hz, amplitude, snr) from a 1-second time_series_ch2 chunk.
 
-    ch2_1s : int8 array, length 10_000_000
-    scaling: voltage_range_mV / 256.0
+    ch2_1s : DAQ counts, length 10_000_000
+    scaling: DAQ counts to mV
     Returns float32 array of shape (3,).
     """
     clean = ch2_1s.astype(np.float32) * np.float32(scaling)
@@ -91,98 +103,70 @@ def _process_files(files, n_per_file, rng, out_ch1, out_ch2, out_params, offset,
     for i, path in enumerate(files):
         print(f'  [{i+1}/{len(files)}] {os.path.basename(path)}', flush=True)
         with h5py.File(path, 'r') as f:
-            ch1_ds = f['timeseries/channel0001/timeseries']
-            ch2_ds = f['timeseries/channel0002/timeseries']
+            ch1_ds = f['time_series_ch1']
+            ch2_ds = f['time_series_ch2']
 
-            # Per-file window count (some files are 2.00B samples, others 2.01B)
-            n_samples_file  = min(ch1_ds.shape[0], ch2_ds.shape[0])
-            n_windows_total = n_samples_file // WINDOW_SIZE
-
-            # Labels from the first full 1-second window at 10 MHz
-            ch2_1s = ch2_ds[:LABEL_WINDOW]
-            params = _compute_labels(ch2_1s, scaling)
+            n_chunks, chunk_length = ch1_ds.shape
+            windows_per_chunk = chunk_length // WINDOW_SIZE
 
             # Sample non-overlapping window start indices
-            n_sample = min(n_per_file, n_windows_total)
-            win_indices = rng.choice(n_windows_total, size=n_sample, replace=False)
+            win_indices = rng.choice(n_chunks * windows_per_chunk, size=n_per_file, replace=False)
             win_indices.sort()  # sorted read order is faster for HDF5
 
+            # Each chunk has its own injection, so labels are computed per chunk
+            current_chunk = None
             for j, wi in enumerate(win_indices):
-                start = int(wi) * WINDOW_SIZE
+                chunk, win = divmod(int(wi), windows_per_chunk)
+                if chunk != current_chunk:
+                    current_chunk = chunk
+                    ch2_chunk = ch2_ds[chunk]
+                    params = _compute_labels(ch2_chunk, scaling)
+
+                start = win * WINDOW_SIZE
                 end   = start + WINDOW_SIZE
-                out_ch1[offset + j] = ch1_ds[start:end]
-                out_ch2[offset + j] = ch2_ds[start:end]
+                out_ch1[offset + j] = ch1_ds[chunk, start:end]
+                out_ch2[offset + j] = ch2_chunk[start:end]
                 out_params[offset + j] = params
 
-        offset += n_sample
+        offset += n_per_file
     return offset
 
 
 def main():
     parser = argparse.ArgumentParser(description='Preprocess TIDMAD H5 → NPY')
     parser.add_argument('--data_dir',   default='data/TIDMAD/original',
-                        help='Directory containing abra_training_*.h5 and abra_validation_*.h5')
+                        help='Directory containing tidmad_training_*.h5, tidmad_validation_*.h5 '
+                             'and tidmad_test_file.h5')
     parser.add_argument('--out_dir',    default='data/TIDMAD/preprocessed')
     parser.add_argument('--n_per_file', type=int, default=1666,
-                        help='Windows sampled per file (default 1666 → ~100K total)')
+                        help='Windows sampled per file (default 1666 → ~68K total)')
     parser.add_argument('--seed',       type=int, default=42)
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
 
     # -----------------------------------------------------------------------
-    # Collect and split files
+    # Collect files for each split
     # -----------------------------------------------------------------------
-    # Accept both HuggingFace naming (tidmad_training_*.h5) and legacy naming
-    # (abra_training_*.h5).  Match exactly 4-digit suffixes to exclude derived
-    # files like abra_validation_denoised_s4denois_XXXX.h5.
-    import re
-    _4digit = re.compile(r'^(abra|tidmad)_(training|validation)_\d{4}\.h5$')
-    all_h5 = sorted(glob.glob(os.path.join(args.data_dir, 'abra_*.h5')) +
-                    glob.glob(os.path.join(args.data_dir, 'tidmad_*.h5')))
-    train_h5 = [f for f in all_h5 if _4digit.match(os.path.basename(f)) and 'training' in f]
-    val_h5   = [f for f in all_h5 if _4digit.match(os.path.basename(f)) and 'validation' in f]
-    all_files = train_h5 + val_h5
-
-    if not all_files:
-        raise FileNotFoundError(
-            f'No tidmad_training_*.h5 / abra_training_*.h5 in {args.data_dir}'
-        )
-
-    rng = np.random.default_rng(args.seed)
-    shuffled = list(rng.permutation(len(all_files)))
-    all_files = [all_files[i] for i in shuffled]
-
-    n       = len(all_files)
-    n_train = int(round(0.8 * n))
-    n_val   = int(round(0.1 * n))
-    n_test  = n - n_train - n_val
-
     splits = {
-        'train': all_files[:n_train],
-        'val':   all_files[n_train:n_train + n_val],
-        'test':  all_files[n_train + n_val:],
+        split: sorted(glob.glob(os.path.join(args.data_dir, pattern)))
+        for split, pattern in SPLIT_FILES.items()
     }
+    for split, files in splits.items():
+        if not files:
+            raise FileNotFoundError(f'No {SPLIT_FILES[split]} in {args.data_dir}')
 
-    print(f'Files: {n_train} train / {n_val} val / {n_test} test')
     print(f'Windows per file: {args.n_per_file}')
     for split, files in splits.items():
         print(f'  {split}: {len(files)} files × {args.n_per_file} = '
               f'{len(files)*args.n_per_file:,} windows')
 
-    # -----------------------------------------------------------------------
-    # Derive voltage scaling from first file (all files share the same range)
-    # -----------------------------------------------------------------------
-    with h5py.File(all_files[0], 'r') as f:
-        voltage_range_mV = float(f['timeseries/channel0001'].attrs['voltage_range_mV'])
-    scaling = voltage_range_mV / 256.0
-    np.save(os.path.join(args.out_dir, 'scale.npy'), np.float32(scaling))
-    print(f'Voltage scaling: {voltage_range_mV} mV / 256 = {scaling:.6f}')
+    np.save(os.path.join(args.out_dir, 'scale.npy'), np.float32(SCALE_MV))
 
     # -----------------------------------------------------------------------
     # Process each split
     # -----------------------------------------------------------------------
-    for split, files in splits.items():
+    for split_index, (split, files) in enumerate(splits.items()):
         n_windows = len(files) * args.n_per_file
         print(f'\n=== {split.upper()} ({n_windows:,} windows) ===')
 
@@ -198,9 +182,9 @@ def main():
         out_params = np.lib.format.open_memmap(
             params_path, mode='w+', dtype='float32', shape=(n_windows, 3))
 
-        split_rng = np.random.default_rng(args.seed + hash(split) % (2**31))
+        split_rng = np.random.default_rng([args.seed, split_index])
         _process_files(files, args.n_per_file, split_rng,
-                       out_ch1, out_ch2, out_params, offset=0, scaling=scaling)
+                       out_ch1, out_ch2, out_params, offset=0, scaling=SCALE_MV)
 
         # Flush to disk
         del out_ch1, out_ch2, out_params

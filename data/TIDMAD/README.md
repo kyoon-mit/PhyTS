@@ -1,67 +1,31 @@
-# TIDMAD Data
+# TIDMAD data
 
-This directory holds the TIDMAD dataset reader. For data, please see the [PhyTS Hugging face](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench).
+SQUID magnetometer readout from the ABRACADABRA axion search with a known hardware-injected signal (TIDMAD, [arXiv:2406.04378](https://arxiv.org/abs/2406.04378)). Hosted in `TIDMAD/` of [`PhyTS-team/PhyTS-bench`](https://huggingface.co/datasets/PhyTS-team/PhyTS-bench).
 
-## Directory layout
+## Download
 
+```bash
+python data/download.py --domain tidmad            # full dataset (~163 GB)
+python data/download.py --domain tidmad --sample   # one file, copied to train, val and test
+python data/TIDMAD/preprocess_tidmad.py --data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed
 ```
-data/TIDMAD/
-  tidmad_dataset.py
-  download_tidmad.py
-  README.md
-```
 
-## About the dataset
+## Files
 
-**TIDMAD** (Time-Domain Dark Matter Detection) is a 689 GB dataset from the ABRACADABRA
-experiment, recording SQUID magnetometer voltage during an axion dark matter search.
+| Split | Hub files (`data/TIDMAD/original/`) | Preprocessed (`data/TIDMAD/preprocessed/`) |
+|---|---|---|
+| train | `tidmad_training_*.h5` | `train_{ch1,ch2,params}.npy` |
+| val | `tidmad_validation_*.h5` | `val_{ch1,ch2,params}.npy` |
+| test | `tidmad_test_file.h5` | `test_{ch1,ch2,params}.npy` |
 
-- **Paper:** https://arxiv.org/abs/2406.04378 (NeurIPS 2025 Spotlight)
-- **Original Repository:** https://github.com/TIDMAD/TIDMAD
-- **PhyTS HuggingFace:** https://huggingface.co/datasets/PhyTS-team/PhyTS-bench/TIDMAD
+## Format
 
-There are 20 training files and 20 validation files.
-Each training/validation H5 file has 200 examples. 
-The files also contain metadata including number of examples (chunks), example time sereis length (chunk length), and sampling rate.  
-Within each example there are two time series channels sampled at 10 MHz, int8, 1×10^6 samples (1 s):
-- `time_series_ch1` — SQUID readout (noisy input)
-- `time_series_ch2` — injected reference signal (clean ground truth)
-Each example also contains metadata including the signal frequency for the hardware injected signal
-- `signal_frequency` — int8 hardware injected signal frequency.
+Each Hub file holds one-second chunks sampled at 10 MHz:
 
-## Downloading the dataset
+| Dataset | Description |
+|---|---|
+| `time_series_ch1` | SQUID readout (noisy input) |
+| `time_series_ch2` | injected reference signal (clean target) |
+| `signal_frequency` | injection frequency of each chunk [Hz] |
 
-To download the dataset from hugging face, use the provided `download_tidmad.py` script.
-Required dependancy is hugging-hub:
-```
-pip install huggingface-hub
-```
-Usage of `download_tidmad.py` includes a few option:
-```
-# Download all splits (default)
-python tidmad_downloader.py
-
-# Download only training and validation
-python tidmad_downloader.py --splits training validation
-
-# Download only test set
-python tidmad_downloader.py --splits test
-
-# Download all with verification
-python tidmad_downloader.py --verify
-```
-The directory layout after downloading will be:
-```angular2html
-tidmad_data/
-├── training/
-│   ├── tidmad_training_0000.h5
-│   ├── ...
-│   └── tidmad_training_0019.h5
-├── validation/
-│   ├── tidmad_validation_0000.h5
-│   ├── ...
-│   └── tidmad_validation_0019.h5
-└── test/
-    ├── tidmad_test_file.h5
-    └── ...
-```
+Preprocessing cuts the chunks into 100,000-sample windows (`{split}_ch1.npy`, `{split}_ch2.npy`) with per-window parameters (`{split}_params.npy`), and stores the DAQ-to-mV scale in `scale.npy`.

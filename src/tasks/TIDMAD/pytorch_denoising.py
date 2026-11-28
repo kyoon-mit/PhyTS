@@ -55,6 +55,10 @@ class TIDMADDenoisingMSE(L.LightningModule):
         loss = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
 
+    def test_step(self, batch, batch_idx: int):
+        loss = self._step(batch)
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
+
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.lr_decay)
@@ -100,6 +104,10 @@ class TIDMADDenoisingPSD(L.LightningModule):
     def validation_step(self, batch, batch_idx: int):
         loss = self._step(batch)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+
+    def test_step(self, batch, batch_idx: int):
+        loss = self._step(batch)
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)

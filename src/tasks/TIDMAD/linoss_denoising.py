@@ -1,27 +1,27 @@
 """
 LinOSS seq2seq denoiser for TIDMAD, wrapped in PyTorch Lightning.
 
-The model receives the noisy SQUID signal (channel0001) and predicts the
-clean reference (channel0002).
+The model receives the noisy SQUID signal (time_series_ch1) and predicts the
+clean reference (time_series_ch2).
 
 Built on JAXLightningModule: JAX optimization runs via optax; PyTorch Lightning
-handles data loading, logging, and checkpointing (use JAXCheckpointManager).
+handles data loading, logging, and checkpointing.
 
 Usage (LightningCLI YAML):
     model:
       class_path: tasks.TIDMAD.linoss_denoising.TIDMADLinOSSDenoising
       init_args:
-        num_blocks: 2
+        num_blocks: 4
         ssm_size: 32
-        H: 64
-        discretization: IMEX
-        lr: 1.0e-3
+        H: 128
+        discretization: damped_IMEX
+        lr: 1.0e-4
         clip_grad_norm: 1.0
 
 Batch convention (from TIDMADDataset.__getitem__):
-    noisy   (B, L)  — channel0001
-    clean   (B, L)  — channel0002
-    params  (B, 3)  — unused during denoising training
+    noisy   (B, L)  time_series_ch1
+    clean   (B, L)  time_series_ch2
+    params  (B, 3)  unused during denoising training
 """
 
 import equinox as eqx
@@ -30,6 +30,7 @@ import optax
 import torch
 
 from models.linoss import LinOSS
+from models.utils.jax.utils import jax_to_tensor
 from models.utils.jax.wrapper import JAXLightningModule
 
 
@@ -37,7 +38,7 @@ def _jax_psd_loss(y_pred, y_true):
     """PSD loss: MSE between power spectral densities (along the time axis).
 
     y_pred, y_true: (B, L, 1)  — batch × time × channel
-    Matches DenoisingPSD in toy_denoising.py and is directly aligned with the
+    Matches TIDMADDenoisingPSD in pytorch_denoising.py and is directly aligned with the
     PSD-based SNR benchmark metric used in TIDMAD Benchmark 1.
     """
     psd_pred = jnp.abs(jnp.fft.rfft(y_pred, axis=1)) ** 2
@@ -82,6 +83,10 @@ class TIDMADLinOSSDenoising(JAXLightningModule):
             optimizer=optax.adamw(lr),
             clip_grad_norm=clip_grad_norm,
         )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """(B, L) noisy -> (B, L) denoised, the same interface as the PyTorch denoisers."""
+        return jax_to_tensor(super().forward(x.unsqueeze(-1))).squeeze(-1)
 
     def _prepare_batch(self, batch):
         """Unpack TIDMAD batch and add channel dim for LinOSS.

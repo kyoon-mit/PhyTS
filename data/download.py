@@ -89,15 +89,12 @@ def sample_tess() -> None:
 
 def sample_tidmad() -> None:
     """
-    Downloads the TIDMAD sample H5 file.  Run preprocess_tidmad.py afterwards:
-        python data/TIDMAD/preprocess_tidmad.py \\
-            --data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed
+    Downloads sample_tidmad.h5 (one training file) and copies it into the
+    training, validation and test file names that preprocess_tidmad.py reads.
     """
-    _hf_get(
-        "sample/sample_tidmad.h5",
-        DATA / "TIDMAD" / "original" / "tidmad_training_0000.h5",
-    )
-    print("  TIDMAD sample downloaded.")
+    src = "sample/sample_tidmad.h5"
+    for name in ("tidmad_training_0000.h5", "tidmad_validation_0000.h5", "tidmad_test_file.h5"):
+        _hf_get(src, DATA / "TIDMAD" / "original" / name)
     print("  Next step: python data/TIDMAD/preprocess_tidmad.py "
           "--data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed")
 
@@ -156,30 +153,21 @@ def full_ligo() -> None:
 
 
 def full_tidmad() -> None:
-    dest = DATA / "TIDMAD" / "original"
-    dest.mkdir(parents=True, exist_ok=True)
     print("  downloading TIDMAD/ (~163 GB) …")
     snapshot_download(
         repo_id=REPO_ID, repo_type="dataset",
         allow_patterns=["TIDMAD/**"],
-        local_dir=str(DATA.parent),
+        local_dir=str(DATA),
     )
-    # Rename to abra_ prefix expected by preprocess_tidmad.py
+    # The Hub keeps training/, validation/ and test/ subfolders; preprocess_tidmad.py
+    # reads all files from one directory.
     tidmad_dir = DATA / "TIDMAD"
-    for subdir, prefix_out in [("training", "training"), ("validation", "validation")]:
-        src_dir = tidmad_dir / subdir
-        if src_dir.is_dir():
-            for f in sorted(src_dir.glob("tidmad_*.h5")):
-                new_name = "abra_" + f.name[len("tidmad_"):]
-                dst = dest / new_name
-                if not dst.exists():
-                    shutil.move(str(f), str(dst))
-            shutil.rmtree(src_dir, ignore_errors=True)
-    test_src = tidmad_dir / "test" / "tidmad_test_file.h5"
-    if test_src.exists():
-        shutil.move(str(test_src), str(dest / "abra_test_file.h5"))
-        shutil.rmtree(tidmad_dir / "test", ignore_errors=True)
-    print("  TIDMAD downloaded and renamed.")
+    dest = tidmad_dir / "original"
+    dest.mkdir(parents=True, exist_ok=True)
+    for subdir in ("training", "validation", "test"):
+        for f in sorted((tidmad_dir / subdir).glob("*.h5")):
+            shutil.move(str(f), str(dest / f.name))
+        shutil.rmtree(tidmad_dir / subdir, ignore_errors=True)
     print("  Next step: python data/TIDMAD/preprocess_tidmad.py "
           "--data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed")
 

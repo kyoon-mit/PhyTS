@@ -2,10 +2,10 @@
 Dataloader for the preprocessed TIDMAD dataset (ABRACADABRA dark matter experiment).
 
 Expects the output of data/TIDMAD/preprocess_tidmad.py in data_dir:
-  {split}_ch1.npy     int8     (N, 100_000)  noisy SQUID channel (channel0001)
-  {split}_ch2.npy     int8     (N, 100_000)  clean injected reference (channel0002)
+  {split}_ch1.npy     int8     (N, 100_000)  noisy SQUID channel (time_series_ch1)
+  {split}_ch2.npy     int8     (N, 100_000)  clean injected reference (time_series_ch2)
   {split}_params.npy  float32  (N, 3)        [frequency_hz, amplitude_mV, snr]
-  scale.npy           float32  scalar        voltage_range_mV / 256.0
+  scale.npy           float32  scalar        DAQ counts to mV (40 mV / 128)
 
 int8 arrays are memory-mapped (not loaded into RAM) and converted to float32
 on-the-fly in __getitem__ by multiplying by scale.
@@ -23,8 +23,8 @@ Usage (LightningCLI YAML):
         batch_size: 32
 
 Batch convention:
-    noisy   (B, 100_000)  float32  channel0001
-    clean   (B, 100_000)  float32  channel0002
+    noisy   (B, 100_000)  float32  time_series_ch1
+    clean   (B, 100_000)  float32  time_series_ch2
     params  (B, 3)        float32  [frequency_hz, amplitude_mV, snr]
 """
 
@@ -83,6 +83,8 @@ class TIDMADDataModule(L.LightningDataModule):
     def setup(self, stage: str | None = None):
         if stage == 'fit':
             self.train = TIDMADDataset(self.data_dir, 'train')
+            self.val   = TIDMADDataset(self.data_dir, 'val')
+        elif stage == 'validate':
             self.val   = TIDMADDataset(self.data_dir, 'val')
         elif stage in ('test', 'predict'):
             self.test  = TIDMADDataset(self.data_dir, 'test')

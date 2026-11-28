@@ -22,7 +22,7 @@ PhyTS addresses these gaps across four dimensions:
 | Experiment | Domain | Task | Sampling rate | Seq. length | SNR |
 |-----------|--------|------|:-------------:|:-----------:|:---:|
 | LIGO | Gravitational waves | Chirp-mass regression | 2048 Hz | 8,192 (4 s) | 5–50 |
-| ABRACADABRA | Axion dark matter | Time-series denoising | 10 MHz | 100,000 (1 s) | 0.02–200 |
+| ABRACADABRA | Axion dark matter | Time-series denoising | 10 MHz | 100,000 (10 ms) | 0.02–200 |
 | TESS | Stellar variability | 8-class classification | 0.56–1.67 mHz | 1,300–3,670 | 0.3–140 |
 | Project 8 | Neutrino mass | Energy regression | 403 MHz | 24,576 (61 μs) | 3–25 |
 
@@ -63,6 +63,7 @@ For pipeline verification (NeurIPS reproducibility), sample files covering all f
 ```bash
 python data/download.py --sample
 python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
+python data/TIDMAD/preprocess_tidmad.py --data_dir data/TIDMAD/original --out_dir data/TIDMAD/preprocessed
 ```
 
 To download a full dataset:
@@ -120,29 +121,13 @@ The full set of configs is in `configs/`.
 
 ## Benchmarks
 
-Each domain has a pipeline script that trains all models and runs evaluation end-to-end:
+Each domain has a pipeline script that trains the supervised models, runs the zero-shot foundation models, and prints that domain's Table 2 rows:
 
 ```bash
 bash benchmarks/LIGO/run.sh
 bash benchmarks/TIDMAD/run.sh
 bash benchmarks/TESS/run.sh
 bash benchmarks/Project8/run.sh
-```
-
-For foundation models (zero-shot evaluation):
-
-```bash
-source benchmarks/foundation/.venv/bin/activate
-python benchmarks/foundation/run_benchmark.py \
-  --models moment chronos timesfm moirai granite_ttm \
-  --tasks  forecasting denoising embedding \
-  --mode   zero_shot
-```
-
-ABRACADABRA denoising score — after training, evaluate all variants:
-
-```bash
-PYTHONPATH=src python benchmarks/TIDMAD/evaluate_all.py
 ```
 
 ---

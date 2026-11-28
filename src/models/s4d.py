@@ -194,11 +194,15 @@ class S4Model(nn.Module):
         prenorm=False,
         lr=None,
         dt_min=0.001,
-        dt_max=0.1
+        dt_max=0.1,
+        pool=True,
     ):
         super().__init__()
 
         self.prenorm = prenorm
+        # pool=True: average over time, one output per sequence (regression/classification).
+        # pool=False: one output per time step (denoising).
+        self.pool = pool
 
         # Linear encoder (d_input = 1 for grayscale and 3 for RGB)
         self.encoder = nn.Linear(d_input, d_model)
@@ -249,6 +253,9 @@ class S4Model(nn.Module):
                 x = norm(x.transpose(-1, -2)).transpose(-1, -2)
 
         x = x.transpose(-1, -2)  # (B, d_model, L) -> (B, L, d_model)
+
+        if not self.pool:
+            return self.decoder(x)  # (B, L, d_model) -> (B, L, d_output)
 
         # Pooling: masked or full mean over the sequence length
         if mask is not None:

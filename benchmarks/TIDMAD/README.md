@@ -1,58 +1,38 @@
-# TIDMAD Benchmark: Denoising + Parameter Regression
+# TIDMAD benchmark
 
-Evaluates denoising quality and dark matter signal parameter recovery on the
-[TIDMAD dataset](https://arxiv.org/abs/2406.04378) (ABRACADABRA experiment).
+Denoising of the ABRACADABRA SQUID readout: a model maps the noisy channel to the injected axion-like signal. Metric: the TIDMAD denoising score ([arXiv:2406.04378](https://arxiv.org/abs/2406.04378)); higher is better.
 
-## Pipeline
+## Run
+
+Download and preprocess the data (see [data/TIDMAD](../../data/TIDMAD/README.md)), then:
 
 ```bash
 bash benchmarks/TIDMAD/run.sh
 ```
 
-Submits 4 chained SLURM jobs:
+| Step | Command | Output |
+|---|---|---|
+| Train, test | `main.py fit` / `main.py test` | `checkpoints/tidmad_<model>_denoising/best.ckpt` |
+| Denoise the test file | `denoise.py --model <model>` | `results/TIDMAD/<model>/tidmad_test_file.h5` |
+| Score | `score.py` | TIDMAD column of Table 2 |
 
-```
-[1] train denoiser ──┬──> [2] train reg_raw   ──┬──> [4] eval
-                     └──> [3] train reg_clean ──┘
-```
+## Models
 
-| Pipeline | Training input | Eval input | Purpose |
-|----------|---------------|------------|---------|
-| **raw** | `channel0001` (noisy) | `channel0001` | baseline |
-| **denoised** | `channel0002` (clean) | `denoiser(channel0001)` | benefit of denoising |
-| **oracle** | `channel0002` (clean) | `channel0002` | upper bound |
+| Model | `--model` | Config | Environment |
+|---|---|---|---|
+| No denoising (baseline) | `raw` | – | `make env` |
+| ConvAE | `conv` | `configs/TIDMAD/train_tidmad_conv_denoising.yaml` | `make env` |
+| S4D | `s4d` | `configs/TIDMAD/train_tidmad_s4d_denoising.yaml` | `make env` |
+| LinOSS | `linoss` | `configs/TIDMAD/train_tidmad_linoss_denoising.yaml` | `make env-jax` |
+| MOMENT-base | `moment` | zero-shot | `make env-fm` |
+| Chronos-tiny | `chronos` | zero-shot | `make env-fm` |
+| Granite-TTM | `granite_ttm` | zero-shot | `make env-fm` |
+| MOIRAI-base | `moirai` | zero-shot | `make env-fm` |
 
-Results saved to `benchmarks/TIDMAD/regression_benchmark.png`.
+Foundation-model outputs go to `results/TIDMAD/fm_<model>/`.
 
-## Models & Configs
+## Protocol
 
-| Step | Config | Checkpoint |
-|------|--------|-----------|
-| Denoiser | `configs/TIDMAD/train_tidmad_s4d_denoising.yaml` | `checkpoints/tidmad_s4d_denoising/best.ckpt` |
-| Raw regressor | `configs/TIDMAD/train_tidmad_mlp_regression_raw.yaml` | `checkpoints/tidmad_mlp_regression_raw/best.ckpt` |
-| Clean regressor | `configs/TIDMAD/train_tidmad_mlp_regression_clean.yaml` | `checkpoints/tidmad_mlp_regression_clean/best.ckpt` |
-
-## Data format
-
-- **Input**: 20 training + 20 validation H5 files at 10 MHz, int8
-- **channel0001**: SQUID magnetometer readout (noisy)
-- **channel0002**: injected reference signal (clean ground truth)
-- **Normalization**: `int8 × (volt_range_mV / 256)` → physical millivolts
-- **Window size**: 1 second = 10,000,000 samples (non-overlapping)
-- **Downsampling**: `downsample_factor=1000` → `seq_len=10,000`, effective Nyquist = 5 kHz
-
-> **Note**: with `downsample_factor=1000`, only injected frequencies below 5 kHz
-> are accurately represented. The full injection range is 1.1 kHz–4.9 MHz.
-> Lower `downsample_factor` in the YAML to cover higher frequencies (at higher
-> memory and compute cost).
-
-## Regression targets
-
-Labels are derived per window from `channel0002` FFT (same method as the
-official TIDMAD benchmark script):
-
-- `frequency_hz` — dominant FFT peak frequency (Hz)
-- `amplitude` — peak amplitude in millivolts
-- `snr` — signal power / noise power in ±1 vs ±50 PSD bins around the peak
-
-SNR bins: `low < 1`, `1 ≤ mid < 10`, `high ≥ 10`.
+- **Supervised models:** train on 100,000-sample windows with a spectral (PSD) loss and early stopping on validation loss.
+- **Test:** the Hub test file is denoised window by window and scored on whole one-second chunks.
+- **Foundation models:** zero-shot on short chunks. MOMENT uses its reconstruction head; the others forecast each half of a chunk from the other half.

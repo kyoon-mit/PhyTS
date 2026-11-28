@@ -1,8 +1,11 @@
-# Usage: python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
-# Trains LinOSS seq2seq denoiser: channel0001 (noisy) -> channel0002 (clean).
-# Input: 100,000 samples at 10 MHz (0.01 s).
-# JAX model — checkpoints saved as .eqx via JAXCheckpointManager.
-# Note: first epoch is slow (JAX JIT compilation). Subsequent epochs are fast.
+# Usage:
+#   python main.py fit  --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
+#   python main.py test --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml \
+#                       --ckpt_path checkpoints/tidmad_linoss_denoising/best.ckpt
+#
+# LinOSS denoiser: noisy SQUID readout (time_series_ch1) -> injected signal (time_series_ch2),
+# 100,000-sample windows at 10 MHz. ~200K parameters (4 damped-IMEX blocks, H=128, ssm_size=32).
+# Loss: PSD (MSE between power spectra).
 
 trainer:
   max_epochs: 100
@@ -15,11 +18,13 @@ trainer:
         monitor: val/loss
         mode: min
         patience: 10
-    - class_path: models.utils.jax.save_model.JAXCheckpointManager
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
+        dirpath: checkpoints/tidmad_linoss_denoising
+        filename: best
         monitor: val/loss
         mode: min
-        save_top_k: 3
+        save_top_k: 1
   logger:
     class_path: lightning.pytorch.loggers.CSVLogger
     init_args:
@@ -29,11 +34,11 @@ trainer:
 model:
   class_path: tasks.TIDMAD.linoss_denoising.TIDMADLinOSSDenoising
   init_args:
-    num_blocks: 2
+    num_blocks: 4
     ssm_size: 32
-    H: 64
+    H: 128
     discretization: damped_IMEX
-    lr: 1.0e-3
+    lr: 1.0e-4
     clip_grad_norm: 1.0
     seed: 0
 
