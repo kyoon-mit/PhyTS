@@ -1,14 +1,16 @@
 # Usage:
-#   uv run python main.py fit  --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
-#   uv run python main.py test --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
+#   python main.py fit  --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
+#   python main.py test --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
 #                              --ckpt_path checkpoints/ligo_conv1d_gaussnll_regression/best.ckpt
 #
-# ResNet1D GaussNLL regression: 2-channel (H1+L1) strain 59-63 s -> chirp_mass.
-# ResNet18-lite (layers=[1,1,1,1], kernel=7) -> comparable to S4D(d_model=512, n_layers=4). ~3.85M params.
-# Mirrors ml4gw ResNet1D (aframe LIGO community standard): residual blocks, GroupNorm, channels [64,128,256,512].
+# ResNet1D GaussNLL regression: 2-channel (H1+L1) strain 59-63 s at 2048 Hz (8192 steps) -> chirp_mass.
+# Size-matched ResNet18-lite: channels [32,64,96,128] -> ~0.39M params (S4D 0.27M, LinOSS 0.40M).
+# Mirrors ml4gw ResNet1D (aframe LIGO community standard): residual blocks, GroupNorm.
+
+seed_everything: 42
 
 trainer:
-  max_epochs: 1000
+  max_epochs: 60   # fixed 60-epoch budget for every model; test uses the best-val checkpoint
   accelerator: gpu
   devices: 1
   log_every_n_steps: 10
@@ -18,7 +20,7 @@ trainer:
       init_args:
         monitor: val/loss
         mode: min
-        patience: 200
+        patience: 30
         min_delta: 1.0e-5
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
@@ -50,22 +52,27 @@ model:
         d_output: 2         # mean + log-var for chirp_mass
         layers: [1, 1, 1, 1]
         kernel_size: 7
+        dropout: 0.1
+        channels: [32, 64, 96, 128]
 
 data:
   class_path: dataloader.LIGO_dataloader.LIGODataModule
   init_args:
-    train_file: data/LIGO/train/sig_combined_train.h5
-    val_file:   data/LIGO/val/sig_combined_val.h5
-    test_file:  data/LIGO/test/sig_combined_test.h5
+    # Pre-cut 58.75-63.25 s window at 2048 Hz (data/LIGO/extract_window.py).
+    # Models see 4 s (59-63 s) shifted by up to +-0.25 s: random per item in train, fixed per sample in val/test.
+    train_file: data/LIGO/train.h5
+    val_file:   data/LIGO/val.h5
+    test_file:  data/LIGO/test.h5
     injected_data_key: whitened_injected
     target_variables:
       - chirp_mass
     observed_variables:
       - snr
-    strain_frequency:  256
-    strain_duration:   64.0
-    window_begin:      59.0
-    window_end:        63.0
+    strain_frequency:  2048
+    strain_duration:   4.5
+    window_begin:      0.25
+    window_end:        4.25
+    jitter:            0.25
     train_batch_size:  64
     val_batch_size:    64
     test_batch_size:   128

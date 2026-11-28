@@ -4,7 +4,7 @@ Targets LIGO physical parameters (e.g. ``chirp_mass``) using a Gaussian NLL loss
 
 Batch layout (from ``LIGODataModule.__getitem__``)::
 
-    X_injected  (B, n_ifos, L)   noisy strain      shape e.g. (B, 2, 1024)
+    X_injected  (B, n_ifos, L)   noisy strain      shape e.g. (B, 2, 8192)
     y_targets   (B, n_targets)   physical params   e.g. chirp_mass
     z_observed  (B, n_obs)       auxiliary scalars  e.g. snr
 
@@ -35,31 +35,20 @@ from models.utils.jax.utils import tensor_to_jax
 from models.utils.jax.wrapper import JAXLightningModule
 
 
+SSM_PARAMS = {"A_diag", "G_diag", "steps"}  # LinOSS dynamics parameters (see LinOSSLayer)
+
+
 def _soft_clamp_lv(lv_raw: Array) -> Array:
     """Soft clamp log-variance to (-5, 5) via tanh; gradient flows at all values."""
     return 5.0 * jnp.tanh(lv_raw / 5.0)
 
 
 def gaussian_nll_loss(y_hat: Array, y: Array) -> Array:
-    """Gaussian NLL averaged over batch and targets (used for validation/test)."""
+    """Gaussian NLL averaged over batch and targets (training, validation and test loss)."""
     n = y.shape[-1]
     mu = y_hat[:, :n]
     lv = _soft_clamp_lv(y_hat[:, n:])
     return jnp.mean(0.5 * (lv + (y - mu) ** 2 / jnp.exp(lv)))
-
-
-def beta_nll_loss(y_hat: Array, y: Array, beta: float = 0.5) -> Array:
-    """Beta-NLL loss (Seitzer et al. 2022) used for training.
-
-    Stops gradient through the variance weight to prevent variance collapse.
-    """
-    n = y.shape[-1]
-    mu = y_hat[:, :n]
-    lv = _soft_clamp_lv(y_hat[:, n:])
-    var = jnp.exp(lv)
-    mse = (y - mu) ** 2
-    weight = jax.lax.stop_gradient(var ** beta)
-    return jnp.mean(0.5 * (weight * (mse / var + lv)))
 
 
 class LinOSSLIGOGaussNLL(JAXLightningModule):
@@ -76,25 +65,76 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         model: eqx.Module,
         n_targets: int = 1,
         lr: float = 1e-3,
+        lr_decay: float | None = None,
+        weight_decay: float = 1e-4,
         clip_grad_norm: float | None = 1.0,
+        ssm_lr_factor: float = 1.0,
+        ssm_weight_decay: float | None = None,
+        skip_nonfinite: bool = False,
         load_from_checkpoint: str | Path | None = None,
         seed: int = 0,
         target_names: Sequence[str] = ("chirp_mass",),
         observed_names: Sequence[str] = ("snr",),
         csv_out: str = "results/LIGO/linoss_gaussnll_regression/test_predictions.csv",
     ):
+        """
+        Args:
+            ssm_lr_factor: LR multiplier for the SSM dynamics parameters (``A_diag``,
+                ``G_diag``, ``steps``), as in S4/S5/LRU training.
+            ssm_weight_decay: weight decay for those parameters (``None``: same as
+                ``weight_decay``). Decay pulls damping and stiffness toward 0, i.e. toward
+                undamped / double-integrator modes that blow up on long sequences.
+            skip_nonfinite: drop any update whose loss or gradient is non-finite (and keep
+                the previous BatchNorm state), instead of letting one bad batch NaN the model.
+        """
         super().__init__(
             model=model,
             loss_fn=gaussian_nll_loss,
-            optimizer=optax.adamw(lr),
+            optimizer=optax.adamw(lr, weight_decay=weight_decay),
             clip_grad_norm=clip_grad_norm,
             load_from_checkpoint=load_from_checkpoint,
             seed=seed,
+            skip_nonfinite=skip_nonfinite,
         )
         self.n_targets = n_targets
+        self.lr = lr
+        self.lr_decay = lr_decay
+        self.weight_decay = weight_decay
+        self.ssm_lr_factor = ssm_lr_factor
+        self.ssm_weight_decay = weight_decay if ssm_weight_decay is None else ssm_weight_decay
         self.target_names = list(target_names)
         self.observed_names = list(observed_names)
         self.csv_out = csv_out
+
+    def configure_optimizers(self):
+        """AdamW, optionally decaying the LR by ``lr_decay`` once per epoch (as ExponentialLR in
+        torch), with a separate LR / weight decay for the SSM dynamics parameters."""
+
+        def lr_schedule(base):
+            if self.lr_decay is None:
+                return base
+            steps_per_epoch = max(1, self.trainer.estimated_stepping_batches // self.trainer.max_epochs)
+            return optax.exponential_decay(
+                base, transition_steps=steps_per_epoch, decay_rate=self.lr_decay, staircase=True
+            )
+
+        regular = optax.adamw(lr_schedule(self.lr), weight_decay=self.weight_decay)
+        if self.ssm_lr_factor == 1.0 and self.ssm_weight_decay == self.weight_decay:
+            self.jax_optimizer = regular
+        else:
+            diff_model, _ = eqx.partition(self.jax_model, self.jax_model_filter_spec)
+            labels = jax.tree_util.tree_map_with_path(
+                lambda path, _: "ssm" if any(getattr(k, "name", None) in SSM_PARAMS for k in path) else "regular",
+                diff_model,
+            )
+            ssm = optax.adamw(lr_schedule(self.lr * self.ssm_lr_factor), weight_decay=self.ssm_weight_decay)
+            # labels is an eqx.Module (callable), so pass it through a function
+            self.jax_optimizer = optax.multi_transform({"regular": regular, "ssm": ssm}, lambda _: labels)
+        return super().configure_optimizers()
+
+    def on_train_epoch_start(self):
+        if self.lr_decay is not None:
+            self.log("lr", self.lr * self.lr_decay**self.current_epoch, on_step=False, on_epoch=True)
 
     def _prepare_batch(self, batch: PyTree[Array]) -> tuple[Array, Array]:
         """Transpose X to (B, L, n_ifos) and select target parameters."""
@@ -102,6 +142,39 @@ class LinOSSLIGOGaussNLL(JAXLightningModule):
         # X: (B, n_ifos, L) -> (B, L, n_ifos)  [jax arrays after tensor_to_jax]
         x = jnp.swapaxes(X, 1, 2)
         return x, y_targets
+
+    # ── validation: loss + per-target RMSE over the full split ─────────────────
+
+    def on_validation_epoch_start(self):
+        self._val_sq_err = np.zeros(self.n_targets)
+        self._val_n = 0
+
+    def validation_step(self, batch, batch_idx: int):
+        batch_jax = tensor_to_jax(batch)
+        x, y_targets = self._prepare_batch(batch_jax)
+        batch_size = jax.tree.leaves(x)[0].shape[0]
+        keys = self._batched_keys(self.key, batch_size)
+
+        y_hat = jax_inference(
+            model=self.jax_model,
+            x=x,
+            state=self.jax_model_state,
+            key=keys,
+        )
+        loss = jax.jit(self.loss_fn)(y_hat, y_targets)
+        self.log(
+            "val/loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True,
+            batch_size=batch_size,
+        )
+
+        err = np.array(y_hat[:, : self.n_targets]) - np.array(y_targets)
+        self._val_sq_err += (err**2).sum(axis=0)
+        self._val_n += batch_size
+
+    def on_validation_epoch_end(self):
+        rmse = np.sqrt(self._val_sq_err / self._val_n)
+        for name, value in zip(self.target_names, rmse):
+            self.log(f"val/rmse_{name}", float(value))
 
     # ── test step: collect predictions and write CSV ───────────────────────────
 

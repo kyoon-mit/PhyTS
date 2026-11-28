@@ -3,7 +3,7 @@ Download PhyTS-bench datasets from Hugging Face (PhyTS-team/PhyTS-bench).
 
 Sample files (~few GB total) are enough to verify the full pipeline and
 satisfy NeurIPS reproducibility requirements.  Full datasets are large
-(LIGO ~157 GB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~194 MB).
+(LIGO ~4 TB, TIDMAD ~163 GB, Project 8 ~44 GB, TESS ~194 MB).
 
 Usage
 -----
@@ -21,9 +21,10 @@ Usage
 
 Notes
 -----
-LIGO   full: train/val are sharded across SNR bins; test is a single merged
-             file.  The dataloader expects one file per split, so for train/val
-             pass the directory to a concat step or use the sample for CI.
+LIGO   full: 64 s segments at 2048 Hz, sharded by split and SNR bin.  After
+             download, run:
+             python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
+             to cut the 59-63 s window into one file per split.
 TIDMAD full: after download, run:
              python data/TIDMAD/preprocess_tidmad.py
              to produce the .npy arrays the dataloader expects.
@@ -67,16 +68,16 @@ def _hf_get(filename: str, dest: Path) -> None:
 
 def sample_ligo() -> None:
     """
-    Downloads sample_LIGO.h5 and places it as all three splits so the
-    LIGO dataloader (which expects one file per split) works out of the box.
+    Downloads sample_LIGO.h5 (one training shard) and copies it into the
+    train, val and test shard layout that data/LIGO/extract_window.py reads.
     """
     src = "sample/sample_LIGO.h5"
-    for split, name in [
-        ("train", "sig_combined_train.h5"),
-        ("val",   "sig_combined_val.h5"),
-        ("test",  "sig_combined_test.h5"),
+    for shard in [
+        "train/bns_snr_5_10/train_000000-000099.h5",
+        "val/snr_5_50/val_000000-000099.h5",
+        "test/snr_5_50/0000000-0099999/test_0000000-0000099.h5",
     ]:
-        _hf_get(src, DATA / "LIGO" / split / name)
+        _hf_get(src, DATA / "LIGO" / shard)
 
 
 def sample_tess() -> None:
@@ -142,25 +143,16 @@ def full_project8() -> None:
 
 
 def full_ligo() -> None:
-    dest = DATA / "LIGO"
-    dest.mkdir(parents=True, exist_ok=True)
-    print("  downloading LIGO/ (~157 GB) …")
+    print("  downloading LIGO/ (~4 TB) …")
     snapshot_download(
         repo_id=REPO_ID, repo_type="dataset",
         allow_patterns=["LIGO/**"],
-        local_dir=str(DATA.parent),
+        local_dir=str(DATA),
     )
-    # Test split is a single merged file; train/val are sharded by SNR bin.
-    # Rename the test file to the path the dataloader expects.
-    test_src = dest / "test" / "snr_5_50" / "test_00000-99999.h5"
-    test_dst = dest / "test" / "sig_combined_test.h5"
-    if test_src.exists() and not test_dst.exists():
-        test_dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(test_src), str(test_dst))
-        shutil.rmtree(dest / "test" / "snr_5_50", ignore_errors=True)
-    print("  Note: LIGO train/val shards are in data/LIGO/{train,val}/bns_snr_*/")
-    print("  The dataloader expects a single merged file per split.")
-    print("  For full training, concatenate shards or point configs to individual shards.")
+    print("  LIGO shards are in data/LIGO/train/bns_snr_*/, data/LIGO/val/snr_5_50/ "
+          "and data/LIGO/test/snr_5_50/")
+    print("  Next step: python data/LIGO/extract_window.py "
+          "--src data/LIGO --dest data/LIGO")
 
 
 def full_tidmad() -> None:

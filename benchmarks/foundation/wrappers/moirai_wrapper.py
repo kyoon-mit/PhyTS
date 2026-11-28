@@ -23,6 +23,7 @@ import torch
 
 from .base import (
     BaseFoundationModel,
+    EmbeddingResult,
     ForecastResult,
 )
 
@@ -38,7 +39,7 @@ class MoiraiWrapper(BaseFoundationModel):
     name = "moirai"
     supports_forecast = True
     supports_denoise = False
-    supports_embed = False
+    supports_embed = True
 
     def __init__(self) -> None:
         super().__init__()
@@ -108,3 +109,52 @@ class MoiraiWrapper(BaseFoundationModel):
         samples = samples[:, :, :horizon]
         point = np.median(samples, axis=1).astype(np.float32)  # (B, H)
         return ForecastResult(point_forecast=point, samples=samples)
+
+    # ── Embedding (encoder representations) ───────────────────────────────
+
+    @torch.no_grad()
+    def embed(self, signal: np.ndarray, patch_size: int = 32, *, pool: str = "mean",
+              horizon: int = 0) -> EmbeddingResult:
+        """(B, L) -> (B, d_model): pooled encoder output over the L / patch_size context tokens.
+
+        Mirrors MoiraiModule.forward up to the encoder (scaler -> in_proj -> mask fill ->
+        encoder) for a single fully observed variate. horizon=0: no prediction window.
+        horizon>0: append horizon / patch_size learned-mask prediction tokens exactly as
+        MoiraiForecast._convert does in forecast mode (the context tokens attend to them),
+        i.e. the embedding the Kepler / TESS / Project 8 FM runs took from a forecast pass;
+        only the context tokens are pooled. L must be a multiple of `patch_size`.
+        """
+        from uni2ts.common.torch_util import packed_attention_mask
+
+        mod = self._module
+        if mod is None:
+            raise RuntimeError("Call .load() before embed().")
+        if patch_size not in tuple(mod.patch_sizes):
+            raise ValueError(f"patch_size {patch_size} not in {tuple(mod.patch_sizes)}")
+        dev = next(mod.parameters()).device
+        B, L = signal.shape
+        if L % patch_size:
+            raise ValueError(f"length {L} is not a multiple of patch_size {patch_size}")
+        n, max_p = L // patch_size, max(mod.patch_sizes)
+        h = -(-horizon // patch_size)          # prediction tokens (MoiraiForecast pads right)
+        t = n + h
+        x = torch.from_numpy(np.ascontiguousarray(signal, dtype=np.float32)).to(dev)
+        target = torch.zeros(B, t, max_p, device=dev)
+        target[:, :n, :patch_size] = x.view(B, n, patch_size)
+        observed = torch.zeros(B, t, max_p, dtype=torch.bool, device=dev)
+        observed[..., :patch_size] = True      # forecast mode marks the future observed too
+        sample_id = torch.ones(B, t, dtype=torch.long, device=dev)
+        time_id = torch.arange(t, device=dev).expand(B, t)
+        variate_id = torch.zeros(B, t, dtype=torch.long, device=dev)
+        pred_mask = torch.zeros(B, t, dtype=torch.bool, device=dev)
+        pred_mask[:, n:] = True
+        psize = torch.full((B, t), patch_size, dtype=torch.long, device=dev)
+        loc, scale = mod.scaler(target, observed * ~pred_mask.unsqueeze(-1), sample_id, variate_id)
+        reprs = mod.in_proj((target - loc) / scale, psize)
+        if h:
+            reprs = torch.where(pred_mask.unsqueeze(-1), mod.mask_encoding.weight, reprs)
+        reprs = mod.encoder(reprs, packed_attention_mask(sample_id), time_id=time_id, var_id=variate_id)
+        reprs = reprs[:, :n]
+        emb = reprs[:, -1] if pool == "last" else reprs.mean(dim=1)
+        return EmbeddingResult(embeddings=emb.float().cpu().numpy())
+

@@ -21,7 +21,7 @@ PhyTS addresses these gaps across four dimensions:
 
 | Experiment | Domain | Task | Sampling rate | Seq. length | SNR |
 |-----------|--------|------|:-------------:|:-----------:|:---:|
-| LIGO | Gravitational waves | Chirp-mass regression | 256 Hz | 1,024 (4 s) | 5–50 |
+| LIGO | Gravitational waves | Chirp-mass regression | 2048 Hz | 8,192 (4 s) | 5–50 |
 | ABRACADABRA | Axion dark matter | Time-series denoising | 10 MHz | 100,000 (1 s) | 0.02–200 |
 | TESS | Stellar variability | 8-class classification | 0.56–1.67 mHz | 1,300–3,670 | 0.3–140 |
 | Project 8 | Neutrino mass | Energy regression | 403 MHz | 24,576 (61 μs) | 3–25 |
@@ -62,13 +62,16 @@ For pipeline verification (NeurIPS reproducibility), sample files covering all f
 
 ```bash
 python data/download.py --sample
+python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
 ```
 
 To download a full dataset:
 
 ```bash
 python data/download.py --domain tess        # 194 MB
-python data/download.py --domain ligo        # ~157 GB
+python data/download.py --domain ligo        # ~4 TB; then run:
+python data/LIGO/extract_window.py \
+    --src data/LIGO --dest data/LIGO
 python data/download.py --domain project8    # ~44 GB
 python data/download.py --domain tidmad      # ~163 GB; then run:
 python data/TIDMAD/preprocess_tidmad.py \
@@ -108,7 +111,7 @@ Any config value can be overridden on the command line:
 ```bash
 python main.py fit --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
   --model.init_args.lr 1e-4 \
-  --data.init_args.batch_size 64
+  --data.init_args.train_batch_size 64
 ```
 
 The full set of configs is in `configs/`.
@@ -150,12 +153,16 @@ Numbers from the paper (Table 2). Results are written to `results/` after runnin
 
 | Model | LIGO RMSE [M☉] | LIGO R² | TESS Bal. Acc. | TESS R² | TIDMAD score | P8 RMSE [eV] | P8 R² |
 |-------|:--------------:|:-------:|:--------------:|:-------:|:------------:|:------------:|:-----:|
-| Mean baseline | 0.271 | 0.000 | 0.125 | −0.017 | 1.00 | 28.83 | 0.000 |
-| S4D | **0.254** | **0.125** | **0.887** | **0.665** | — | **15.68** | **0.704** |
-| LinOSS | 0.259 | 0.081 | 0.843 | 0.612 | **1.30** | 20.88 | 0.476 |
-| CNN | 0.280 | −0.068 | 0.851 | 0.617 | −0.11 | 20.11 | 0.514 |
-| MOMENT | 0.284 | −0.096 | 0.828 | 0.263 | 0.46 | 25.22 | 0.236 |
-| Chronos | 0.278 | −0.052 | 0.812 | 0.305 | −0.88 | 25.22 | 0.235 |
+| Mean baseline | 0.3001 | 0.000 | 0.125 | −0.017 | 1.00 | 28.83 | 0.000 |
+| LinOSS | 0.2851 | 0.097 | 0.843 | 0.612 | 1.30 | 20.88 | 0.476 |
+| S4D | 0.2630 | 0.232 | 0.887 | 0.665 | 0.89 | 15.68 | 0.704 |
+| CNN | 0.2955 | 0.030 | 0.851 | 0.617 | −0.11 | 20.11 | 0.514 |
+| MOMENT-base | 0.2999 | 0.001 | 0.8322 | 0.4318 | 0.46 | 25.22 | 0.236 |
+| Chronos-base | 0.2998 | 0.002 | 0.8451 | 0.3962 | −0.88 | 25.22 | 0.235 |
+| Time-MoE-base | 0.3007 | −0.004 | 0.7913 | 0.2727 | – | 27.40 | 0.0977 |
+| Granite-TTM-base | 0.3002 | −0.001 | 0.7028 | 0.3660 | −1.03 | 26.61 | 0.149 |
+| TimesFM-base | 0.3006 | −0.003 | 0.8277 | 0.1509 | – | 25.77 | 0.202 |
+| MOIRAI-base | 0.3000 | 0.001 | 0.8304 | 0.4230 | −2.77 | 26.48 | 0.157 |
 
 ---
 
