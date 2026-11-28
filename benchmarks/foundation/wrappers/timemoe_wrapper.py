@@ -108,9 +108,7 @@ class TimeMoEWrapper(BaseFoundationModel):
         # restoring the pre-4.44 contract that Time-MoE's mixin relies on.
         try:
             from transformers.generation.utils import GenerationMixin
-            import inspect
             _orig_extract = GenerationMixin._extract_past_from_model_output
-            sig = inspect.signature(_orig_extract)
             def _extract_patched(self, outputs, standardize_cache_format=False):
                 result = _orig_extract(self, outputs)
                 # transformers>=4.44 returns (cache_name, cache) — unwrap to just cache

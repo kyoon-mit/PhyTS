@@ -30,7 +30,8 @@ slurm_logs/
 *.err
 
 # Data (download from HuggingFace; see README)
-data/LIGO/
+data/LIGO/*/
+data/LIGO/*.h5
 data/Project8/*/
 data/TESS/split/
 data/TIDMAD/original/

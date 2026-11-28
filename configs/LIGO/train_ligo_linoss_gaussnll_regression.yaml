@@ -3,13 +3,10 @@
 #   python main.py test --config configs/LIGO/train_ligo_linoss_gaussnll_regression.yaml \
 #                       --ckpt_path checkpoints/ligo_linoss_gaussnll_regression/best.ckpt
 #
-# LinOSS (JAX/equinox) Gaussian NLL regression: 2-channel strain 59-63 s at 2048 Hz (8192 steps) -> chirp_mass.
-# accelerator: cpu — JAX manages its own GPU device via XLA.
-# Original (unpatched) LinOSS, H=128, ssm_size=128 (~0.40M params): every block runs on all 8192 steps.
-# AdamW weight decay 0.01, grad-norm clip 1.0, lr 3e-4, early-stopping patience 30.
-# SSM dynamics params (A, G, dt): lr x0.1, no weight decay; non-finite steps skipped.
-# Without these, weight decay drives oscillators undamped and ~1% background glitches
-# (|x| up to ~3000 sigma) blow up the 8192-step recurrence (lr 1e-3 went NaN in epoch 0).
+# LinOSS Gaussian-NLL regression: 2-channel (H1+L1) strain, 4 s at 2048 Hz -> chirp_mass mean
+# and variance. ~400K parameters (H=128, ssm_size=128). The SSM dynamics parameters train at
+# 0.1x the learning rate without weight decay, and non-finite steps are skipped, which keeps the
+# long recurrence stable.
 
 seed_everything: 42
 

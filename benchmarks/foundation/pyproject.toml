@@ -20,8 +20,6 @@ dependencies = [
     "accelerate==1.13.0",
     "uni2ts==2.0.0",
     "granite-tsfm==0.2.23",
-    "lag-llama",
-    "setuptools<72",  # restores pkg_resources needed by lag-llama
 ]
 
 [tool.uv]
@@ -35,6 +33,3 @@ override-dependencies = [
     "transformers==4.44.2",
     "accelerate==1.13.0",
 ]
-
-[tool.uv.sources]
-lag-llama = { git = "https://github.com/time-series-foundation-models/lag-llama.git" }

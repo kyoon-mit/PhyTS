@@ -481,14 +481,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/3e/c0f5b3d1be3307c02de68a713b1f15804c6e05d94b01dfa7f14d721c019d/gluonts-0.14.4-py3-none-any.whl", hash = "sha256:ef8601e59ebf36833c2f4131e2e2363acb2bc045442513dedbfa6333f0ba12a0", size = 1495336, upload-time = "2024-02-02T12:38:04.865Z" },
 ]
 
-[package.optional-dependencies]
-torch = [
-    { name = "lightning" },
-    { name = "pytorch-lightning" },
-    { name = "scipy" },
-    { name = "torch" },
-]
-
 [[package]]
 name = "googleapis-common-protos"
 version = "1.76.0"
@@ -812,21 +804,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/12/f4beaaceb740b96c363a8fa6f34dbdf37a58d9e5f15416427d7bf89c552a/kiwisolver-1.5.1-pp310-pypy310_pp73-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e4e49f7e1a4e7191bdf9dc67a974db714501b1fc52c24324103d06a86abd5c08", size = 79885, upload-time = "2026-08-28T10:28:16.345Z" },
     { url = "https://files.pythonhosted.org/packages/02/24/18d8a755acdae79c37ca2f1a925795aab67b9456c30c8569c377ea3abc77/kiwisolver-1.5.1-pp310-pypy310_pp73-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f0a887b6565bbfe80efde2b7f6e8890d7d9bbdb11bdb17028a3690c32fe0621f", size = 77582, upload-time = "2026-08-28T10:28:17.719Z" },
     { url = "https://files.pythonhosted.org/packages/df/a9/b86dde4f553ef74db0f9c32398614e24b2e8ec1d29a6ca04ae080d7dd29b/kiwisolver-1.5.1-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:1983f0974a750a6f6556f368ba11105d1d8369c735b944747c9f12ae5aea7aae", size = 98321, upload-time = "2026-08-28T10:28:19.087Z" },
-]
-
-[[package]]
-name = "lag-llama"
-version = "0.1.0"
-source = { git = "https://github.com/time-series-foundation-models/lag-llama.git#df7531a83a19b3c6a0222d703ca9bf59ef7a6ab9" }
-dependencies = [
-    { name = "gluonts", extra = ["torch"] },
-    { name = "huggingface-hub", extra = ["cli"] },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "scipy" },
-    { name = "torch" },
-    { name = "wandb" },
 ]
 
 [[package]]
@@ -2019,14 +1996,12 @@ dependencies = [
     { name = "granite-tsfm" },
     { name = "h5py" },
     { name = "jsonargparse", extra = ["all"] },
-    { name = "lag-llama" },
     { name = "lightning" },
     { name = "matplotlib" },
     { name = "momentfm" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyyaml" },
-    { name = "setuptools" },
     { name = "timesfm" },
     { name = "torch" },
     { name = "transformers" },
@@ -2042,14 +2017,12 @@ requires-dist = [
     { name = "granite-tsfm", specifier = "==0.2.23" },
     { name = "h5py" },
     { name = "jsonargparse", extras = ["all"] },
-    { name = "lag-llama", git = "https://github.com/time-series-foundation-models/lag-llama.git" },
     { name = "lightning" },
     { name = "matplotlib" },
     { name = "momentfm" },
     { name = "numpy", specifier = "==1.26.4" },
     { name = "pandas", specifier = "==2.3.3" },
     { name = "pyyaml" },
-    { name = "setuptools", specifier = "<72" },
     { name = "timesfm", specifier = "==1.3.0" },
     { name = "torch", specifier = "==2.4.1" },
     { name = "transformers", specifier = "==4.44.2" },

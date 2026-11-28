@@ -3,9 +3,8 @@
 #   python main.py test --config configs/LIGO/train_ligo_s4d_gaussnll_regression.yaml \
 #                       --ckpt_path checkpoints/ligo_s4d_gaussnll_regression/best.ckpt
 #
-# S4D Gaussian NLL regression: 2-channel (H1+L1) strain 59-63 s at 2048 Hz (8192 steps) -> chirp_mass.
-# Loss: Gaussian NLL.  d_output=2 (mean + log-var for chirp_mass).
-# ~0.27M parameters (d_model=128, d_state=128, 4 layers).
+# S4D Gaussian-NLL regression: 2-channel (H1+L1) strain, 4 s at 2048 Hz -> chirp_mass mean and
+# variance. ~270K parameters (d_model=128, d_state=128, 4 layers).
 
 seed_everything: 42
 

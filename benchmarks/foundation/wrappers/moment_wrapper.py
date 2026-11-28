@@ -179,20 +179,6 @@ class MomentWrapper(BaseFoundationModel):
             emb = emb.mean(axis=1)
         return EmbeddingResult(embeddings=emb)
 
-    # ── Fine-tuning parameter selection ───────────────────────────────────
-
-    def get_finetune_params(self) -> list[torch.nn.Parameter]:
-        """Only the forecasting head is trainable for fine-tuning.
-
-        MOMENT was pre-trained with a reconstruction objective; to avoid
-        destroying the representation, we freeze the encoder and embedder
-        and only unfreeze the task-specific head.  This matches the MOMENT
-        authors' recommended fine-tuning protocol.
-        """
-        if self.forecast_model is None:
-            raise RuntimeError("Call .load() before get_finetune_params().")
-        return [p for p in self.forecast_model.parameters() if p.requires_grad]
-
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _prep_input(self, x: np.ndarray, target_len: int) -> torch.Tensor:

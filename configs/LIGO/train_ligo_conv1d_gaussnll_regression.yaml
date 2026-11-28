@@ -1,11 +1,10 @@
 # Usage:
 #   python main.py fit  --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml
 #   python main.py test --config configs/LIGO/train_ligo_conv1d_gaussnll_regression.yaml \
-#                              --ckpt_path checkpoints/ligo_conv1d_gaussnll_regression/best.ckpt
+#                       --ckpt_path checkpoints/ligo_conv1d_gaussnll_regression/best.ckpt
 #
-# ResNet1D GaussNLL regression: 2-channel (H1+L1) strain 59-63 s at 2048 Hz (8192 steps) -> chirp_mass.
-# Size-matched ResNet18-lite: channels [32,64,96,128] -> ~0.39M params (S4D 0.27M, LinOSS 0.40M).
-# Mirrors ml4gw ResNet1D (aframe LIGO community standard): residual blocks, GroupNorm.
+# ResNet1D Gaussian-NLL regression: 2-channel (H1+L1) strain, 4 s at 2048 Hz -> chirp_mass mean
+# and variance. ~390K parameters (residual blocks with channels 32, 64, 96, 128).
 
 seed_everything: 42
 

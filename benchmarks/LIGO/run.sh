@@ -3,10 +3,10 @@
 # foundation models, and score everything on the test split.
 #
 # Prerequisites:
-#   python data/download.py --domain ligo                                   # ~4 TB of 64 s shards
+#   python data/download.py --domain ligo          # ~4 TB
 #   python data/LIGO/extract_window.py --src data/LIGO --dest data/LIGO
-#   make env       # PyTorch env (S4D, CNN); make env-jax for LinOSS
-#   benchmarks/foundation/.venv for the foundation models
+#   make env-jax                                   # PyTorch + JAX env (S4D, CNN, LinOSS)
+#   make env-fm                                    # foundation-model env
 #
 # Every model trains for 60 epochs (seed 42); test uses the best-validation checkpoint.
 # Approximate cost on one A100: S4D / LinOSS ~35 h, CNN ~6 h.

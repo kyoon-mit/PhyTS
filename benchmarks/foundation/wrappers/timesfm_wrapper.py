@@ -25,7 +25,7 @@ forward hook on the final transformer block via `embed_via_hidden_states`.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 import torch

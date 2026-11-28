@@ -84,7 +84,7 @@ class ChronosWrapper(BaseFoundationModel):
         self.pipeline = ChronosPipeline.from_pretrained(
             hf, device_map=device, torch_dtype=torch_dtype,
         )
-        # Expose underlying model for unload / finetune hooks.
+        # Expose underlying model for unload().
         self.model = getattr(self.pipeline, "model", None)
 
     def unload(self) -> None:

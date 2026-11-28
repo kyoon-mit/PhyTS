@@ -61,7 +61,8 @@ def main():
     ap.add_argument("--out_root", default="results/Project8", type=Path)
     ap.add_argument("--cutoff", default=24576, type=int)
     ap.add_argument("--batch_size", default=16, type=int, help="events per loader batch")
-    ap.add_argument("--embed_batch", default=256, type=int, help="windows per model call")
+    ap.add_argument("--embed_batch", default=128, type=int,
+                    help="windows per model call (lower it if the GPU runs out of memory)")
     ap.add_argument("--num_workers", default=4, type=int)
     ap.add_argument("--max_samples", type=int, help="events per split (smoke test)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")

@@ -1,33 +1,21 @@
-"""Zero-shot foundation-model benchmark on LIGO (chirp-mass regression, paper Table 2).
+"""Zero-shot foundation-model rows of Table 2 for LIGO: frozen embeddings + ridge probe.
 
-Protocol (frozen backbone, same splits / window / jitter as the supervised runs)
---------------------------------------------------------------------------------
-* Window: 59-63 s (4 s, 8192 samples per IFO at 2048 Hz) cut from the stored 58.75-63.25 s
-  segment, shifted by a fixed per-sample offset in [-0.25, 0.25] s drawn exactly like
-  LIGODataset's val/test shifts (seed 0 + {train: 0, val: 1, test: 2}).
-* Each IFO channel is split into 16 non-overlapping 512-sample chunks (the common context limit
-  of MOMENT / Chronos / TimesFM / TTM). Every chunk is embedded by the frozen model with the same
-  token pooling as the TESS / Project 8 zero-shot rows: mean for MOMENT / Chronos / MOIRAI / TTM,
-  last token for the causal decoders Time-MoE / TimesFM; MOIRAI is embedded as in a patch-32,
-  horizon-128 forecast pass. Chunk embeddings are mean-pooled and H1 / L1 are concatenated.
-* Head: closed-form Ridge(alpha=1) on z-scored features and target. Because the training split's
-  SNR prior differs from val / test (Appendix A), the probe and its z-scoring statistics are fitted
-  on the validation split and evaluated on the held-out test split.
+Each event's 4 s window (the same window and time shifts as the supervised runs) is split per
+detector into 512-sample chunks, which the frozen backbone embeds (benchmarks/foundation/
+zeroshot.py). Chunk embeddings are averaged per detector and H1 and L1 are concatenated. A ridge
+regression (alpha = 1) on z-scored features and target is fitted on the validation split, whose
+SNR distribution matches the test split, and scored on the test split.
 
-Outputs: <results_root>/fm_<model>/{test_predictions.csv, val_predictions.csv, metrics.json};
-test_predictions.csv uses the supervised schema (snr, true_chirp_mass, pred_chirp_mass_mean,
-pred_chirp_mass_logvar), with logvar the constant log val MSE.
+Embedding is sharded and resumable, and can be split over several jobs with --worker i
+--num_workers k (the last one to finish fits the probe); --time_limit_h stops a job early with
+exit code 85 so a batch system can requeue it.
 
-Embedding extraction is sharded and resumable (finished shards are skipped) and can be split over
-several GPUs with --worker i --num_workers k; the last worker to finish fits the probe. With
---time_limit_h the script stops after that long and exits with code 85 (for batch-system requeue).
-Embedding all three splits (1.9M samples) takes from ~1 GPU-hour (TTM) to ~40 GPU-hours
-(Chronos, Time-MoE) on an H100.
-
-Usage (foundation-model venv, see benchmarks/foundation):
-  python benchmarks/LIGO/fm_zeroshot_ligo.py --model moment
+Usage (foundation-model env):
+  benchmarks/foundation/.venv/bin/python benchmarks/LIGO/fm_zeroshot_ligo.py --model moment
   # smoke test
-  python benchmarks/LIGO/fm_zeroshot_ligo.py --model moment --max_samples 512 --out_root /tmp/ligo_fm_smoke
+  benchmarks/foundation/.venv/bin/python benchmarks/LIGO/fm_zeroshot_ligo.py --model moment \
+      --max_samples 512 --out_root /tmp/ligo_fm_smoke
+Writes results/LIGO/fm_<model>/{test_predictions.csv, val_predictions.csv, metrics.json}.
 """
 
 from __future__ import annotations
@@ -50,6 +38,7 @@ _REPO = _HERE.parent.parent
 for p in (str(_REPO / "src"), str(_REPO / "benchmarks")):
     if p not in sys.path:
         sys.path.insert(0, p)
+from foundation.zeroshot import CHUNK_LEN, MODELS, MOIRAI_HORIZON, POOL, embed, load_wrapper
 
 REQUEUE_RC = 85
 SPLITS = ("train", "val", "test")
@@ -57,53 +46,8 @@ SEG_LEN = 9216            # 58.75-63.25 s stored at 2048 Hz
 WIN_START = 512           # 0.25 s into the segment -> 59 s
 WIN_LEN = 8192            # 4 s
 MAX_SHIFT = 512           # +-0.25 s
-CHUNK_LEN = 512
 RIDGE_ALPHA = 1.0
 PROBE_FIT = "val"         # split the probe and its z-scoring are fitted on
-
-MODELS = ("moment", "chronos", "timesfm", "timemoe", "moirai", "granite_ttm")
-# Token pooling of the TESS / Project 8 zero-shot runs: encoders -> mean, causal decoders -> last.
-POOL = {"moment": "mean", "chronos": "mean", "moirai": "mean", "granite_ttm": "mean",
-        "timemoe": "last", "timesfm": "last"}
-MOIRAI_HORIZON = 128
-
-
-# ── model loading ──────────────────────────────────────────────────────────────
-
-def load_wrapper(name: str, device: str):
-    if name == "moment":
-        from foundation.wrappers.moment_wrapper import MomentWrapper as W
-        w = W(); w.load(device=device, model_size="base", seq_len=CHUNK_LEN)
-    elif name == "chronos":
-        from foundation.wrappers.chronos_wrapper import ChronosWrapper as W
-        w = W(); w.load(device=device, model_size="base")
-    elif name == "timesfm":
-        from foundation.wrappers.timesfm_wrapper import TimesFMWrapper as W
-        w = W(); w.load(device=device, model_size="base", context_len=CHUNK_LEN, horizon=128)
-    elif name == "timemoe":
-        from foundation.wrappers.timemoe_wrapper import TimeMoEWrapper as W
-        w = W(); w.load(device=device, model_size="base")
-    elif name == "moirai":
-        from foundation.wrappers.moirai_wrapper import MoiraiWrapper as W
-        w = W(); w.load(device=device, model_size="base", context_len=CHUNK_LEN)
-        w._module.to(device).eval()
-    elif name == "granite_ttm":
-        from foundation.wrappers.granite_ttm_wrapper import GraniteTTMWrapper as W
-        w = W(); w.load(device=device, model_size="base")
-        if w._ctx_len != CHUNK_LEN:
-            raise ValueError(f"TTM context {w._ctx_len} != chunk length {CHUNK_LEN}")
-    else:
-        raise ValueError(name)
-    return w
-
-
-def embed_kwargs(model: str) -> dict:
-    kw = {}
-    if POOL[model] != "mean":
-        kw["pool"] = POOL[model]
-    if model == "moirai":
-        kw["horizon"] = MOIRAI_HORIZON
-    return kw
 
 
 # ── data / embedding ─────────────────────────────────────────────────────────
@@ -122,16 +66,12 @@ def read_windows(f: h5py.File, a: int, b: int, shifts: np.ndarray) -> np.ndarray
     return np.take_along_axis(X, idx[:, None, :], axis=-1).astype(np.float32)
 
 
-def embed_windows(wrapper, X: np.ndarray, batch: int, embed_kw: dict) -> np.ndarray:
+def embed_windows(wrapper, model: str, X: np.ndarray, batch: int) -> np.ndarray:
     """(n, 2, L) -> (n, 2*d): per-chunk embeddings, mean over chunks, concat IFOs."""
     n, c, L = X.shape
     k = L // CHUNK_LEN
-    flat = X.reshape(n * c * k, CHUNK_LEN)
-    outs = []
-    with torch.inference_mode():
-        for i in range(0, len(flat), batch):
-            outs.append(np.asarray(wrapper.embed(flat[i:i + batch], **embed_kw).embeddings, dtype=np.float32))
-    return np.concatenate(outs).reshape(n, c, k, -1).mean(axis=2).reshape(n, -1)
+    E = embed(wrapper, model, X.reshape(n * c * k, CHUNK_LEN), batch)
+    return E.reshape(n, c, k, -1).mean(axis=2).reshape(n, -1)
 
 
 def n_samples(args, split: str) -> int:
@@ -190,7 +130,7 @@ def extract(args, out: Path, t0: float) -> bool:
                 if j + 1 < len(todo):
                     fut = pool.submit(read_windows, f, todo[j + 1][1], todo[j + 1][2], shifts)
                 ts = time.time()
-                E = embed_windows(wrapper, X, args.batch_size, embed_kwargs(args.model))
+                E = embed_windows(wrapper, args.model, X, args.batch_size)
                 if not np.isfinite(E).all():
                     bad = ~np.isfinite(E).all(1)
                     print(f"  WARNING shard {split}_{i:04d}: {bad.sum()} rows non-finite")
@@ -299,7 +239,8 @@ def main():
     ap.add_argument("--out_root", default="outputs/LIGO/fm_embeddings", help="embedding cache")
     ap.add_argument("--results_root", default="results/LIGO")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--batch_size", type=int, default=512, help="chunks per forward pass")
+    ap.add_argument("--batch_size", type=int, default=128,
+                    help="windows per model call (lower it if the GPU runs out of memory)")
     ap.add_argument("--shard_size", type=int, default=20000, help="samples per embedding shard")
     ap.add_argument("--max_samples", type=int, default=None, help="per split (smoke tests)")
     ap.add_argument("--time_limit_h", type=float, default=0,

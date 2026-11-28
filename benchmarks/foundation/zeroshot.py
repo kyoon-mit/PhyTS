@@ -55,7 +55,7 @@ def load_wrapper(name: str, device: str):
     return w
 
 
-def embed(wrapper, name: str, windows: np.ndarray, batch_size: int = 64) -> np.ndarray:
+def embed(wrapper, name: str, windows: np.ndarray, batch_size: int = 128) -> np.ndarray:
     """(N, 512) windows -> (N, d) embeddings."""
     kw = {} if POOL[name] == "mean" else {"pool": POOL[name]}
     if name == "moirai":

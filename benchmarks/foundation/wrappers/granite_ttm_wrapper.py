@@ -102,7 +102,6 @@ class GraniteTTMWrapper(BaseFoundationModel):
         # scaling but we match the pattern used by other wrappers so the
         # caller always sees inputs in the dataset's original units.
         normed, mean, std = self._instance_normalize(context.astype(np.float32))
-        B = normed.shape[0]
 
         # Roll the forecast window by window until we cover `horizon` steps.
         buf = self._prep_input(normed, target_len=self._ctx_len)  # (B, ctx, 1)

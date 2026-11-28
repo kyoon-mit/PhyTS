@@ -53,15 +53,15 @@ class BaseFoundationModel(ABC):
     """Abstract base for all foundation-model wrappers.
 
     Subclasses MUST implement: load(), forecast().
-    Subclasses MAY override: denoise(), embed(), get_finetune_params().
+    Subclasses MAY override: denoise(), embed().
 
     Attributes
     ----------
     name : str
         Short identifier used in output paths and CSV rows (e.g. "moment").
     supports_forecast, supports_denoise, supports_embed : bool
-        Declarative capability flags. Used by the evaluator to decide whether
-        to call the native method or the fallback.
+        Which capabilities the model provides natively rather than through
+        the shared fallbacks.
     """
 
     name: str = "base"
@@ -114,13 +114,11 @@ class BaseFoundationModel(ABC):
     # ── Shared fallbacks ──────────────────────────────────────────────────
 
     def denoise_via_forecast(self, noisy: np.ndarray) -> DenoiseResult:
-        """Bidirectional forecast-based denoising.
+        """Bidirectional forecast-based denoising: each half is forecast from the other.
 
-        Split (B, L) at L//2.  Forecast the second half from the first half,
-        then reverse the signal and forecast the (reversed) second half from
-        the (reversed) first half.  Average the two reconstructions for the
-        second half; the first half is recovered by reversing the backward
-        pass.  Total cost: 2 forward passes per batch, full L-sample coverage.
+        Split (B, L) at L//2. The second half is forecast from the first half; the first half
+        is forecast from the time-reversed second half and reversed back. Total cost: 2 forward
+        passes per batch, full L-sample coverage.
 
         This treats the foundation model's forecast as a model-based prior
         for the underlying clean signal; it is imperfect but provides a fair
@@ -140,14 +138,8 @@ class BaseFoundationModel(ABC):
         fcst_bwd = fcst_bwd_rev[:, ::-1].copy()  # un-reverse to align with original order; shape (B, L - mid)
 
         denoised = noisy.copy()
-        # First half from backward pass (what the model predicts when looking at reversed context)
-        denoised[:, :L - mid] = fcst_bwd
-        # Second half: average forward forecast and the reversed backward forecast's tail
-        # (backward pass covered the first L-mid positions in the reversed order, so those
-        # map to the last L-mid positions in the original order).  The forward pass covered
-        # positions mid..L.  Blend them in their shared region.
-        second_half_len = L - mid
-        denoised[:, mid:] = fcst_fwd
+        denoised[:, :L - mid] = fcst_bwd   # first half, from the reversed second half
+        denoised[:, mid:] = fcst_fwd       # second half, from the first half
 
         return DenoiseResult(denoised=denoised.astype(np.float32))
 
@@ -203,18 +195,6 @@ class BaseFoundationModel(ABC):
         else:
             emb = h.flatten(start_dim=1)
         return EmbeddingResult(embeddings=emb.cpu().numpy().astype(np.float32))
-
-    # ── Fine-tuning interface ─────────────────────────────────────────────
-
-    def get_finetune_params(self) -> list[torch.nn.Parameter]:
-        """Return parameters to optimize during fine-tuning.
-
-        Default: every parameter of `self.model`.  Override to freeze the
-        backbone and only expose a task head / last N layers.
-        """
-        if self.model is None:
-            raise RuntimeError(f"{self.name} not loaded; call .load() first.")
-        return [p for p in self.model.parameters() if p.requires_grad]
 
     # ── Shared utilities ──────────────────────────────────────────────────
 

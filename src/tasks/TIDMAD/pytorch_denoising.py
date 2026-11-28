@@ -12,7 +12,6 @@ Compatible with ConvAE(n_layers=..., latent_channels=..., kernel_size=...).
 """
 
 import lightning as L
-import torch
 import torch.nn as nn
 from torch import Tensor, optim
 

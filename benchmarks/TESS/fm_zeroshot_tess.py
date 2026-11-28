@@ -44,7 +44,8 @@ def main():
     ap.add_argument("--model", required=True, choices=MODELS)
     ap.add_argument("--data_dir", default="data/TESS/split", type=Path)
     ap.add_argument("--out_root", default="results/TESS", type=Path)
-    ap.add_argument("--batch_size", default=64, type=int, help="windows per model call")
+    ap.add_argument("--batch_size", default=128, type=int,
+                    help="windows per model call (lower it if the GPU runs out of memory)")
     ap.add_argument("--max_samples", type=int, help="light curves per split (smoke test)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
