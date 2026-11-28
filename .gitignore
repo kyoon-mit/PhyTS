@@ -31,10 +31,11 @@ slurm_logs/
 
 # Data (download from HuggingFace; see README)
 data/LIGO/
-data/Project8/
-data/TESS/
+data/Project8/*/
+data/TESS/split/
 data/TIDMAD/original/
 data/TIDMAD/preprocessed/
+data/.cache/
 
 # Generated outputs
 plots/

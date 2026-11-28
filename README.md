@@ -104,7 +104,7 @@ python main.py fit --config configs/TIDMAD/train_tidmad_linoss_denoising.yaml
 python main.py fit --config configs/TESS/train_tess_s4d_classification.yaml
 
 # Project 8 — energy regression, S4D
-python main.py fit --config configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml
+python main.py fit --config configs/Project8/train_project8_s4d_gaussnll_regression.yaml
 ```
 
 Any config value can be overridden on the command line:

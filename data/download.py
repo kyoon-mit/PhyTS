@@ -129,15 +129,13 @@ def full_tess() -> None:
 
 
 def full_project8() -> None:
-    dest = DATA / "Project8"
-    dest.mkdir(parents=True, exist_ok=True)
-    print(f"  downloading Project8/ (~44 GB) …")
+    print("  downloading Project8/ (~44 GB) …")
     snapshot_download(
         repo_id=REPO_ID, repo_type="dataset",
         allow_patterns=["Project8/**"],
-        local_dir=str(DATA.parent),
+        local_dir=str(DATA),
     )
-    print(f"  → {dest.relative_to(DATA.parent)}/")
+    print("  → data/Project8/{train,valid,test}/")
 
 
 def full_ligo() -> None:

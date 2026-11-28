@@ -1,29 +1,29 @@
 #!/bin/bash
-# Project 8 benchmark — train all models and run evaluation.
+# Project 8 benchmark (paper Table 2): train S4D / LinOSS / CNN to regress the electron energy
+# with a Gaussian NLL, evaluate the six zero-shot foundation models, and score everything on
+# the test split.
 #
 # Prerequisites:
-#   source .venv/bin/activate          # make env (PyTorch) or make env-jax (LinOSS)
-#   python data/download.py --domain project8 --sample   # or full dataset
+#   python data/download.py --domain project8      # ~44 GB
+#   make env-jax                                   # PyTorch + JAX env (S4D, CNN, LinOSS)
+#   make env-fm                                    # foundation-model env
 #
-# Usage:
-#   bash benchmarks/Project8/run.sh
+# Each model trains for up to 100 epochs (early stopping on val loss, patience 20); test uses
+# the best-validation checkpoint. At batch 64 S4D needs ~64 GB and LinOSS ~83 GB of GPU memory.
+#
+# Usage: bash benchmarks/Project8/run.sh
 
 set -e
 
-# S4D — GaussNLL energy regression
-python main.py fit --config configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml
-python benchmarks/Project8/eval_pipeline.py \
-    --config     configs/Project8/train_project8_s4d_regression_energy_gaussiannll.yaml \
-    --checkpoint checkpoints/project8_s4d_regression_energy_gaussiannll/best.ckpt
+for model in s4d linoss conv; do
+    cfg=configs/Project8/train_project8_${model}_gaussnll_regression.yaml
+    python main.py fit  --config $cfg
+    python main.py test --config $cfg --ckpt_path checkpoints/project8_${model}_gaussnll_regression/best.ckpt
+done
 
-# LinOSS (JAX) — GaussNLL energy regression
-python main.py fit --config configs/Project8/train_project8_linoss_regression_energy_gaussiannll.yaml
-python benchmarks/Project8/eval_pipeline.py \
-    --config     configs/Project8/train_project8_linoss_regression_energy_gaussiannll.yaml \
-    --checkpoint checkpoints/project8_linoss_regression_energy_gaussiannll/best.eqx
+# Zero-shot foundation models: frozen embeddings + ridge probe fitted on train, scored on test.
+for model in moment chronos timesfm timemoe moirai granite_ttm; do
+    benchmarks/foundation/.venv/bin/python benchmarks/Project8/fm_zeroshot_project8.py --model $model
+done
 
-# 1D CNN — GaussNLL energy regression
-python main.py fit --config configs/Project8/train_project8_conv_regression_energy_gaussiannll.yaml
-python benchmarks/Project8/eval_pipeline.py \
-    --config     configs/Project8/train_project8_conv_regression_energy_gaussiannll.yaml \
-    --checkpoint checkpoints/project8_conv_regression_energy_gaussiannll/best.ckpt
+python benchmarks/Project8/score.py
